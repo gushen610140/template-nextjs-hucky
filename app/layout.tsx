@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { EB_Garamond, Geist, Geist_Mono, Outfit } from "next/font/google";
 import "./globals.css";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 const ebGaramondHeading = EB_Garamond({
@@ -43,7 +44,9 @@ export default function RootLayout({
         ebGaramondHeading.variable,
       )}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <TooltipProvider>{children}</TooltipProvider>
+      </body>
     </html>
   );
 }
