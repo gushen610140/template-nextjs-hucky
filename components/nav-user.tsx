@@ -1,9 +1,11 @@
 "use client";
 
+import { SignInButton, useClerk, useUser } from "@clerk/nextjs";
 import {
   RiArrowUpDownLine,
   RiBankCardLine,
   RiCheckboxCircleLine,
+  RiLoginBoxLine,
   RiLogoutBoxLine,
   RiNotificationLine,
   RiSparklingLine,
@@ -25,16 +27,48 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-export function NavUser({
-  user,
-}: {
-  user: {
-    name: string;
-    email: string;
-    avatar: string;
-  };
-}) {
+export function NavUser() {
   const { isMobile } = useSidebar();
+  const { user, isLoaded } = useUser();
+  const { signOut, openUserProfile } = useClerk();
+
+  if (!isLoaded) return null;
+
+  if (!user) {
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SignInButton mode="modal">
+            <SidebarMenuButton
+              size="lg"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            >
+              <div className="flex size-8 items-center justify-center rounded-lg bg-sidebar-accent">
+                <RiLoginBoxLine className="size-4" />
+              </div>
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-medium">Log in</span>
+                <span className="truncate text-xs">
+                  Sign in to your account
+                </span>
+              </div>
+            </SidebarMenuButton>
+          </SignInButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    );
+  }
+
+  const initials = (
+    user.fullName ??
+    user.emailAddresses[0]?.emailAddress ??
+    "U"
+  )
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <SidebarMenu>
@@ -46,12 +80,21 @@ export function NavUser({
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                <AvatarImage
+                  src={user.imageUrl}
+                  alt={user.fullName ?? "User"}
+                />
+                <AvatarFallback className="rounded-lg">
+                  {initials}
+                </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user.name}</span>
-                <span className="truncate text-xs">{user.email}</span>
+                <span className="truncate font-medium">
+                  {user.fullName ?? "User"}
+                </span>
+                <span className="truncate text-xs">
+                  {user.emailAddresses[0]?.emailAddress}
+                </span>
               </div>
               <RiArrowUpDownLine className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -65,12 +108,21 @@ export function NavUser({
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarImage
+                    src={user.imageUrl}
+                    alt={user.fullName ?? "User"}
+                  />
+                  <AvatarFallback className="rounded-lg">
+                    {initials}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.name}</span>
-                  <span className="truncate text-xs">{user.email}</span>
+                  <span className="truncate font-medium">
+                    {user.fullName ?? "User"}
+                  </span>
+                  <span className="truncate text-xs">
+                    {user.emailAddresses[0]?.emailAddress}
+                  </span>
                 </div>
               </div>
             </DropdownMenuLabel>
@@ -83,7 +135,7 @@ export function NavUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openUserProfile()}>
                 <RiCheckboxCircleLine />
                 Account
               </DropdownMenuItem>
@@ -97,7 +149,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => signOut({ redirectUrl: "/" })}>
               <RiLogoutBoxLine />
               Log out
             </DropdownMenuItem>

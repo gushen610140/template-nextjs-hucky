@@ -1,22 +1,16 @@
 import type { Metadata } from "next";
-import { EB_Garamond, Geist, Geist_Mono, Outfit } from "next/font/google";
+import { DM_Sans, Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
-import {
-  ClerkProvider,
-  Show,
-  SignInButton,
-  SignUpButton,
-  UserButton,
-} from "@clerk/nextjs";
+import { ClerkProvider } from "@clerk/nextjs";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-const ebGaramondHeading = EB_Garamond({
+const playfairDisplayHeading = Playfair_Display({
   subsets: ["latin"],
   variable: "--font-heading",
 });
 
-const outfit = Outfit({ subsets: ["latin"], variable: "--font-sans" });
+const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" });
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -47,8 +41,8 @@ export default function RootLayout({
         geistSans.variable,
         geistMono.variable,
         "font-sans",
-        outfit.variable,
-        ebGaramondHeading.variable,
+        dmSans.variable,
+        playfairDisplayHeading.variable,
       )}
     >
       <body className="min-h-full flex flex-col">
