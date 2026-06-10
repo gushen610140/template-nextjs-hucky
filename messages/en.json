@@ -1,0 +1,12 @@
+{
+  "Home": {
+    "title": "To get started, edit the page.tsx file.",
+    "description": "Looking for a starting point or more instructions? Head over to <templates>Templates</templates> or the <learning>Learning</learning> center.",
+    "deployNow": "Deploy Now",
+    "documentation": "Documentation"
+  },
+  "Dashboard": {
+    "buildApp": "Build Your Application",
+    "dataFetching": "Data Fetching"
+  }
+}

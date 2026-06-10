@@ -1,0 +1,12 @@
+{
+  "Home": {
+    "title": "开始使用，请编辑 page.tsx 文件。",
+    "description": "寻找起点或更多说明？前往 <templates>模板</templates> 或 <learning>学习</learning> 中心。",
+    "deployNow": "立即部署",
+    "documentation": "文档"
+  },
+  "Dashboard": {
+    "buildApp": "构建你的应用",
+    "dataFetching": "数据获取"
+  }
+}
