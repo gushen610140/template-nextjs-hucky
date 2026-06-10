@@ -6,6 +6,7 @@ import {
   RiMoreLine,
   RiShareLine,
 } from "@remixicon/react";
+import { useTranslations } from "next-intl";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,10 +34,11 @@ export function NavProjects({
   }[];
 }>) {
   const { isMobile } = useSidebar();
+  const t = useTranslations("Sidebar");
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Projects</SidebarGroupLabel>
+      <SidebarGroupLabel>{t("project")}</SidebarGroupLabel>
       <SidebarMenu>
         {projects.map((item) => (
           <SidebarMenuItem key={item.name}>

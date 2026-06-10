@@ -8,5 +8,40 @@
   "Dashboard": {
     "buildApp": "Build Your Application",
     "dataFetching": "Data Fetching"
+  },
+  "Sidebar": {
+    "brandName": "Hucky",
+    "brandSlogan": "Relieve Your Hands",
+    "playground": "Playground",
+    "history": "History",
+    "starred": "Starred",
+    "settings": "Settings",
+    "models": "Models",
+    "genesis": "Genesis",
+    "explorer": "Explorer",
+    "quantum": "Quantum",
+    "documentation": "Documentation",
+    "introduction": "Introduction",
+    "getStarted": "Get Started",
+    "tutorials": "Tutorials",
+    "changelog": "Changelog",
+    "general": "General",
+    "team": "Team",
+    "billing": "Billing",
+    "limits": "Limits",
+    "support": "Support",
+    "feedback": "Feedback",
+    "designEngineering": "Design Engineering",
+    "salesMarketing": "Sales & Marketing",
+    "travel": "Travel",
+    "platform": "Platform",
+    "project": "Project"
+  },
+  "User": {
+    "upgrade": "Upgrade to Pro",
+    "account": "Account",
+    "billing": "Billing",
+    "notifications": "Notifications",
+    "logout": "Log out"
   }
 }

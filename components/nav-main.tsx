@@ -1,6 +1,7 @@
 "use client";
 
 import { RiArrowRightSLine } from "@remixicon/react";
+import { useTranslations } from "next-intl";
 import {
   Collapsible,
   CollapsibleContent,
@@ -32,9 +33,11 @@ export function NavMain({
     }[];
   }[];
 }>) {
+  const t = useTranslations("Sidebar");
+
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Platform</SidebarGroupLabel>
+      <SidebarGroupLabel>{t("platform")}</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
           <Collapsible key={item.title} asChild defaultOpen={item.isActive}>

@@ -10,6 +10,7 @@ import {
   RiNotificationLine,
   RiSparklingLine,
 } from "@remixicon/react";
+import { useTranslations } from "next-intl";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -31,6 +32,7 @@ export function NavUser() {
   const { isMobile } = useSidebar();
   const { user, isLoaded } = useUser();
   const { signOut, openUserProfile } = useClerk();
+  const t = useTranslations("User");
 
   if (!isLoaded) return null;
 
@@ -130,28 +132,28 @@ export function NavUser() {
             <DropdownMenuGroup>
               <DropdownMenuItem>
                 <RiSparklingLine />
-                Upgrade to Pro
+                {t("upgrade")}
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem onClick={() => openUserProfile()}>
                 <RiCheckboxCircleLine />
-                Account
+                {t("account")}
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <RiBankCardLine />
-                Billing
+                {t("billing")}
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <RiNotificationLine />
-                Notifications
+                {t("notifications")}
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => signOut({ redirectUrl: "/" })}>
               <RiLogoutBoxLine />
-              Log out
+              {t("logout")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

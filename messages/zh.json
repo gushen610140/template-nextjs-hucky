@@ -8,5 +8,40 @@
   "Dashboard": {
     "buildApp": "构建你的应用",
     "dataFetching": "数据获取"
+  },
+  "Sidebar": {
+    "brandName": "Hucky",
+    "brandSlogan": "解放你的双手",
+    "playground": "调试场",
+    "history": "历史",
+    "starred": "已收藏",
+    "settings": "设置",
+    "models": "模型",
+    "genesis": "起源",
+    "explorer": "探索者",
+    "quantum": "量子",
+    "documentation": "文档",
+    "introduction": "简介",
+    "getStarted": "快速开始",
+    "tutorials": "教程",
+    "changelog": "更新日志",
+    "general": "常规",
+    "team": "团队",
+    "billing": "账单",
+    "limits": "限额",
+    "support": "支持",
+    "feedback": "反馈",
+    "designEngineering": "设计工程",
+    "salesMarketing": "销售与市场",
+    "travel": "旅行",
+    "platform": "平台",
+    "project": "项目"
+  },
+  "User": {
+    "upgrade": "升级",
+    "account": "账户",
+    "billing": "账单",
+    "notifications": "通知",
+    "logout": "退出"
   }
 }
