@@ -43,5 +43,21 @@
     "billing": "Billing",
     "notifications": "Notifications",
     "logout": "Log out"
+  },
+  "Landing": {
+    "heroSubtitle": "Build Your Next App with Confidence",
+    "scrollHint": "Scroll to explore",
+    "feature1Title": "Lightning Fast",
+    "feature1Desc": "Built on Next.js 16 with React 19 compiler for maximum performance out of the box.",
+    "feature2Title": "Secure by Default",
+    "feature2Desc": "Enterprise-grade authentication powered by Clerk with zero configuration overhead.",
+    "feature3Title": "Beautiful & Accessible",
+    "feature3Desc": "Polished UI components from shadcn with full i18n support via next-intl.",
+    "storyTitle": "Crafted for Modern Teams",
+    "storyDesc": "Hucky is a production-ready Next.js template that combines the best tools in the ecosystem. From authentication to internationalization, every piece is carefully chosen so you can focus on building your product.",
+    "techTitle": "Powered By",
+    "ctaTitle": "Ready to Build?",
+    "ctaDesc": "Start your next project with a solid foundation. Everything you need, nothing you don't.",
+    "ctaButton": "Get Started"
   }
 }

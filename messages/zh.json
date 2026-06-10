@@ -43,5 +43,21 @@
     "billing": "账单",
     "notifications": "通知",
     "logout": "退出"
+  },
+  "Landing": {
+    "heroSubtitle": "自信地构建你的下一个应用",
+    "scrollHint": "向下滚动探索",
+    "feature1Title": "极速性能",
+    "feature1Desc": "基于 Next.js 16 与 React 19 编译器，开箱即用的极致性能体验。",
+    "feature2Title": "安全可靠",
+    "feature2Desc": "Clerk 驱动的企业级身份认证，零配置负担。",
+    "feature3Title": "美观易用",
+    "feature3Desc": "shadcn 精选组件库，搭配 next-intl 完整国际化支持。",
+    "storyTitle": "为现代团队而生",
+    "storyDesc": "Hucky 是一款生产就绪的 Next.js 模板，整合了生态中最优秀的工具链。从身份认证到国际化，每个环节都精心挑选，让你专注于产品本身。",
+    "techTitle": "技术栈",
+    "ctaTitle": "准备好了吗？",
+    "ctaDesc": "以坚实的基础开始你的下一个项目。你需要的全都有，不需要的一个也没有。",
+    "ctaButton": "开始使用"
   }
 }
