@@ -1,14 +1,14 @@
 "use client";
 
-import { useRef, Suspense } from "react";
+import { Center, Text3D } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { Text3D, Center } from "@react-three/drei";
+import { Suspense, useRef } from "react";
 import * as THREE from "three";
 import { animState } from "./animation-store";
 
 const LETTERS = ["H", "u", "c", "k", "y"];
 // Approximate x positions for each letter to form "Hucky" (will be centered)
-const BASE_X = [-1.85, -0.65, 0.2, 1.0, 1.85];
+const BASE_X = [-3.6, -2, -0.7, 0.7, 2.0];
 
 const FONT_URL =
   "https://threejs.org/examples/fonts/helvetiker_bold.typeface.json";
@@ -17,11 +17,11 @@ function LetterMesh({
   letter,
   baseX,
   index,
-}: {
+}: Readonly<{
   letter: string;
   baseX: number;
   index: number;
-}) {
+}>) {
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null);
 
@@ -34,8 +34,8 @@ function LetterMesh({
     const offYKey = `l${index}OffY` as keyof typeof animState;
 
     meshRef.current.position.x = spreadX;
-    meshRef.current.position.y = animState[offYKey] as number;
-    meshRef.current.rotation.z = animState[rotKey] as number;
+    meshRef.current.position.y = animState[offYKey];
+    meshRef.current.rotation.z = animState[rotKey];
 
     const mat = materialRef.current;
     mat.color.setRGB(animState.colorR, animState.colorG, animState.colorB);

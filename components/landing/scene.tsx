@@ -1,7 +1,7 @@
 "use client";
 
-import { Canvas } from "@react-three/fiber";
 import { Environment } from "@react-three/drei";
+import { Canvas } from "@react-three/fiber";
 import { Suspense } from "react";
 import { LuckyText } from "./lucky-text";
 

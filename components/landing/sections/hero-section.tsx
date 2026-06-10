@@ -1,7 +1,7 @@
 "use client";
 
-import { useTranslations } from "next-intl";
 import { ChevronDown } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export function HeroSection() {
   const t = useTranslations("Landing");

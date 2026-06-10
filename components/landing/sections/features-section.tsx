@@ -1,7 +1,7 @@
 "use client";
 
+import { Shield, Sparkles, Zap } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Zap, Shield, Sparkles } from "lucide-react";
 
 const FEATURES = [
   { icon: Zap, titleKey: "feature1Title", descKey: "feature1Desc" },
