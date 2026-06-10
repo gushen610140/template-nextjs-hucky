@@ -25,13 +25,13 @@ import {
 
 export function NavProjects({
   projects,
-}: {
+}: Readonly<{
   projects: {
     name: string;
     url: string;
     icon: React.ReactNode;
   }[];
-}) {
+}>) {
   const { isMobile } = useSidebar();
 
   return (
