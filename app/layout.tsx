@@ -43,6 +43,7 @@ export default function RootLayout({
         "font-sans",
         dmSans.variable,
         playfairDisplayHeading.variable,
+        "dark",
       )}
     >
       <body className="min-h-full flex flex-col">
