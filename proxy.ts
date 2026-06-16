@@ -12,16 +12,15 @@ const isPublicRoute = createRouteMatcher([
   "/zh(.*)",
 ]);
 
+// 链式中间件
 export default clerkMiddleware(async (auth, req) => {
-  // Run next-intl middleware for locale routing
-  const intlResponse = intlMiddleware(req);
-
-  // Protect non-public routes
+  // 保护非公共路由
   if (!isPublicRoute(req)) {
     await auth.protect();
   }
 
-  return intlResponse;
+  // 下一步处理 intl
+  return intlMiddleware(req);
 });
 
 export const config = {
