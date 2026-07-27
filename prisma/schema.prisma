@@ -1,7 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
+// RBAC 基础模型 — User / Role / Permission
+// 使用: npx prisma migrate dev --name init
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +8,66 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ─── 用户 ──────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  avatarUrl    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  roles UserRole[]
+}
+
+// ─── 角色 ──────────────────────────────────────────────
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       UserRole[]
+  permissions RolePermission[]
+}
+
+// ─── 权限 ──────────────────────────────────────────────
+
+model Permission {
+  id          String   @id @default(cuid())
+  name        String   @unique // 如 "user:create", "post:publish"
+  description String?
+  module      String?          // 按模块分组，如 "user", "post", "settings"
+  createdAt   DateTime @default(now())
+
+  roles RolePermission[]
+}
+
+// ─── 关联表 ────────────────────────────────────────────
+
+model UserRole {
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
 }
