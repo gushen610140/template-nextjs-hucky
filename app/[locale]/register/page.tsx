@@ -59,16 +59,20 @@ export default function RegisterPage() {
     if (Object.keys(errs).length > 0) return;
 
     setSubmitting(true);
-    // TODO: call register API
-    const { promise, resolve } = Promise.withResolvers<void>();
-    setTimeout(resolve, 800);
-    await promise;
-    setUser({
-      id: "1",
-      email,
-      name: username.trim(),
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, email, password }),
     });
-    setSubmitting(false);
+    const data = await res.json();
+
+    if (res.ok) {
+      setUser(data.user);
+      setSubmitting(false);
+    } else {
+      setErrors(data.errors ?? {});
+      setSubmitting(false);
+    }
   }
 
   // ── Render ──────────────────────────────────────────

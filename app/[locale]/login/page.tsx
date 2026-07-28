@@ -59,18 +59,21 @@ export default function LoginPage() {
     const errs = validatePassword();
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
-
     setSubmitting(true);
-    // TODO: call login API
-    const { promise, resolve } = Promise.withResolvers<void>();
-    setTimeout(resolve, 800);
-    await promise;
-    setUser({
-      id: "1",
-      email: account,
-      name: account.split("@")[0],
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: account, password }),
     });
-    setSubmitting(false);
+    const data = await res.json();
+
+    if (res.ok) {
+      setUser(data.user);
+      setSubmitting(false);
+    } else {
+      setErrors(data.errors ?? {});
+      setSubmitting(false);
+    }
   }
 
   async function handleCodeSubmit(e: React.SubmitEvent) {
@@ -80,16 +83,20 @@ export default function LoginPage() {
     if (Object.keys(errs).length > 0) return;
 
     setSubmitting(true);
-    // TODO: call login API
-    const { promise, resolve } = Promise.withResolvers<void>();
-    setTimeout(resolve, 800);
-    await promise;
-    setUser({
-      id: "1",
-      email,
-      name: email.split("@")[0],
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code }),
     });
-    setSubmitting(false);
+    const data = await res.json();
+
+    if (res.ok) {
+      setUser(data.user);
+      setSubmitting(false);
+    } else {
+      setErrors(data.errors ?? {});
+      setSubmitting(false);
+    }
   }
 
   function handleSendCode() {
