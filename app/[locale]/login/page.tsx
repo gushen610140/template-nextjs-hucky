@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +24,8 @@ export default function LoginPage() {
   const t = useTranslations("Auth");
   const { setUser } = useAuth();
 
+  const router = useRouter();
+  const locale = useLocale();
   const [activeTab, setActiveTab] = useState("password");
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
@@ -69,6 +72,7 @@ export default function LoginPage() {
 
     if (res.ok) {
       setUser(data.user);
+      router.push(`/${locale}/dashboard`);
       setSubmitting(false);
     } else {
       setErrors(data.errors ?? {});
@@ -92,6 +96,7 @@ export default function LoginPage() {
 
     if (res.ok) {
       setUser(data.user);
+      router.push(`/${locale}/dashboard`);
       setSubmitting(false);
     } else {
       setErrors(data.errors ?? {});

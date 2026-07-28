@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useRouter } from "next/navigation";
+import { useLocale } from "next-intl";
 import { useAuth } from "@/providers/auth-provider";
 
 type FormErrors = Partial<{
@@ -22,6 +24,8 @@ export default function RegisterPage() {
   const t = useTranslations("Auth");
   const { setUser } = useAuth();
 
+  const router = useRouter();
+  const locale = useLocale();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -68,6 +72,7 @@ export default function RegisterPage() {
 
     if (res.ok) {
       setUser(data.user);
+      router.push(`/${locale}/dashboard`);
       setSubmitting(false);
     } else {
       setErrors(data.errors ?? {});
