@@ -1,6 +1,5 @@
 "use client";
 
-import { SignInButton, useClerk, useUser } from "@clerk/nextjs";
 import {
   RiArrowUpDownLine,
   RiBankCardLine,
@@ -27,45 +26,37 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useAuth } from "@/providers/auth-provider";
 
 export function NavUser() {
   const { isMobile } = useSidebar();
-  const { user, isLoaded } = useUser();
-  const { signOut, openUserProfile } = useClerk();
   const t = useTranslations("User");
 
-  if (!isLoaded) return null;
+  // 用户登录系统
+  const { user, isAuthenticated } = useAuth();
 
-  if (!user) {
+  if (!isAuthenticated) {
     return (
       <SidebarMenu>
         <SidebarMenuItem>
-          <SignInButton mode="modal">
-            <SidebarMenuButton
-              size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-            >
-              <div className="flex size-8 items-center justify-center rounded-lg bg-sidebar-accent">
-                <RiLoginBoxLine className="size-4" />
-              </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">Log in</span>
-                <span className="truncate text-xs">
-                  Sign in to your account
-                </span>
-              </div>
-            </SidebarMenuButton>
-          </SignInButton>
+          <SidebarMenuButton
+            size="lg"
+            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+          >
+            <div className="flex size-8 items-center justify-center rounded-lg bg-sidebar-accent">
+              <RiLoginBoxLine className="size-4" />
+            </div>
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-medium">Log in</span>
+              <span className="truncate text-xs">Sign in to your account</span>
+            </div>
+          </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>
     );
   }
 
-  const initials = (
-    user.fullName ??
-    user.emailAddresses[0]?.emailAddress ??
-    "U"
-  )
+  const initials = (user?.name ?? user?.email ?? "U")
     .split(" ")
     .map((n) => n[0])
     .join("")
@@ -82,21 +73,16 @@ export function NavUser() {
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarImage
-                  src={user.imageUrl}
-                  alt={user.fullName ?? "User"}
-                />
+                <AvatarImage src={user?.avatar} alt={user?.name ?? "User"} />
                 <AvatarFallback className="rounded-lg">
                   {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">
-                  {user.fullName ?? "User"}
+                  {user?.name ?? "User"}
                 </span>
-                <span className="truncate text-xs">
-                  {user.emailAddresses[0]?.emailAddress}
-                </span>
+                <span className="truncate text-xs">{user?.email ?? ""}</span>
               </div>
               <RiArrowUpDownLine className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -110,21 +96,16 @@ export function NavUser() {
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage
-                    src={user.imageUrl}
-                    alt={user.fullName ?? "User"}
-                  />
+                  <AvatarImage src={user?.avatar} alt={user?.name ?? "User"} />
                   <AvatarFallback className="rounded-lg">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">
-                    {user.fullName ?? "User"}
+                    {user?.name ?? "User"}
                   </span>
-                  <span className="truncate text-xs">
-                    {user.emailAddresses[0]?.emailAddress}
-                  </span>
+                  <span className="truncate text-xs">{user?.email ?? ""}</span>
                 </div>
               </div>
             </DropdownMenuLabel>
@@ -137,7 +118,7 @@ export function NavUser() {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => openUserProfile()}>
+              <DropdownMenuItem onClick={() => {}}>
                 <RiCheckboxCircleLine />
                 {t("account")}
               </DropdownMenuItem>
@@ -151,7 +132,7 @@ export function NavUser() {
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => signOut({ redirectUrl: "/" })}>
+            <DropdownMenuItem onClick={() => {}}>
               <RiLogoutBoxLine />
               {t("logout")}
             </DropdownMenuItem>
