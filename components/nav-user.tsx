@@ -9,6 +9,7 @@ import {
   RiNotificationLine,
   RiSparklingLine,
 } from "@remixicon/react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -31,6 +32,7 @@ import { useAuth } from "@/providers/auth-provider";
 export function NavUser() {
   const { isMobile } = useSidebar();
   const t = useTranslations("User");
+  const router = useRouter();
 
   // 用户登录系统
   const { user, isAuthenticated } = useAuth();
@@ -41,7 +43,8 @@ export function NavUser() {
         <SidebarMenuItem>
           <SidebarMenuButton
             size="lg"
-            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            onClick={() => router.push("/login")}
+            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground cursor-pointer"
           >
             <div className="flex size-8 items-center justify-center rounded-lg bg-sidebar-accent">
               <RiLoginBoxLine className="size-4" />

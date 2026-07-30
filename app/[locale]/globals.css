@@ -81,6 +81,9 @@
   --sidebar-ring: oklch(0.708 0 0);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
+  --scrollbar-thumb: oklch(0.72 0 0 / 0%);
+  --scrollbar-thumb-hover: oklch(0.55 0 0 / 50%);
+  --scrollbar-thumb-active: oklch(0.45 0 0 / 65%);
 }
 
 .dark {
@@ -115,6 +118,9 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --scrollbar-thumb: oklch(0.45 0 0 / 0%);
+  --scrollbar-thumb-hover: oklch(0.58 0 0 / 45%);
+  --scrollbar-thumb-active: oklch(0.65 0 0 / 60%);
 }
 
 @layer base {
@@ -129,24 +135,11 @@
   }
 
   /* ── Scrollbar ── */
-  :root {
-    --scrollbar-thumb: oklch(0.72 0 0 / 0%);
-    --scrollbar-thumb-hover: oklch(0.55 0 0 / 50%);
-    --scrollbar-thumb-active: oklch(0.45 0 0 / 65%);
-  }
-  .dark {
-    --scrollbar-thumb: oklch(0.45 0 0 / 0%);
-    --scrollbar-thumb-hover: oklch(0.58 0 0 / 45%);
-    --scrollbar-thumb-active: oklch(0.65 0 0 / 60%);
-  }
-
-  /* Firefox */
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb-hover) transparent;
   }
 
-  /* Webkit (Chrome / Safari / Edge) */
   ::-webkit-scrollbar {
     width: 4px;
     height: 4px;
@@ -169,7 +162,6 @@
     background: transparent;
   }
 
-  /* Hover-reveal: thumb fades in when scrolling or hovering the scrollbar area */
   @media (hover: hover) {
     *::-webkit-scrollbar-thumb {
       background: var(--scrollbar-thumb);
@@ -178,26 +170,40 @@
       background: var(--scrollbar-thumb-hover);
     }
   }
-}
 
-/* ── Lenis smooth scroll ── */
-html.lenis,
-html.lenis body {
-  height: auto;
-}
+  /* ── Lenis smooth scroll ── */
+  html.lenis,
+  html.lenis body {
+    height: auto;
+  }
 
-.lenis.lenis-smooth {
-  scroll-behavior: auto !important;
-}
+  .lenis.lenis-smooth {
+    scroll-behavior: auto !important;
+  }
 
-.lenis.lenis-smooth [data-lenis-prevent] {
-  overscroll-behavior: contain;
-}
+  .lenis.lenis-smooth [data-lenis-prevent] {
+    overscroll-behavior: contain;
+  }
 
-.lenis.lenis-stopped {
-  overflow: clip;
-}
+  .lenis.lenis-stopped {
+    overflow: clip;
+  }
 
-.lenis.lenis-smooth iframe {
-  pointer-events: none;
+  .lenis.lenis-smooth iframe {
+    pointer-events: none;
+  }
+
+  /* Autofill override */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active,
+  input:-internal-autofill-selected,
+  input:-internal-autofill-preview {
+    transition: background-color 5000s ease-in-out 0s !important;
+    -webkit-text-fill-color: var(--foreground) !important;
+    caret-color: var(--foreground) !important;
+    /** TODO: 字体在 preview autofill 的时候还是有问题 */
+    font-family: var(--font-family) !important;
+  }
 }
