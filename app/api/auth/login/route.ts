@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { createSession, setSessionCookie } from "@/lib/session";
 
 export async function POST(request: Request) {
   try {
@@ -73,10 +74,14 @@ export async function POST(request: Request) {
       // For development, any 6-digit code passes
     }
 
-    // ── Return user ────────────────────────────────────
+    // ── 建立会话并写入 httpOnly cookie ────────────────
+    const token = await createSession(user.id);
 
+    // ── Return user ────────────────────────────────────
     const { passwordHash: _, ...safeUser } = user;
-    return NextResponse.json({ user: safeUser }, { status: 200 });
+    const response = NextResponse.json({ user: safeUser }, { status: 200 });
+    setSessionCookie(response, token);
+    return response;
   } catch (error) {
     console.error("Login error:", error);
     return NextResponse.json(

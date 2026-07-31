@@ -5,6 +5,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -24,7 +25,7 @@ export type AuthState = {
 export type AuthContextValue = AuthState & {
   setUser: (user: User | null) => void;
   setLoading: (loading: boolean) => void;
-  signOut: () => void;
+  signOut: () => Promise<void>;
   isAuthenticated: boolean;
 };
 
@@ -34,8 +35,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setLoading] = useState(true);
 
-  const signOut = useCallback(() => {
+  // 每次挂载/刷新时从服务端恢复登录态(httpOnly cookie 客户端读不到)
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((data: { user: User | null }) => {
+        if (!cancelled) setUser(data.user ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setUser(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const signOut = useCallback(async () => {
     setUser(null);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // 网络失败时本地态已清除, 服务端 session 按过期时间自然失效
+    }
   }, []);
 
   const value = useMemo<AuthContextValue>(

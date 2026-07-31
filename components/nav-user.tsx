@@ -34,8 +34,7 @@ export function NavUser() {
   const t = useTranslations("User");
   const router = useRouter();
 
-  // 用户登录系统
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, signOut } = useAuth();
 
   if (!isAuthenticated) {
     return (
@@ -135,7 +134,7 @@ export function NavUser() {
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => {}}>
+            <DropdownMenuItem onClick={() => signOut()}>
               <RiLogoutBoxLine />
               {t("logout")}
             </DropdownMenuItem>

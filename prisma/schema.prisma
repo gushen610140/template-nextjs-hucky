@@ -23,6 +23,8 @@ model User {
   updatedAt    DateTime @updatedAt
 
   roles UserRole[]
+
+  sessions Session[]
 }
 
 // ─── 角色 ──────────────────────────────────────────────
@@ -70,4 +72,18 @@ model RolePermission {
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId])
+}
+
+// ─── 会话 ──────────────────────────────────────────────
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique // sha256(sessionToken)，不存明文
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

@@ -1,11 +1,13 @@
-import { type NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import createMiddleware from "next-intl/middleware";
 import { routing } from "./i18n/routing";
+import { getSessionUser, SESSION_COOKIE } from "./lib/session";
 
 // intl 国际化重定向组件构造
 const intlMiddleware = createMiddleware(routing);
 
-const publicRoutes = ["/"];
+const publicRoutes = ["/", "/login", "/register"];
 function isPublicRoute(pathname: string) {
   // 去除路径中的语言前缀再做匹配
   const pathWithoutLocale =
@@ -33,9 +35,16 @@ export default async function proxy(request: NextRequest) {
     return intlResponse;
   }
 
-  // 保护非公共路由
-  // TODO: 登录状态验证
-  const token = "";
+  // 保护非公共路由: 校验 httpOnly session cookie
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  const user = await getSessionUser(token);
+
+  if (!user) {
+    const loginUrl = new URL(`/login`, request.url);
+    loginUrl.searchParams.set("next", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
   return intlResponse;
 }
 

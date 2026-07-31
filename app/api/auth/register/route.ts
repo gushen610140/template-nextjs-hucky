@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { createSession, setSessionCookie } from "@/lib/session";
 
 export async function POST(request: Request) {
   try {
@@ -73,8 +74,11 @@ export async function POST(request: Request) {
         createdAt: true,
       },
     });
+    const token = await createSession(user.id);
 
-    return NextResponse.json({ user }, { status: 201 });
+    const response = NextResponse.json({ user }, { status: 201 });
+    setSessionCookie(response, token);
+    return response;
   } catch (error) {
     console.error("Register error:", error);
     return NextResponse.json(
