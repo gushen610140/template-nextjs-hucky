@@ -7,6 +7,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -212,13 +220,27 @@ export default function LoginPage() {
                     htmlFor="agree-password"
                     className="text-xs font-normal tracking-normal normal-case"
                   >
-                    {t("agreeTerms")}
-                    <Link
-                      href={`/${locale}/terms`}
-                      className="ml-0.5 underline underline-offset-2 hover:text-foreground"
-                    >
-                      {t("termsOfService")}
-                    </Link>
+                    {t("agreeTerms")}{" "}
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <button
+                          type="button"
+                          className="ml-0.5 cursor-pointer underline underline-offset-2 hover:text-foreground"
+                        >
+                          {t("termsOfService")}
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>{t("termsTitle")}</DialogTitle>
+                          <DialogDescription>{t("termsP1")}</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-3 text-sm text-muted-foreground">
+                          <p>{t("termsP2")}</p>
+                          <p>{t("termsP3")}</p>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </Label>
                 </div>
                 {errors.agree && (
@@ -301,12 +323,26 @@ export default function LoginPage() {
                     className="text-xs font-normal tracking-normal normal-case"
                   >
                     {t("agreeTerms")}
-                    <Link
-                      href={`/${locale}/terms`}
-                      className="ml-0.5 underline underline-offset-2 hover:text-foreground"
-                    >
-                      {t("termsOfService")}
-                    </Link>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <button
+                          type="button"
+                          className="ml-0.5 cursor-pointer underline underline-offset-2 hover:text-foreground"
+                        >
+                          {t("termsOfService")}
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>{t("termsTitle")}</DialogTitle>
+                          <DialogDescription>{t("termsP1")}</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-3 text-sm text-muted-foreground">
+                          <p>{t("termsP2")}</p>
+                          <p>{t("termsP3")}</p>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </Label>
                 </div>
                 {errors.agree && (
