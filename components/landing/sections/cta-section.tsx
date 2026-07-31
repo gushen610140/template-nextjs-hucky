@@ -1,10 +1,11 @@
 "use client";
 
-import { useTranslations } from "next-intl";
 import { ArrowRight } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 
 export function CtaSection() {
   const t = useTranslations("Landing");
+  const locale = useLocale();
 
   return (
     <section className="relative flex h-screen flex-col items-center justify-center text-center">
@@ -15,7 +16,7 @@ export function CtaSection() {
         {t("ctaDesc")}
       </p>
       <a
-        href="/dashboard"
+        href={`/${locale}/dashboard`}
         className="cta-button group mt-10 flex items-center gap-2 rounded-full bg-emerald-500 px-8 py-4 text-lg font-semibold text-black transition-all hover:bg-emerald-400 hover:shadow-lg hover:shadow-emerald-500/25 opacity-0"
       >
         {t("ctaButton")}

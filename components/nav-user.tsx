@@ -10,7 +10,7 @@ import {
   RiSparklingLine,
 } from "@remixicon/react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -33,6 +33,7 @@ export function NavUser() {
   const { isMobile } = useSidebar();
   const t = useTranslations("User");
   const router = useRouter();
+  const locale = useLocale();
 
   const { user, isAuthenticated, signOut } = useAuth();
 
@@ -42,7 +43,7 @@ export function NavUser() {
         <SidebarMenuItem>
           <SidebarMenuButton
             size="lg"
-            onClick={() => router.push("/login")}
+            onClick={() => router.push(`/${locale}/login`)}
             className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground cursor-pointer"
           >
             <div className="flex size-8 items-center justify-center rounded-lg bg-sidebar-accent">

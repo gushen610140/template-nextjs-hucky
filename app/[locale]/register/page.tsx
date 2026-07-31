@@ -185,7 +185,7 @@ export default function RegisterPage() {
               >
                 {t("agreeTerms")}
                 <Link
-                  href="/terms"
+                  href={`/${locale}/terms`}
                   className="ml-0.5 underline underline-offset-2 hover:text-foreground"
                 >
                   {t("termsOfService")}
@@ -202,10 +202,19 @@ export default function RegisterPage() {
             </Button>
           </form>
 
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="mt-2 w-full text-muted-foreground"
+          >
+            <Link href={`/${locale}`}>{t("backHome")}</Link>
+          </Button>
+
           <p className="mt-6 text-center text-xs text-muted-foreground">
             {t("hasAccount")}{" "}
             <Link
-              href="/login"
+              href={`/${locale}/login`}
               className="underline underline-offset-2 hover:text-foreground"
             >
               {t("goLogin")}
