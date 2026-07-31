@@ -40,8 +40,13 @@ export default async function proxy(request: NextRequest) {
   const user = await getSessionUser(token);
 
   if (!user) {
-    const loginUrl = new URL(`/login`, request.url);
-    loginUrl.searchParams.set("next", pathname);
+    const locale =
+      routing.locales.find((l) => pathname.startsWith(`/${l}`)) ??
+      routing.defaultLocale;
+    // 直接跳到带 locale 的 login, 避免 next-intl 的 locale 补全跳转把 query 重新编码成 %2F
+    // RFC 3986 允许 query 中出现原始 "/", 直接拼接即可
+    const loginUrl = new URL(`/${locale}/login`, request.url);
+    loginUrl.search = `next=${pathname}`;
     return NextResponse.redirect(loginUrl);
   }
 

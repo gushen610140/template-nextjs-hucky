@@ -1,15 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useRouter } from "next/navigation";
-import { useLocale } from "next-intl";
 import { useAuth } from "@/providers/auth-provider";
 
 type FormErrors = Partial<{
@@ -56,6 +55,15 @@ export default function RegisterPage() {
     return errs;
   }
 
+  // 优先跳转 proxy 传入的 next 参数, 否则回 dashboard
+  function getRedirectDestination(): string {
+    const next = new URLSearchParams(window.location.search).get("next");
+    if (!next) return `/${locale}/dashboard`;
+    // 只接受站内绝对路径, 拒绝 //host 协议相对跳转, 防开放重定向
+    if (next.startsWith("/") && !next.startsWith("//")) return next;
+    return `/${locale}/dashboard`;
+  }
+
   async function handleSubmit(e: React.SubmitEvent) {
     e.preventDefault();
     const errs = validate();
@@ -72,7 +80,7 @@ export default function RegisterPage() {
 
     if (res.ok) {
       setUser(data.user);
-      router.push(`/${locale}/dashboard`);
+      router.push(getRedirectDestination());
       setSubmitting(false);
     } else {
       setErrors(data.errors ?? {});
