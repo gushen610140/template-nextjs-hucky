@@ -66,7 +66,7 @@ export default async function Home() {
       </header>
 
       {/* ── Hero ── */}
-      <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-6 py-24 text-center md:py-32">
+      <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-6 py-24 text-center">
         <Badge
           variant="outline"
           className="rounded-full border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
@@ -96,6 +96,7 @@ export default async function Home() {
           <Button
             asChild
             variant="outline"
+            size="lg"
             className="normal-case tracking-normal text-base"
           >
             <a href="#features">{t("heroSecondary")}</a>
@@ -104,22 +105,15 @@ export default async function Home() {
       </section>
 
       {/* ── Features ── */}
-      <section id="features" className="mx-auto w-full max-w-6xl px-6 py-20">
+      <section id="features" className="mx-auto w-full max-w-6xl px-6 py-10">
         <h2 className="text-3xl font-bold tracking-tight text-zinc-100">
           {t("featureTitle")}
         </h2>
         <div className="mt-10 grid gap-6 md:grid-cols-2">
           {features.map(({ icon: Icon, title, desc }) => (
-            <Card
-              key={title}
-              className="relative rounded-2xl border border-white/10 bg-white/5 shadow-none ring-0 backdrop-blur-xl transition-colors hover:border-white/20 [--card-spacing:--spacing(6)]"
-            >
-              {/* top edge highlight */}
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
-              {/* soft glass sheen */}
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/[0.06] to-transparent" />
+            <Card key={title} className="[--card-spacing:--spacing(6)]">
               <CardContent className="relative flex items-start gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15">
                   <Icon className="h-5 w-5 text-emerald-400" />
                 </div>
                 <div>
@@ -137,7 +131,7 @@ export default async function Home() {
       </section>
 
       {/* ── Tech stack ── */}
-      <section id="tech" className="mx-auto w-full max-w-6xl px-6 py-20">
+      <section id="tech" className="mx-auto w-full max-w-6xl px-6 py-10">
         <h2 className="text-center text-3xl font-bold tracking-tight text-zinc-100">
           {t("techTitle")}
         </h2>
@@ -159,13 +153,13 @@ export default async function Home() {
         <h2 className="text-4xl font-bold tracking-tight text-zinc-100">
           {t("ctaTitle")}
         </h2>
-        <p className="mx-auto mt-4 max-w-xl text-lg text-zinc-400">
+        <p className="mx-auto mt-4 max-w-2xl text-lg text-zinc-400">
           {t("ctaDesc")}
         </p>
         <Button
           asChild
           size="lg"
-          className="mt-10 rounded-full normal-case tracking-normal text-base"
+          className="mt-10 normal-case tracking-normal text-base"
         >
           <Link
             href={`/${locale}/dashboard`}
