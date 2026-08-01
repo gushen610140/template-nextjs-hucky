@@ -1,6 +1,14 @@
 import { ArrowRight, Blocks, KeyRound, ShieldCheck, Zap } from "lucide-react";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardTitle,
+} from "@/components/ui/card";
 
 const TECH_STACK = [
   "Next.js 16",
@@ -47,27 +55,24 @@ export default async function Home() {
             </a>
           </div>
           <div className="flex items-center gap-3">
-            <Link
-              href={`/${locale}/login`}
-              className="px-3 py-2 text-sm font-medium text-zinc-300 transition-colors hover:text-zinc-100"
-            >
-              {auth("loginTitle")}
-            </Link>
-            <Link
-              href={`/${locale}/register`}
-              className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-emerald-400"
-            >
-              {auth("registerTitle")}
-            </Link>
+            <Button asChild size="sm">
+              <Link href={`/${locale}/login`}>{auth("loginTitle")}</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm">
+              <Link href={`/${locale}/register`}>{auth("registerTitle")}</Link>
+            </Button>
           </div>
         </nav>
       </header>
 
       {/* ── Hero ── */}
       <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-6 py-24 text-center md:py-32">
-        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1.5 text-xs font-medium tracking-wide text-emerald-400">
+        <Badge
+          variant="outline"
+          className="rounded-full border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+        >
           {t("heroBadge")}
-        </span>
+        </Badge>
         <h1 className="mt-6 text-5xl font-bold tracking-tight text-zinc-100 md:text-7xl">
           {t("heroTitle")}
         </h1>
@@ -75,19 +80,26 @@ export default async function Home() {
           {t("heroSubtitle")}
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-          <Link
-            href={`/${locale}/dashboard`}
-            className="group flex items-center gap-2 rounded-full bg-emerald-500 px-7 py-3.5 text-base font-semibold text-black transition-all hover:bg-emerald-400 hover:shadow-lg hover:shadow-emerald-500/25"
+          <Button
+            asChild
+            size="lg"
+            className="normal-case tracking-normal text-base"
           >
-            {t("heroCta")}
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-          </Link>
-          <a
-            href="#features"
-            className="rounded-full border border-white/15 px-7 py-3.5 text-base font-medium text-zinc-200 transition-colors hover:border-white/30 hover:bg-white/5"
+            <Link
+              href={`/${locale}/dashboard`}
+              className="flex items-center gap-2"
+            >
+              {t("heroCta")}
+              <ArrowRight className="h-4 w-4 transition-transform group-hover/button:translate-x-1" />
+            </Link>
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            className="normal-case tracking-normal text-base"
           >
-            {t("heroSecondary")}
-          </a>
+            <a href="#features">{t("heroSecondary")}</a>
+          </Button>
         </div>
       </section>
 
@@ -98,20 +110,28 @@ export default async function Home() {
         </h2>
         <div className="mt-10 grid gap-6 md:grid-cols-2">
           {features.map(({ icon: Icon, title, desc }) => (
-            <div
+            <Card
               key={title}
-              className="flex items-start gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 transition-colors hover:border-white/20"
+              className="relative rounded-2xl border border-white/10 bg-white/5 shadow-none ring-0 backdrop-blur-xl transition-colors hover:border-white/20 [--card-spacing:--spacing(6)]"
             >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15">
-                <Icon className="h-5 w-5 text-emerald-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-zinc-100">{title}</h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">
-                  {desc}
-                </p>
-              </div>
-            </div>
+              {/* top edge highlight */}
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+              {/* soft glass sheen */}
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/[0.06] to-transparent" />
+              <CardContent className="relative flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15">
+                  <Icon className="h-5 w-5 text-emerald-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-semibold text-zinc-100">
+                    {title}
+                  </CardTitle>
+                  <CardDescription className="mt-1.5 text-sm leading-relaxed text-zinc-400">
+                    {desc}
+                  </CardDescription>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       </section>
@@ -123,12 +143,13 @@ export default async function Home() {
         </h2>
         <div className="mt-10 flex flex-wrap justify-center gap-3">
           {TECH_STACK.map((tech) => (
-            <span
+            <Badge
               key={tech}
-              className="rounded-full border border-white/10 bg-white/5 px-5 py-2.5 text-sm text-zinc-300"
+              variant="outline"
+              className="rounded-full border-white/10 bg-white/5 px-5 py-2.5 text-sm text-zinc-300"
             >
               {tech}
-            </span>
+            </Badge>
           ))}
         </div>
       </section>
@@ -141,13 +162,19 @@ export default async function Home() {
         <p className="mx-auto mt-4 max-w-xl text-lg text-zinc-400">
           {t("ctaDesc")}
         </p>
-        <Link
-          href={`/${locale}/dashboard`}
-          className="mt-10 inline-flex items-center gap-2 rounded-full bg-emerald-500 px-8 py-4 text-lg font-semibold text-black transition-all hover:bg-emerald-400 hover:shadow-lg hover:shadow-emerald-500/25"
+        <Button
+          asChild
+          size="lg"
+          className="mt-10 rounded-full normal-case tracking-normal text-base"
         >
-          {t("ctaButton")}
-          <ArrowRight className="h-5 w-5" />
-        </Link>
+          <Link
+            href={`/${locale}/dashboard`}
+            className="flex items-center gap-2"
+          >
+            {t("ctaButton")}
+            <ArrowRight className="h-5 w-5" />
+          </Link>
+        </Button>
       </section>
 
       {/* ── Footer ── */}
