@@ -8,6 +8,7 @@ import { AuthProvider } from "@/providers/auth-provider";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { LenisProvider } from "@/providers/lenis-provider";
 
 const playfairDisplayHeading = Playfair_Display({
   subsets: ["latin"],
@@ -61,11 +62,13 @@ export default async function RootLayout({
       )}
     >
       <body className="min-h-full flex flex-col">
-        <NextIntlClientProvider messages={messages}>
-          <TooltipProvider>
-            <AuthProvider>{children}</AuthProvider>
-          </TooltipProvider>
-        </NextIntlClientProvider>
+        <LenisProvider>
+          <NextIntlClientProvider messages={messages}>
+            <TooltipProvider>
+              <AuthProvider>{children}</AuthProvider>
+            </TooltipProvider>
+          </NextIntlClientProvider>
+        </LenisProvider>
       </body>
     </html>
   );
