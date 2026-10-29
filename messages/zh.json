@@ -113,6 +113,9 @@
     "successLogin": "登录成功",
     "successRegister": "注册成功",
     "welcomeBack": "欢迎回来",
-    "createAccount": "创建新账号"
+    "createAccount": "创建新账号",
+    "orContinueWith": "或使用以下方式继续",
+    "continueWithLogto": "使用 Logto 登录",
+    "errorLogto": "Logto 登录失败，请重试"
   }
 }

@@ -64,15 +64,18 @@ export async function deleteSession(
   await prisma.session.deleteMany({ where: { tokenHash: hashToken(token) } });
 }
 
+/** 会话 cookie 的写入选项, 同时供 NextResponse 和 next/headers 的 cookieStore 使用 */
+export const sessionCookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  path: "/",
+  maxAge: SESSION_DURATION_MS / 1000,
+} as const;
+
 /** 写入 httpOnly cookie 到响应 */
 export function setSessionCookie(response: NextResponse, token: string): void {
-  response.cookies.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_DURATION_MS / 1000,
-  });
+  response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions);
 }
 
 /** 清除 session cookie */

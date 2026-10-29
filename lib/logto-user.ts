@@ -6,24 +6,22 @@ import { prisma } from "@/lib/prisma";
 /**
  * 把 Logto 身份映射到本地 User 表。
  *
- * 以 email 作为关联键: 本地已存在同邮箱用户时复用, 否则自动创建一个
- * "外部登录" 用户。外部用户没有本地密码, 因此写入一个随机 bcrypt 哈希占位,
- * 这样 POST /api/auth/login 的密码校验必然失败, 不会留下可用的空密码。
+ * 关联键的选择:
+ * - 有已验证邮箱时用邮箱, 这样能和本地邮箱密码注册的账号自动合并
+ * - 否则(例如本实例只启用 username 登录, 没有邮箱验证流程)用 Logto 的稳定
+ *   sub 派生占位邮箱 `<sub>@logto.local`。占位域名不会被真实邮箱占用, 同时
+ *   避免把未验证的邮箱和本地已有账号关联, 防止账号接管。
  *
- * 安全前提: 只接受已验证的邮箱, 否则任何人都能在 Logto 注册一个
- * 与本地账号相同的邮箱来接管它。
+ * 外部账号没有本地密码, 因此写入随机 bcrypt 哈希占位, 使
+ * POST /api/auth/login 的密码校验必然失败。
  */
 export async function upsertLogtoUser(claims: IdTokenClaims) {
-  const email = claims.email?.trim().toLowerCase();
-  if (!email) {
-    throw new Error(
-      "Logto account has no email claim; make sure the email scope is granted",
-    );
-  }
+  const verifiedEmail =
+    claims.email && claims.email_verified === true
+      ? claims.email.trim().toLowerCase()
+      : undefined;
 
-  if (claims.email_verified !== true) {
-    throw new Error("Logto account email is not verified");
-  }
+  const email = verifiedEmail ?? `${claims.sub}@logto.local`;
 
   const profile = {
     ...(claims.name ? { name: claims.name } : {}),
@@ -43,13 +41,12 @@ export async function upsertLogtoUser(claims: IdTokenClaims) {
     });
   }
 
-  // 外部账号没有本地密码, 用随机 bcrypt 哈希占位
   const passwordHash = await bcrypt.hash(randomBytes(32).toString("hex"), 12);
   return prisma.user.create({
     data: {
       email,
       passwordHash,
-      name: claims.name ?? claims.username ?? null,
+      name: claims.name ?? claims.username ?? claims.sub,
       avatarUrl: claims.picture ?? null,
     },
   });

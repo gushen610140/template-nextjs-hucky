@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -44,6 +44,13 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [logtoError, setLogtoError] = useState(false);
+
+  // /callback 失败时会带 ?error=logto 回到登录页
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setLogtoError(params.get("error") === "logto");
+  }, []);
 
   function validatePassword(): FormErrors {
     const errs: FormErrors = {};
@@ -357,6 +364,30 @@ export default function LoginPage() {
               </form>
             </TabsContent>
           </Tabs>
+
+          {logtoError && (
+            <p className="mt-4 text-center text-xs text-destructive">
+              {t("errorLogto")}
+            </p>
+          )}
+
+          <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            {t("orContinueWith")}
+            <span className="h-px flex-1 bg-border" />
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              const next = encodeURIComponent(getRedirectDestination());
+              window.location.href = `/api/auth/logto?next=${next}`;
+            }}
+          >
+            {t("continueWithLogto")}
+          </Button>
 
           <Button
             asChild

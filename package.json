@@ -12,6 +12,7 @@
   "dependencies": {
     "@hugeicons/core-free-icons": "^4.2.0",
     "@hugeicons/react": "^1.1.6",
+    "@logto/next": "^5.0.2",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.0",
     "@react-three/drei": "^10.7.7",

@@ -113,6 +113,9 @@
     "successLogin": "Login successful",
     "successRegister": "Registration successful",
     "welcomeBack": "Welcome back",
-    "createAccount": "Create your account"
+    "createAccount": "Create your account",
+    "orContinueWith": "Or continue with",
+    "continueWithLogto": "Continue with Logto",
+    "errorLogto": "Logto sign-in failed, please try again"
   }
 }

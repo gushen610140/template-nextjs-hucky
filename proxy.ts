@@ -20,6 +20,14 @@ function isPublicRoute(pathname: string) {
 }
 
 export default async function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  // Logto 回调不带 locale 前缀, 直接交给 app/callback/route.ts。
+  // 必须在 intlMiddleware 之前放行, 否则会被重写/重定向到 /<locale>/callback 而 404。
+  if (pathname === "/callback") {
+    return NextResponse.next();
+  }
+
   // 国际化路径重写
   const intlResponse = intlMiddleware(request);
 
@@ -27,8 +35,6 @@ export default async function proxy(request: NextRequest) {
   if (intlResponse.status >= 300 && intlResponse.status < 400) {
     return intlResponse;
   }
-
-  const pathname = request.nextUrl.pathname;
 
   // 放行公共路由
   if (isPublicRoute(pathname)) {
