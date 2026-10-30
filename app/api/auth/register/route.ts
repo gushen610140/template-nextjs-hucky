@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createSession, setSessionCookie } from "@/lib/session";
 
@@ -80,6 +81,16 @@ export async function POST(request: Request) {
     setSessionCookie(response, token);
     return response;
   } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return NextResponse.json(
+        { errors: { email: "Email already registered" } },
+        { status: 409 },
+      );
+    }
+
     console.error("Register error:", error);
     return NextResponse.json(
       { error: "Internal server error" },

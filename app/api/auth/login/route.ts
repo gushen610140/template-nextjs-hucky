@@ -59,6 +59,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!user.isActive) {
+      return NextResponse.json(
+        { errors: { email: "Account is disabled" } },
+        { status: 403 },
+      );
+    }
+
     // ── Verify credentials ─────────────────────────────
 
     if (mode === "password") {

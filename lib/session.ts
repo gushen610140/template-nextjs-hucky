@@ -35,7 +35,7 @@ export async function createSession(userId: string): Promise<string> {
   return token;
 }
 
-/** 校验 token 并返回对应用户(不含 passwordHash), 无效/过期返回 null */
+/** 校验 token 并返回对应用户(不含 passwordHash), 无效/过期/禁用返回 null */
 export async function getSessionUser(
   token: string | null | undefined,
 ): Promise<Omit<User, "passwordHash"> | null> {
@@ -43,17 +43,30 @@ export async function getSessionUser(
 
   const session = await prisma.session.findUnique({
     where: { tokenHash: hashToken(token) },
-    include: { user: true },
+    select: {
+      id: true,
+      expiresAt: true,
+      user: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          avatarUrl: true,
+          isActive: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+    },
   });
   if (!session) return null;
 
-  if (session.expiresAt.getTime() < Date.now()) {
-    await prisma.session.delete({ where: { id: session.id } });
+  if (session.expiresAt.getTime() < Date.now() || !session.user.isActive) {
+    await prisma.session.deleteMany({ where: { id: session.id } });
     return null;
   }
 
-  const { passwordHash: _, ...user } = session.user;
-  return user;
+  return session.user;
 }
 
 /** 删除会话(登出) */
