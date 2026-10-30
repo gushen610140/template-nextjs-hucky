@@ -1,0 +1,87 @@
+---
+title: 主题配置
+description: 用 Popover 调整基础色、主色、圆角和阴影，并同步到 Fumadocs
+---
+
+项目在首页和 Dashboard 的顶栏提供了一个主题配置按钮（调色板图标）。它和深浅色切换按钮并列，点击后可以即时修改整套 shadcn token。
+
+## 可配置项
+
+| 选项 | 内容 |
+| --- | --- |
+| 基础色 | Neutral、Stone、Zinc、Mauve、Olive、Mist、Taupe |
+| 主色 | Emerald、Blue、Violet、Rose、Orange、Red、Yellow、Teal |
+| 圆角 | None、Small、Medium、Large、Default、XL |
+| 阴影 | None、Soft、Default、Strong |
+
+设置会写入 `localStorage`，键名是：
+
+```text
+hucky-theme-customization
+```
+
+刷新页面后会自动恢复。点击面板里的“重置”会恢复默认值：Neutral + Emerald + Default 圆角 + Default 阴影。
+
+## 实现结构
+
+| 路径 | 作用 |
+| --- | --- |
+| `lib/theme-presets.ts` | 色板、圆角、阴影预设，以及 token 生成函数 |
+| `providers/theme-customizer-provider.tsx` | 读取/保存配置，把变量写到 `<html>` |
+| `components/theme-customizer.tsx` | Popover 配置面板 |
+| `components/ui/popover.tsx` | 通用 Popover 基础组件 |
+
+配置变化时，Provider 会根据当前 `resolvedTheme` 选择浅色或深色色板，然后把 CSS 变量设置到 `document.documentElement.style`。
+
+## shadcn token
+
+颜色会覆盖这些 shadcn 变量：
+
+```text
+--background / --foreground
+--card / --card-foreground
+--popover / --popover-foreground
+--primary / --primary-foreground
+--secondary / --secondary-foreground
+--muted / --muted-foreground
+--accent / --accent-foreground
+--destructive
+--border / --input / --ring
+--chart-1 ... --chart-5
+--sidebar / --sidebar-*
+```
+
+圆角通过 `--radius` 控制，项目已有的 `--radius-sm` 到 `--radius-4xl` 会基于它计算。
+
+阴影通过一层间接变量控制：
+
+```text
+--app-shadow-*  →  --shadow-*  →  Tailwind shadow utilities
+```
+
+因此 `shadow-sm`、`shadow-md`、`shadow-xl` 等 utility 会跟随阴影预设变化。
+
+## Fumadocs 同步
+
+Fumadocs 使用 `--color-fd-*` 变量。Provider 会同步设置这些变量，例如：
+
+```text
+--color-fd-background
+--color-fd-foreground
+--color-fd-primary
+--color-fd-primary-foreground
+--color-fd-border
+--color-fd-ring
+```
+
+所以修改基础色或主色后，文档侧边栏、按钮、边框和强调色也会一起变化。
+
+## 增加新预设
+
+在 `lib/theme-presets.ts` 中：
+
+1. 给 `BASE_SCALES` 或 `PRIMARY_SCALES` 增加一组 50–950 的色阶。
+2. 在 `messages/zh.json` 和 `messages/en.json` 的 `ThemeCustomizer` 中补名称。
+3. 不需要改 Provider 或 Popover，组件会自动列出新选项。
+
+新增圆角或阴影预设时，同时更新 `RADIUS_PRESETS` / `SHADOW_PRESETS` 和对应翻译。

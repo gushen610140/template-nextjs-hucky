@@ -1,0 +1,87 @@
+---
+title: Theme configuration
+description: Adjust base color, primary color, radius, and shadows from a popover
+---
+
+The home and dashboard top bars expose a theme configuration button (palette icon) next to the light/dark toggle. It updates the shadcn token set immediately.
+
+## Options
+
+| Option | Values |
+| --- | --- |
+| Base color | Neutral, Stone, Zinc, Mauve, Olive, Mist, Taupe |
+| Primary color | Emerald, Blue, Violet, Rose, Orange, Red, Yellow, Teal |
+| Radius | None, Small, Medium, Large, Default, XL |
+| Shadow | None, Soft, Default, Strong |
+
+Settings are stored in `localStorage` under:
+
+```text
+hucky-theme-customization
+```
+
+They are restored after a reload. The Reset button returns to Neutral + Emerald + Default radius + Default shadow.
+
+## Implementation
+
+| Path | Purpose |
+| --- | --- |
+| `lib/theme-presets.ts` | Palettes, radius/shadow presets, token generation |
+| `providers/theme-customizer-provider.tsx` | Load/save settings and write CSS variables to `<html>` |
+| `components/theme-customizer.tsx` | Popover UI |
+| `components/ui/popover.tsx` | Shared popover primitive |
+
+The provider selects the light or dark palette from `resolvedTheme`, then applies the generated variables to `document.documentElement.style`.
+
+## shadcn tokens
+
+The customizer updates:
+
+```text
+--background / --foreground
+--card / --card-foreground
+--popover / --popover-foreground
+--primary / --primary-foreground
+--secondary / --secondary-foreground
+--muted / --muted-foreground
+--accent / --accent-foreground
+--destructive
+--border / --input / --ring
+--chart-1 ... --chart-5
+--sidebar / --sidebar-*
+```
+
+Radius is controlled by `--radius`; the existing `--radius-sm` through `--radius-4xl` tokens derive from it.
+
+Shadows use one indirection layer:
+
+```text
+--app-shadow-*  →  --shadow-*  →  Tailwind shadow utilities
+```
+
+That means `shadow-sm`, `shadow-md`, `shadow-xl`, and similar utilities follow the selected shadow preset.
+
+## Fumadocs
+
+Fumadocs reads `--color-fd-*`. The provider mirrors the app palette into variables such as:
+
+```text
+--color-fd-background
+--color-fd-foreground
+--color-fd-primary
+--color-fd-primary-foreground
+--color-fd-border
+--color-fd-ring
+```
+
+Changing the base or primary color also updates the docs sidebar, buttons, borders, and accents.
+
+## Adding presets
+
+In `lib/theme-presets.ts`:
+
+1. Add a 50–950 scale to `BASE_SCALES` or `PRIMARY_SCALES`.
+2. Add its label under `ThemeCustomizer` in `messages/zh.json` and `messages/en.json`.
+3. The provider and popover discover it automatically.
+
+For a new radius or shadow preset, update `RADIUS_PRESETS` / `SHADOW_PRESETS` and the matching translations.
