@@ -48,9 +48,27 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --shadow-2xs: var(--app-shadow-2xs);
+  --shadow-xs: var(--app-shadow-xs);
+  --shadow-sm: var(--app-shadow-sm);
+  --shadow-md: var(--app-shadow-md);
+  --shadow-lg: var(--app-shadow-lg);
+  --shadow-xl: var(--app-shadow-xl);
+  --shadow-2xl: var(--app-shadow-2xl);
+  --shadow: var(--app-shadow-DEFAULT);
+  --shadow-inner: var(--app-shadow-inner);
 }
 
 :root {
+  --app-shadow-2xs: 0 1px rgb(0 0 0 / 0.05);
+  --app-shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --app-shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --app-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --app-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --app-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --app-shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  --app-shadow-DEFAULT: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --app-shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
