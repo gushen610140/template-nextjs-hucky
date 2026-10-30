@@ -9,6 +9,7 @@ import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { LenisProvider } from "@/providers/lenis-provider";
+import { ThemeProvider } from "@/providers/theme-provider";
 
 const playfairDisplayHeading = Playfair_Display({
   subsets: ["latin"],
@@ -50,6 +51,7 @@ export default async function RootLayout({
   return (
     <html
       lang={locale}
+      suppressHydrationWarning
       className={cn(
         "h-full",
         "antialiased",
@@ -58,17 +60,18 @@ export default async function RootLayout({
         "font-sans",
         dmSans.variable,
         playfairDisplayHeading.variable,
-        "dark",
       )}
     >
       <body className="min-h-full flex flex-col">
-        <LenisProvider>
-          <NextIntlClientProvider messages={messages}>
-            <TooltipProvider>
-              <AuthProvider>{children}</AuthProvider>
-            </TooltipProvider>
-          </NextIntlClientProvider>
-        </LenisProvider>
+        <ThemeProvider>
+          <LenisProvider>
+            <NextIntlClientProvider messages={messages}>
+              <TooltipProvider>
+                <AuthProvider>{children}</AuthProvider>
+              </TooltipProvider>
+            </NextIntlClientProvider>
+          </LenisProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

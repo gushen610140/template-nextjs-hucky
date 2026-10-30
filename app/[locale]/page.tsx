@@ -1,6 +1,7 @@
 import { ArrowRight, Blocks, KeyRound, ShieldCheck, Zap } from "lucide-react";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,26 +36,27 @@ export default async function Home() {
   return (
     <main className="flex min-h-screen flex-col">
       {/* ── Nav ── */}
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-background/80 backdrop-blur">
+      <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur">
         <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link
             href={`/${locale}`}
-            className="text-lg font-bold tracking-tight text-zinc-100"
+            className="text-lg font-bold tracking-tight text-foreground"
           >
             Hucky
           </Link>
-          <div className="hidden items-center gap-8 text-sm text-zinc-400 md:flex">
+          <div className="hidden items-center gap-8 text-sm text-muted-foreground md:flex">
             <a
               href="#features"
-              className="transition-colors hover:text-zinc-100"
+              className="transition-colors hover:text-foreground"
             >
               {t("navFeatures")}
             </a>
-            <a href="#tech" className="transition-colors hover:text-zinc-100">
+            <a href="#tech" className="transition-colors hover:text-foreground">
               {t("navTech")}
             </a>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Button asChild size="sm">
               <Link href={`/${locale}/login`}>{auth("loginTitle")}</Link>
             </Button>
@@ -69,14 +71,14 @@ export default async function Home() {
       <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-6 py-24 text-center">
         <Badge
           variant="outline"
-          className="rounded-full border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+          className="rounded-full border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
         >
           {t("heroBadge")}
         </Badge>
-        <h1 className="mt-6 text-5xl font-bold tracking-tight text-zinc-100 md:text-7xl">
+        <h1 className="mt-6 text-5xl font-bold tracking-tight text-foreground md:text-7xl">
           {t("heroTitle")}
         </h1>
-        <p className="mt-6 max-w-2xl text-lg leading-relaxed text-zinc-400">
+        <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">
           {t("heroSubtitle")}
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
@@ -106,7 +108,7 @@ export default async function Home() {
 
       {/* ── Features ── */}
       <section id="features" className="mx-auto w-full max-w-6xl px-6 py-10">
-        <h2 className="text-3xl font-bold tracking-tight text-zinc-100">
+        <h2 className="text-3xl font-bold tracking-tight text-foreground">
           {t("featureTitle")}
         </h2>
         <div className="mt-10 grid gap-6 md:grid-cols-2">
@@ -114,13 +116,13 @@ export default async function Home() {
             <Card key={title} className="[--card-spacing:--spacing(6)]">
               <CardContent className="relative flex items-start gap-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15">
-                  <Icon className="h-5 w-5 text-emerald-400" />
+                  <Icon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg font-semibold text-zinc-100">
+                  <CardTitle className="text-lg font-semibold text-foreground">
                     {title}
                   </CardTitle>
-                  <CardDescription className="mt-1.5 text-sm leading-relaxed text-zinc-400">
+                  <CardDescription className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
                     {desc}
                   </CardDescription>
                 </div>
@@ -132,7 +134,7 @@ export default async function Home() {
 
       {/* ── Tech stack ── */}
       <section id="tech" className="mx-auto w-full max-w-6xl px-6 py-10">
-        <h2 className="text-center text-3xl font-bold tracking-tight text-zinc-100">
+        <h2 className="text-center text-3xl font-bold tracking-tight text-foreground">
           {t("techTitle")}
         </h2>
         <div className="mt-10 flex flex-wrap justify-center gap-3">
@@ -140,7 +142,7 @@ export default async function Home() {
             <Badge
               key={tech}
               variant="outline"
-              className="rounded-full border-white/10 bg-white/5 px-5 py-2.5 text-sm text-zinc-300"
+              className="rounded-full border-border bg-muted/50 px-5 py-2.5 text-sm text-muted-foreground"
             >
               {tech}
             </Badge>
@@ -150,10 +152,10 @@ export default async function Home() {
 
       {/* ── CTA ── */}
       <section className="mx-auto w-full max-w-6xl px-6 py-24 text-center">
-        <h2 className="text-4xl font-bold tracking-tight text-zinc-100">
+        <h2 className="text-4xl font-bold tracking-tight text-foreground">
           {t("ctaTitle")}
         </h2>
-        <p className="mx-auto mt-4 max-w-2xl text-lg text-zinc-400">
+        <p className="mx-auto mt-4 max-w-2xl text-lg text-muted-foreground">
           {t("ctaDesc")}
         </p>
         <Button
@@ -172,7 +174,7 @@ export default async function Home() {
       </section>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-white/10 py-8 text-center text-sm text-zinc-500">
+      <footer className="border-t border-border py-8 text-center text-sm text-muted-foreground">
         {t("footerRights")}
       </footer>
     </main>

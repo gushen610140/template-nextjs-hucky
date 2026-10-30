@@ -44,6 +44,12 @@
     "notifications": "通知",
     "logout": "退出"
   },
+  "Theme": {
+    "toggle": "切换主题",
+    "light": "浅色",
+    "dark": "深色",
+    "system": "跟随系统"
+  },
   "Landing": {
     "navFeatures": "核心特性",
     "navTech": "技术栈",

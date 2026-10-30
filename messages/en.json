@@ -44,6 +44,12 @@
     "notifications": "Notifications",
     "logout": "Log out"
   },
+  "Theme": {
+    "toggle": "Toggle theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
   "Landing": {
     "navFeatures": "Features",
     "navTech": "Tech Stack",
