@@ -7,7 +7,7 @@ import { getSessionUser, SESSION_COOKIE } from "./lib/session";
 // intl 国际化重定向组件构造
 const intlMiddleware = createMiddleware(routing);
 
-const publicRoutes = ["/", "/login", "/register"];
+const publicRoutes = ["/", "/login", "/register", "/docs"];
 function isPublicRoute(pathname: string) {
   // 去除路径中的语言前缀再做匹配
   const pathWithoutLocale =
