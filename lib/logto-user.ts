@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { IdTokenClaims } from "@logto/next";
 import bcrypt from "bcryptjs";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -42,12 +43,26 @@ export async function upsertLogtoUser(claims: IdTokenClaims) {
   }
 
   const passwordHash = await bcrypt.hash(randomBytes(32).toString("hex"), 12);
-  return prisma.user.create({
-    data: {
-      email,
-      passwordHash,
-      name: claims.name ?? claims.username ?? claims.sub,
-      avatarUrl: claims.picture ?? null,
-    },
-  });
+  try {
+    return await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        name: claims.name ?? claims.username ?? claims.sub,
+        avatarUrl: claims.picture ?? null,
+      },
+    });
+  } catch (error) {
+    // 同一 Logto 身份并发回调时, 另一个请求可能已经创建了该邮箱。
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return prisma.user.update({
+        where: { email },
+        data: profile,
+      });
+    }
+    throw error;
+  }
 }
