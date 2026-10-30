@@ -1,0 +1,158 @@
+---
+title: RBAC 权限
+description: 用户、角色、权限模型，以及如何在业务代码中做授权判断
+---
+
+项目的 RBAC 数据模型已经建好，但还没有角色管理 UI 或统一的授权中间件。当前状态是：**数据结构可用，授权逻辑需要业务代码接入**。
+
+## 数据模型
+
+<Mermaid
+  chart={`
+erDiagram
+  User ||--o{ UserRole : has
+  Role ||--o{ UserRole : assigned
+  Role ||--o{ RolePermission : grants
+  Permission ||--o{ RolePermission : included
+  User ||--o{ Session : owns
+
+  User {
+    string id PK
+    string email UK
+    string passwordHash
+    boolean isActive
+  }
+  Role {
+    string id PK
+    string name UK
+    string description
+  }
+  Permission {
+    string id PK
+    string name UK
+    string module
+  }
+  UserRole {
+    string userId PK,FK
+    string roleId PK,FK
+  }
+  RolePermission {
+    string roleId PK,FK
+    string permissionId PK,FK
+  }
+`}
+/>
+
+- `UserRole` 和 `RolePermission` 使用复合主键，防止重复分配。
+- 所有关联都使用 `onDelete: Cascade`。
+- `Permission.name` 是稳定的授权标识，例如 `user:create`、`post:publish`。
+- `Permission.module` 用于按模块分组展示或筛选。
+
+## 分配角色
+
+目前可以通过 Prisma Studio、迁移种子脚本或自己的管理 API 分配角色。
+
+```ts
+await prisma.userRole.create({
+  data: {
+    userId,
+    roleId,
+  },
+});
+```
+
+给角色添加权限：
+
+```ts
+await prisma.rolePermission.create({
+  data: {
+    roleId,
+    permissionId,
+  },
+});
+```
+
+一次查询用户的全部权限：
+
+```ts
+const user = await prisma.user.findUnique({
+  where: { id: userId },
+  select: {
+    roles: {
+      select: {
+        role: {
+          select: {
+            name: true,
+            permissions: {
+              select: {
+                permission: {
+                  select: { name: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+});
+
+const permissions = new Set(
+  user?.roles.flatMap(({ role }) =>
+    role.permissions.map(({ permission }) => permission.name),
+  ) ?? [],
+);
+```
+
+## 授权判断
+
+不要在客户端根据按钮是否显示来判断权限；权限必须在服务端校验。
+
+```ts
+async function hasPermission(userId: string, permission: string) {
+  const count = await prisma.rolePermission.count({
+    where: {
+      permission: { name: permission },
+      role: {
+        users: {
+          some: { userId },
+        },
+      },
+    },
+  });
+
+  return count > 0;
+}
+```
+
+在 Route Handler 或 Server Action 中：
+
+```ts
+const user = await getSessionUser(token);
+if (!user) {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+
+if (!(await hasPermission(user.id, "post:publish"))) {
+  return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+}
+```
+
+## 建议补充的能力
+
+- `lib/authz.ts`：集中导出 `getUserPermissions`、`hasPermission`、`requirePermission`。
+- 管理 API：角色 CRUD、权限 CRUD、用户角色分配。
+- 种子数据：至少创建 `admin`、`user` 两个角色和基础权限。
+- 审计：记录谁给谁分配了什么角色。
+- 缓存：权限查询可以按用户短时间缓存，但角色变更后必须失效。
+
+<Callout type="warn" title="RBAC 不是登录">
+RBAC 只回答“这个已登录用户能做什么”。它不能替代 Session 校验；受保护路由仍然要先通过 `proxy.ts` 或服务端 `getSessionUser`。
+</Callout>
+
+## 增量升级
+
+1. 先补齐权限种子和 `hasPermission`，不要直接在所有页面散落查询。
+2. 再增加角色管理页面。
+3. 如果角色会频繁变化，考虑增加权限缓存和失效机制。
+4. 如果未来需要多租户，应在 `UserRole` 中加入 `tenantId` 或引入独立租户模型，并重新设计唯一约束。

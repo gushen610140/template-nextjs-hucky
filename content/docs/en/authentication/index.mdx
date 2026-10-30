@@ -1,0 +1,122 @@
+---
+title: Authentication & users
+description: Local accounts, Logto sign-in, sessions, and RBAC
+---
+
+The project supports two identity entry points:
+
+- **Email + password**: handled entirely by the local database and sessions.
+- **Logto**: OIDC sign-in, mapped to a local `User`.
+
+Both entry points end up in the same `User` table and the same local session system. The core rule is: **one email maps to one local user**.
+
+<Mermaid
+  chart={`
+flowchart TB
+  Browser[Browser]
+  Local["Email + password"]
+  Logto["Logto OIDC"]
+  Login["/api/auth/login"]
+  Register["/api/auth/register"]
+  LogtoStart["/api/auth/logto"]
+  Callback["/callback"]
+  Session["Local session<br/>httpOnly Cookie"]
+  DB[("PostgreSQL<br/>User / Session / RBAC")]
+
+  Browser --> Local --> Login
+  Browser --> Register
+  Browser --> Logto --> LogtoStart --> Callback
+  Login --> DB
+  Register --> DB
+  Callback --> DB
+  Login --> Session
+  Register --> Session
+  Callback --> Session
+  Session --> Browser
+`}
+/>
+
+## Two sign-in paths
+
+| Path | Entry | Credential | Account source |
+| --- | --- | --- | --- |
+| Email/password | `/login` form | Email + bcrypt hash | Local registration |
+| Logto | `Continue with Logto` | Logto OIDC | Created or merged in callback |
+
+Both paths call `createSession(user.id)` and write the same httpOnly cookie. Application code does not need to know which provider was used.
+
+## Account linking rules
+
+`lib/logto-user.ts` maps Logto claims to a local user:
+
+1. If Logto returns a **verified email**, use that email to find the local user.
+2. If found, update `name` and `avatarUrl`, keep the local `passwordHash`, and allow email/password login to continue.
+3. If not found, create a new local user.
+4. If there is no verified email, use `<logto-sub>@logto.local` as a placeholder email so an unverified email cannot be merged into an existing account.
+
+<Callout type="warn" title="Only trust verified emails">
+An unverified Logto email must not be used for account merging. Otherwise an attacker could enter someone else's email in Logto and take over the local account. The current code only uses the real email when `email_verified === true`.
+</Callout>
+
+## Session model
+
+Local sessions use an opaque token:
+
+- The browser holds a random token in an httpOnly cookie.
+- The database stores only `sha256(token)` in `Session.tokenHash`.
+- `proxy.ts` looks up the session and user on protected requests.
+- Expired sessions and disabled users are rejected and their sessions are deleted.
+- Logout deletes the local session and clears the Logto SDK cookie.
+
+<Mermaid
+  chart={`
+sequenceDiagram
+  participant B as Browser
+  participant P as proxy.ts
+  participant S as Session service
+  participant DB as PostgreSQL
+
+  B->>P: Protected request + session Cookie
+  P->>S: getSessionUser(token)
+  S->>DB: findUnique(tokenHash)
+  DB-->>S: Session + User
+  alt Valid and active
+    S-->>P: User
+    P-->>B: Allow
+  else Expired or disabled
+    S->>DB: deleteMany(session)
+    S-->>P: null
+    P-->>B: 302 /login?next=...
+  end
+`}
+/>
+
+## Key files
+
+| Path | Purpose |
+| --- | --- |
+| `app/api/auth/register/route.ts` | Email/password registration |
+| `app/api/auth/login/route.ts` | Email/password login |
+| `app/api/auth/logout/route.ts` | Delete local session and clear cookies |
+| `app/api/auth/me/route.ts` | Return the current user |
+| `app/api/auth/logto/route.ts` | Start Logto sign-in |
+| `app/callback/route.ts` | Logto callback, user mapping, local session |
+| `lib/logto-user.ts` | Logto claims → local User |
+| `lib/session.ts` | Create, validate, delete sessions |
+| `lib/prisma.ts` | Prisma Client singleton |
+| `proxy.ts` | i18n + route protection |
+| `prisma/schema.prisma` | User, Session, Role, Permission models |
+
+## Current limits
+
+- Local **code login is disabled**. There is no email delivery service, so the placeholder that accepted any six-digit code was removed. Passwordless login should go through Logto or a real OTP implementation.
+- No email verification. The email entered at registration is trusted; production should add verification.
+- RBAC tables exist, but there is no admin UI or authorization API yet; business code must enforce permissions.
+- No login rate limiting, audit log, or MFA. See [Evolution](./evolution).
+
+## Next
+
+- [Local accounts and sessions](./local): registration, login, cookies, proxy checks.
+- [Logto](./logto): OIDC flow, claims mapping, account merging.
+- [RBAC](./rbac): users, roles, permissions, and authorization.
+- [Evolution](./evolution): identity table, OTP, linking, revocation, audit.

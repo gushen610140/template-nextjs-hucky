@@ -1,0 +1,142 @@
+---
+title: 演进与扩展
+description: 从当前邮箱绑定模型升级到多身份、OTP、审计和更强的会话体系
+---
+
+当前实现适合“一个邮箱一个用户”的基础场景。下面按风险和收益排序，给出后续增量升级时需要考虑的内容。
+
+## 当前边界
+
+| 能力 | 当前状态 | 风险 |
+| --- | --- | --- |
+| 邮箱密码登录 | 已实现 | 无邮箱验证、无限流 |
+| Logto 登录 | 已实现 | 仅靠邮箱关联，未保存 `sub` |
+| 验证码登录 | 已移除占位逻辑 | 需要真实 OTP 服务后才能启用 |
+| RBAC 模型 | 已建表 | 没有授权 API、管理界面和种子 |
+| Session | 已实现 | 没有“登出所有设备”和审计 |
+| 账号禁用 | 已实现 | 禁用后会拒绝登录并清理会话 |
+| 邮箱变更 | 未处理 | Logto 改邮箱可能产生新账号 |
+
+## 1. 增加身份表
+
+如果希望稳定保存 Logto 的 `sub`，建议增加身份表，而不是继续只用邮箱作为唯一关联键：
+
+```prisma
+model AuthIdentity {
+  id                String   @id @default(cuid())
+  provider          String   // "logto" | "local"
+  providerAccountId String   // Logto sub 或本地稳定 ID
+  userId            String
+  email             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@index([email])
+}
+```
+
+同时给 `User` 增加：
+
+```prisma
+identities AuthIdentity[]
+```
+
+升级顺序：
+
+1. 新增可空结构，不修改现有登录逻辑。
+2. 在用户登录时回填 `AuthIdentity`。
+3. 新逻辑优先按 `provider + providerAccountId` 查找。
+4. 只有不存在身份记录时才按已验证邮箱合并。
+5. 最后再决定是否移除对邮箱关联的依赖。
+
+<Callout type="warn" title="不要直接用未验证邮箱合并">
+邮箱合并必须要求 `email_verified === true`。否则任何人都可以在第三方身份中心填写受害者邮箱，接管本地账号。
+</Callout>
+
+## 2. 实现安全 OTP
+
+当前本地验证码登录已移除，因为它曾经接受任意 6 位数字。正确实现至少需要：
+
+- 服务端生成 OTP，不使用客户端生成。
+- 数据库只保存 OTP 哈希，不保存明文。
+- 设置短过期时间，例如 5 到 10 分钟。
+- 限制验证尝试次数，失败后作废。
+- 按邮箱、IP、设备做速率限制。
+- OTP 使用一次后立即删除。
+- 发送失败时不泄露账号是否存在。
+
+可以新增 `VerificationCode` 模型：
+
+```prisma
+model VerificationCode {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  purpose   String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email, purpose])
+  @@index([expiresAt])
+}
+```
+
+不要恢复“任意 6 位数字通过”的占位逻辑。
+
+## 3. 邮箱验证
+
+注册后增加 `emailVerifiedAt` 字段，并在发送验证邮件前限制登录后的敏感操作。迁移步骤：
+
+1. 新增可空 `emailVerifiedAt`。
+2. 历史用户按业务决定是否视为已验证。
+3. 新注册用户完成验证后再标记。
+4. 未验证用户仍可登录，但限制发布、邀请、支付等高风险操作。
+
+## 4. 会话加固
+
+建议逐步增加：
+
+- Session 轮换：登录或权限提升后创建新 token。
+- “登出所有设备”：按 `userId` 删除全部会话。
+- 定期清理过期会话，并为 `expiresAt` 建立索引。
+- 记录登录时间、IP、User-Agent，支持会话列表。
+- 对高敏感操作要求重新认证。
+
+当前 `getSessionUser` 已经会在过期或用户禁用时清理会话，并且只选择安全字段。后续改动不要重新把 `passwordHash` 查出来。
+
+## 5. 登录限流与审计
+
+登录接口目前没有频率限制。至少应增加：
+
+- 按 IP 和邮箱的滑动窗口限流。
+- 连续失败后的短期锁定。
+- 登录成功、失败、登出、角色变更的审计日志。
+- 告警：同一账号短时间多地登录、密码连续失败。
+
+审计日志不要记录明文密码、Session token 或 OTP。
+
+## 6. RBAC 管理面
+
+当前只有表结构。建议按以下顺序补齐：
+
+1. 种子角色和权限。
+2. `lib/authz.ts` 统一授权判断。
+3. 角色管理 API。
+4. 用户角色分配界面。
+5. 权限变更审计和缓存失效。
+
+## 升级检查清单
+
+- [ ] 修改 schema 后运行 `bunx prisma migrate dev --name ...`
+- [ ] 检查生成的 SQL，尤其是删除列和唯一约束
+- [ ] 运行 `bunx prisma generate`
+- [ ] 更新 `lib/session.ts` 和 `lib/logto-user.ts` 的类型
+- [ ] 为新增的认证路径增加失败场景测试
+- [ ] 确认生产环境 `LOGTO_BASE_URL` 和回调地址
+- [ ] 确认没有把真实密钥写入 `.env.example`
+- [ ] 验证禁用用户无法登录、无法使用旧会话

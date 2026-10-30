@@ -1,0 +1,110 @@
+---
+title: Logto integration
+description: OIDC flow, claims mapping, email merging, and security boundaries
+---
+
+Logto is an optional external identity provider. It handles the sign-in UI and identity verification; the app still owns its `User` table and local session.
+
+## Configuration
+
+Set these in `.env.development` / `.env.production`:
+
+```ini
+LOGTO_ENDPOINT=https://your-tenant.logto.app
+LOGTO_APP_ID=your-app-id
+LOGTO_APP_SECRET=your-app-secret
+LOGTO_BASE_URL=http://localhost:3000
+LOGTO_COOKIE_SECRET=a-long-random-string
+```
+
+- `LOGTO_BASE_URL` must match the site part of the Redirect URI registered in Logto.
+- Register this Redirect URI:
+
+```text
+http://localhost:3000/callback
+```
+
+Use the production domain in production, and keep `/callback` outside the locale prefix.
+
+## Sign-in flow
+
+1. The user clicks `Continue with Logto`.
+2. The browser goes to `/api/auth/logto?next=...`.
+3. `next` is stored in a short-lived `logto_next` httpOnly cookie.
+4. The Logto SDK redirects to the authorization page.
+5. Logto redirects back to `/callback`.
+6. `handleSignIn` exchanges the code for tokens.
+7. `getLogtoContext` reads the claims.
+8. `upsertLogtoUser` maps claims to a local `User`.
+9. A local session is created and the `session` cookie is written.
+10. The user returns to `logto_next` or the default locale dashboard.
+
+<Mermaid
+  chart={`
+sequenceDiagram
+  participant B as Browser
+  participant App as Next.js
+  participant L as Logto
+  participant DB as PostgreSQL
+
+  B->>App: GET /api/auth/logto?next=/zh/dashboard
+  App->>B: 302 Logto + logto_next Cookie
+  B->>L: Sign in
+  L->>B: 302 /callback?code=...
+  B->>App: GET /callback
+  App->>L: Exchange code for tokens
+  L-->>App: ID token / claims
+  App->>DB: findUnique(email) / update / create
+  App->>DB: create Session
+  App->>B: 302 /zh/dashboard + session Cookie
+`}
+/>
+
+## Claims mapping
+
+Rules in `lib/logto-user.ts`:
+
+| Logto claims | Local behavior |
+| --- | --- |
+| `email` and `email_verified === true` | Use the normalized email as the unique key |
+| No verified email | Use `<sub>@logto.local` |
+| Local user with the same email exists | Update `name` and `avatarUrl`, keep `passwordHash` |
+| No local user | Create a `User` with a random bcrypt placeholder password |
+| Concurrent callback creates the same email | Catch `P2002` and update the existing user |
+
+### Why keep the local password
+
+A user can register with email/password, then sign in through Logto with the same verified email. The system merges the profile into the existing account instead of creating a second user. The password hash remains, so both methods work.
+
+### Why use a placeholder email
+
+Some Logto instances only enable username sign-in and provide no verified email. Using an unverified email for matching could let someone take over an existing local account. `<sub>@logto.local` is stable for the Logto identity and cannot collide with a real email.
+
+<Callout type="warn" title="Do not trust unverified email">
+Only `email_verified === true` may participate in email merging. Confirm that Logto has completed verification before changing this rule.
+</Callout>
+
+## Logout
+
+`POST /api/auth/logout`:
+
+1. Deletes the local `Session`.
+2. Clears the `session` cookie.
+3. Clears the Logto SDK cookie `logto_<appId>`.
+
+If the user still has a Logto SSO session, clicking Logto again may return without a password prompt. That is Logto SSO behavior; it does not mean the local session is still valid.
+
+## Current limits
+
+- The Logto `sub` is not stored separately; account linking depends entirely on email. If the email changes in Logto, the next login may look like a new user.
+- There is no UI to inspect or unlink a Logto identity.
+- There is no immutable `sub` mapping. If you need multiple identities, add an `AuthIdentity` table; see [Evolution](./evolution).
+- Callback errors all redirect to `/login?error=logto` without finer error codes.
+
+## Debug checklist
+
+- Is the Redirect URI in Logto exactly `<LOGTO_BASE_URL>/callback`?
+- Does `LOGTO_BASE_URL` match the browser URL?
+- Is `LOGTO_COOKIE_SECRET` at least 32 characters?
+- Does the user actually have a verified email?
+- Does a local user with that email already exist, and is it active?

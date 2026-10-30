@@ -1,0 +1,122 @@
+---
+title: 认证与用户系统
+description: 本地账号、Logto 单点登录、会话与 RBAC 的整体设计
+---
+
+本项目同时支持两种身份入口：
+
+- **邮箱 + 密码**：完全由本地数据库和 Session 管理。
+- **Logto**：通过 OIDC 登录，再把 Logto 身份映射到本地 `User`。
+
+两种入口最终都会落到同一张 `User` 表和同一套本地 Session 上。核心约束是：**一个邮箱只对应一个本地 User**。
+
+<Mermaid
+  chart={`
+flowchart TB
+  Browser[浏览器]
+  Local["邮箱 + 密码"]
+  Logto["Logto OIDC"]
+  Login["/api/auth/login"]
+  Register["/api/auth/register"]
+  LogtoStart["/api/auth/logto"]
+  Callback["/callback"]
+  Session["本地 Session<br/>httpOnly Cookie"]
+  DB[("PostgreSQL<br/>User / Session / RBAC")]
+
+  Browser --> Local --> Login
+  Browser --> Register
+  Browser --> Logto --> LogtoStart --> Callback
+  Login --> DB
+  Register --> DB
+  Callback --> DB
+  Login --> Session
+  Register --> Session
+  Callback --> Session
+  Session --> Browser
+`}
+/>
+
+## 两种登录方式
+
+| 方式 | 入口 | 凭据 | 账号来源 |
+| --- | --- | --- | --- |
+| 邮箱密码 | `/login` 表单 | 邮箱 + bcrypt 密码哈希 | 本地注册 |
+| Logto | `继续使用 Logto` 按钮 | Logto OIDC | Logto 回调时创建或合并 |
+
+本地登录和 Logto 登录最终都会调用 `createSession(user.id)`，写入同一种 httpOnly Cookie。业务代码不需要区分用户最初从哪里登录。
+
+## 账号绑定规则
+
+Logto 回调通过 `lib/logto-user.ts` 将 claims 映射到本地用户：
+
+1. 如果 Logto 返回**已验证邮箱**，使用该邮箱查找本地用户。
+2. 找到本地用户时，更新 `name`、`avatarUrl`，保留本地 `passwordHash`，因此邮箱密码仍然可以继续登录。
+3. 没找到时，创建一个新的本地用户。
+4. 如果没有已验证邮箱，使用 `<logto-sub>@logto.local` 作为占位邮箱，避免把未验证邮箱和本地已有账号错误合并。
+
+<Callout type="warn" title="只信任已验证邮箱">
+未验证的 Logto 邮箱不能用于合并本地账号，否则攻击者可以在 Logto 填写他人邮箱并接管本地账号。当前实现只在 `email_verified === true` 时使用真实邮箱。
+</Callout>
+
+## 会话模型
+
+本地 Session 采用不透明 token：
+
+- 客户端只持有随机 token，保存在 httpOnly Cookie。
+- 数据库只保存 `sha256(token)`，即 `Session.tokenHash`。
+- 每次受保护请求由 `proxy.ts` 根据 token 哈希查询会话和用户。
+- 会话过期或用户被禁用时，服务端会删除会话并拒绝访问。
+- 登出会删除本地 Session，并清理 Logto SDK 的 Cookie。
+
+<Mermaid
+  chart={`
+sequenceDiagram
+  participant B as 浏览器
+  participant P as proxy.ts
+  participant S as Session 服务
+  participant DB as PostgreSQL
+
+  B->>P: 请求受保护页面 + session Cookie
+  P->>S: getSessionUser(token)
+  S->>DB: findUnique(tokenHash)
+  DB-->>S: Session + User
+  alt 会话有效且用户启用
+    S-->>P: User
+    P-->>B: 放行
+  else 过期或用户禁用
+    S->>DB: deleteMany(session)
+    S-->>P: null
+    P-->>B: 302 /login?next=...
+  end
+`}
+/>
+
+## 关键文件
+
+| 路径 | 作用 |
+| --- | --- |
+| `app/api/auth/register/route.ts` | 邮箱密码注册 |
+| `app/api/auth/login/route.ts` | 邮箱密码登录 |
+| `app/api/auth/logout/route.ts` | 删除本地会话并清理 Cookie |
+| `app/api/auth/me/route.ts` | 返回当前登录用户 |
+| `app/api/auth/logto/route.ts` | 发起 Logto 登录 |
+| `app/callback/route.ts` | Logto 回调、映射用户、创建本地会话 |
+| `lib/logto-user.ts` | Logto claims → 本地 User |
+| `lib/session.ts` | Session 创建、校验、删除 |
+| `lib/prisma.ts` | Prisma Client 单例 |
+| `proxy.ts` | 国际化 + 路由保护 |
+| `prisma/schema.prisma` | User、Session、Role、Permission 模型 |
+
+## 当前边界
+
+- 本地**验证码登录未启用**。项目没有邮件发送服务，因此移除了任意 6 位验证码都能登录的占位逻辑；验证码/无密码登录应通过 Logto 或后续专门的 OTP 实现。
+- 没有邮箱验证流程。注册时填写的邮箱默认可信，生产环境建议增加验证邮件。
+- RBAC 数据模型已经建立，但还没有角色管理 UI 和授权 API；授权判断需要业务代码自己实现，详见 [RBAC 权限](./rbac)。
+- 没有登录频率限制、审计日志和 MFA。增量升级建议见[演进与扩展](./evolution)。
+
+## 接下来
+
+- [本地账号与会话](./local)：注册、登录、Cookie、proxy 校验。
+- [Logto 接入](./logto)：OIDC 流程、claims 映射和账号合并。
+- [RBAC 权限](./rbac)：用户、角色、权限模型和授权方式。
+- [演进与扩展](./evolution)：身份表、OTP、账号绑定、会话撤销和审计。

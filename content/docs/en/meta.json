@@ -1,4 +1,13 @@
 {
   "title": "Documentation",
-  "pages": ["index", "getting-started", "infrastructure", "prisma"]
+  "pages": [
+    "---Introduction---",
+    "index",
+    "getting-started",
+    "---Configuration---",
+    "infrastructure",
+    "---Backend---",
+    "prisma",
+    "authentication"
+  ]
 }

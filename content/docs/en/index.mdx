@@ -14,7 +14,7 @@ It pre-builds the parts every full-stack app needs — auth, i18n, database acce
 | Framework | Next.js 16 (App Router, React Compiler) |
 | UI | React 19, Tailwind CSS 4, shadcn/ui, Radix UI |
 | i18n | next-intl |
-| Auth | Logto |
+| Auth | Local email/password + Logto + RBAC |
 | Database | PostgreSQL + Prisma 7 (driver adapter) |
 | Package manager | Bun |
 | Linting | Biome |
@@ -39,6 +39,7 @@ proxy.ts              # auth + i18n middleware
 - [Getting started](./getting-started): install dependencies, configure env vars, initialize the database.
 - [Infrastructure](./infrastructure): package manager and environment variable conventions.
 - [Prisma database](./prisma): data model, PostgreSQL, client usage, and migrations.
+- [Authentication & users](./authentication): local accounts, Logto, sessions, and RBAC.
 - Docs live in `content/docs/<locale>/`; adding an `.mdx` file adds a page.
 
 <Callout title="About this site">

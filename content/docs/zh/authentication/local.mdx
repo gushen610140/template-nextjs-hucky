@@ -1,0 +1,147 @@
+---
+title: 本地账号与会话
+description: 邮箱密码注册、登录、bcrypt、Session Cookie 和路由保护
+---
+
+本地认证不依赖第三方服务：用户表、密码哈希、会话和 Cookie 都在应用和 PostgreSQL 内完成。
+
+## 注册流程
+
+`POST /api/auth/register` 接收：
+
+```json
+{
+  "username": "Hucky",
+  "email": "user@example.com",
+  "password": "至少 6 个字符"
+}
+```
+
+处理步骤：
+
+1. 校验用户名、邮箱格式和密码长度。
+2. 将邮箱 `trim().toLowerCase()`，保证大小写不同但内容相同的邮箱被视为同一个账号。
+3. 查询 `User.email` 是否已存在。
+4. 用 bcrypt（cost 12）生成 `passwordHash`。
+5. 创建 `User`。
+6. 调用 `createSession(user.id)`，写入 httpOnly Session Cookie。
+7. 返回安全的用户字段，不返回 `passwordHash`。
+
+如果并发请求同时通过邮箱检查，数据库唯一索引会兜底；接口捕获 Prisma `P2002` 并返回 `409`，不会变成 500。
+
+<Mermaid
+  chart={`
+sequenceDiagram
+  participant B as 浏览器
+  participant R as /api/auth/register
+  participant DB as PostgreSQL
+
+  B->>R: username / email / password
+  R->>R: 校验 + 邮箱规范化
+  R->>DB: findUnique(email)
+  alt 邮箱已存在
+    DB-->>R: 用户
+    R-->>B: 409 Email already registered
+  else 可注册
+    R->>R: bcrypt.hash(password, 12)
+    R->>DB: create User
+    R->>DB: create Session(tokenHash)
+    R-->>B: 201 + Set-Cookie: session
+  end
+`}
+/>
+
+## 登录流程
+
+`POST /api/auth/login` 只接受邮箱和密码：
+
+1. 校验字段并规范化邮箱。
+2. 按 `email` 查询用户。
+3. 用户不存在返回 404；用户被禁用返回 403。
+4. 用 `bcrypt.compare` 校验密码。
+5. 密码错误返回 401。
+6. 创建新的 Session，并写入 httpOnly Cookie。
+
+<Mermaid
+  chart={`
+sequenceDiagram
+  participant B as 浏览器
+  participant L as /api/auth/login
+  participant DB as PostgreSQL
+
+  B->>L: email / password
+  L->>DB: findUnique(email)
+  DB-->>L: User + passwordHash
+  alt 用户不存在或禁用
+    L-->>B: 404 / 403
+  else 密码错误
+    L->>L: bcrypt.compare
+    L-->>B: 401
+  else 成功
+    L->>DB: create Session(tokenHash)
+    L-->>B: 200 + Set-Cookie: session
+  end
+`}
+/>
+
+## Session 设计
+
+会话采用“客户端持有不透明 token，数据库只存哈希”的方式：
+
+```ts
+// lib/session.ts
+const token = randomBytes(32).toString("base64url");
+const tokenHash = createHash("sha256").update(token).digest("hex");
+
+await prisma.session.create({
+  data: {
+    tokenHash,
+    userId,
+    expiresAt: new Date(Date.now() + SESSION_DURATION_MS),
+  },
+});
+```
+
+数据库泄露时，攻击者只拿到 `tokenHash`，无法反推出 Cookie 中的原始 token。Session 默认有效期为 7 天。
+
+Cookie 选项：
+
+```ts
+{
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  path: "/",
+  maxAge: 7 * 24 * 60 * 60,
+}
+```
+
+## 路由保护
+
+`proxy.ts` 在 next-intl 处理语言前缀之后执行：
+
+1. 公开路由直接放行：`/`、`/login`、`/register`、`/docs`。
+2. 其他页面从 Cookie 读取 `session`。
+3. 调用 `getSessionUser(token)` 查询数据库。
+4. 没有有效用户时跳转 `/<locale>/login?next=<原路径>`。
+5. 登录成功后优先回到 `next` 指定的站内路径。
+
+`next` 参数只接受以 `/` 开头且不以 `//` 开头的路径，防止开放重定向。
+
+## 相关接口
+
+| 接口 | 方法 | 说明 |
+| --- | --- | --- |
+| `/api/auth/register` | `POST` | 注册并自动登录 |
+| `/api/auth/login` | `POST` | 邮箱密码登录 |
+| `/api/auth/logout` | `POST` | 删除当前 Session |
+| `/api/auth/me` | `GET` | 读取当前用户 |
+
+## 安全注意事项
+
+- `passwordHash` 绝不能返回给客户端。
+- 不要降低 bcrypt cost 到 10 以下；生产环境建议使用 12 或更高。
+- 生产环境必须启用 HTTPS，`secure` Cookie 才会生效。
+- 当前没有登录限流。上线前建议按 IP + 邮箱增加速率限制和失败次数锁定。
+- 当前注册不验证邮箱。若业务需要邮箱所有权证明，应增加验证邮件流程。
+- 验证码登录不要使用“任意 6 位数字通过”的占位逻辑；本项目已移除该逻辑，后续实现时应使用一次性、带过期时间和尝试次数的服务端 OTP。

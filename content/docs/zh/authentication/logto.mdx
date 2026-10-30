@@ -1,0 +1,110 @@
+---
+title: Logto 接入
+description: OIDC 登录流程、claims 映射、邮箱合并和账号安全边界
+---
+
+Logto 是可选的外部身份中心。它负责登录界面和身份验证，本项目仍然使用自己的 `User` 表和本地 Session。
+
+## 配置
+
+在 `.env.development` / `.env.production` 中配置：
+
+```ini
+LOGTO_ENDPOINT=https://your-tenant.logto.app
+LOGTO_APP_ID=your-app-id
+LOGTO_APP_SECRET=your-app-secret
+LOGTO_BASE_URL=http://localhost:3000
+LOGTO_COOKIE_SECRET=a-long-random-string
+```
+
+- `LOGTO_BASE_URL` 必须与 Logto 控制台注册的 Redirect URI 的站点部分一致。
+- Redirect URI 应配置为：
+
+```text
+http://localhost:3000/callback
+```
+
+生产环境换成实际域名，并确保 `/callback` 不需要语言前缀。
+
+## 登录流程
+
+1. 用户点击登录页的 `继续使用 Logto`。
+2. 浏览器访问 `/api/auth/logto?next=...`。
+3. `next` 被写入短期的 `logto_next` httpOnly Cookie。
+4. Logto SDK 的 `signIn` 重定向到 Logto 授权页。
+5. Logto 回调到 `/callback`。
+6. `handleSignIn` 用授权码换取 token。
+7. `getLogtoContext` 读取 claims。
+8. `upsertLogtoUser` 把 claims 映射到本地 `User`。
+9. 创建本地 Session，写入 `session` Cookie。
+10. 根据 `logto_next` 或默认语言跳转回站内页面。
+
+<Mermaid
+  chart={`
+sequenceDiagram
+  participant B as 浏览器
+  participant App as Next.js
+  participant L as Logto
+  participant DB as PostgreSQL
+
+  B->>App: GET /api/auth/logto?next=/zh/dashboard
+  App->>B: 302 Logto 授权页 + logto_next Cookie
+  B->>L: 登录
+  L->>B: 302 /callback?code=...
+  B->>App: GET /callback
+  App->>L: 用 code 换 token
+  L-->>App: ID token / claims
+  App->>DB: findUnique(email) / update / create
+  App->>DB: create Session
+  App->>B: 302 /zh/dashboard + session Cookie
+`}
+/>
+
+## claims 如何映射到本地用户
+
+`lib/logto-user.ts` 的规则：
+
+| Logto claims | 本地处理 |
+| --- | --- |
+| `email` 且 `email_verified === true` | 使用规范化邮箱作为唯一键 |
+| 没有已验证邮箱 | 使用 `<sub>@logto.local` 占位邮箱 |
+| 本地已存在同邮箱用户 | 更新 `name`、`avatarUrl`，保留 `passwordHash` |
+| 本地不存在 | 创建新 `User`，写入随机 bcrypt 占位密码 |
+| 并发回调同时创建 | 捕获 `P2002`，改为更新已存在的用户 |
+
+### 为什么保留本地密码
+
+如果用户先用邮箱密码注册，再用同一个已验证邮箱登录 Logto，系统会把 Logto 资料合并到已有账号，而不是创建第二个账号。`passwordHash` 不会被清空，所以两种登录方式可以同时使用。
+
+### 为什么使用占位邮箱
+
+部分 Logto 实例只启用 username 登录，不提供已验证邮箱。此时如果把未验证邮箱直接用于匹配，本地已有账号可能被他人接管。`<sub>@logto.local` 使用 Logto 的稳定 `sub`，既能保证一个 Logto 身份对应一个本地用户，又不会和真实邮箱冲突。
+
+<Callout type="warn" title="不要信任未验证邮箱">
+只有 `email_verified === true` 才能参与邮箱合并。修改这段逻辑前，先确认 Logto 是否已经完成邮箱验证。
+</Callout>
+
+## 登出
+
+`POST /api/auth/logout` 会：
+
+1. 删除本地 `Session`。
+2. 清除 `session` Cookie。
+3. 清除 Logto SDK 的 `logto_<appId>` Cookie，避免残留登录态。
+
+如果用户还停留在 Logto 的全局会话中，再次点击 Logto 登录可能无需输入密码直接返回。这是 Logto 的 SSO 行为，不等于本地 Session 仍然有效。
+
+## 当前限制
+
+- 没有单独保存 Logto `sub`，账号关联完全依赖邮箱。用户在 Logto 修改邮箱后，下一次登录可能被识别为新用户。
+- 没有“解绑 Logto”或“查看已绑定身份”的界面。
+- 没有把 Logto 的 `sub` 与本地用户建立不可变映射；如果未来需要多身份绑定，建议增加 `AuthIdentity` 表，详见[演进与扩展](./evolution)。
+- Logto 回调失败时统一回到 `/login?error=logto`，没有细分错误码。
+
+## 调试清单
+
+- Logto 控制台的 Redirect URI 是否是 `<LOGTO_BASE_URL>/callback`。
+- `LOGTO_BASE_URL` 是否与浏览器实际访问地址一致。
+- `LOGTO_COOKIE_SECRET` 是否至少 32 个字符。
+- 用户是否真的拥有已验证邮箱。
+- 本地是否已经存在同邮箱用户，以及该用户是否被禁用。

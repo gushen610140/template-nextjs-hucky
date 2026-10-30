@@ -1,0 +1,158 @@
+---
+title: RBAC permissions
+description: User, role, and permission models, plus how to enforce authorization
+---
+
+The RBAC tables exist, but there is no role admin UI or shared authorization middleware yet. Current state: **the data model is ready; business code must enforce permissions**.
+
+## Data model
+
+<Mermaid
+  chart={`
+erDiagram
+  User ||--o{ UserRole : has
+  Role ||--o{ UserRole : assigned
+  Role ||--o{ RolePermission : grants
+  Permission ||--o{ RolePermission : included
+  User ||--o{ Session : owns
+
+  User {
+    string id PK
+    string email UK
+    string passwordHash
+    boolean isActive
+  }
+  Role {
+    string id PK
+    string name UK
+    string description
+  }
+  Permission {
+    string id PK
+    string name UK
+    string module
+  }
+  UserRole {
+    string userId PK,FK
+    string roleId PK,FK
+  }
+  RolePermission {
+    string roleId PK,FK
+    string permissionId PK,FK
+  }
+`}
+/>
+
+- `UserRole` and `RolePermission` use composite primary keys to prevent duplicates.
+- All relations use `onDelete: Cascade`.
+- `Permission.name` is the stable authorization key, such as `user:create` or `post:publish`.
+- `Permission.module` groups permissions by area.
+
+## Assigning roles
+
+Use Prisma Studio, a seed migration script, or your own admin API:
+
+```ts
+await prisma.userRole.create({
+  data: {
+    userId,
+    roleId,
+  },
+});
+```
+
+Add a permission to a role:
+
+```ts
+await prisma.rolePermission.create({
+  data: {
+    roleId,
+    permissionId,
+  },
+});
+```
+
+Read all permissions for a user:
+
+```ts
+const user = await prisma.user.findUnique({
+  where: { id: userId },
+  select: {
+    roles: {
+      select: {
+        role: {
+          select: {
+            name: true,
+            permissions: {
+              select: {
+                permission: {
+                  select: { name: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+});
+
+const permissions = new Set(
+  user?.roles.flatMap(({ role }) =>
+    role.permissions.map(({ permission }) => permission.name),
+  ) ?? [],
+);
+```
+
+## Enforcing permissions
+
+Do not rely on hiding a button in the client. Check permissions on the server.
+
+```ts
+async function hasPermission(userId: string, permission: string) {
+  const count = await prisma.rolePermission.count({
+    where: {
+      permission: { name: permission },
+      role: {
+        users: {
+          some: { userId },
+        },
+      },
+    },
+  });
+
+  return count > 0;
+}
+```
+
+In a Route Handler or Server Action:
+
+```ts
+const user = await getSessionUser(token);
+if (!user) {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+
+if (!(await hasPermission(user.id, "post:publish"))) {
+  return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+}
+```
+
+## Suggested additions
+
+- `lib/authz.ts` with `getUserPermissions`, `hasPermission`, and `requirePermission`.
+- Admin APIs for roles, permissions, and user-role assignment.
+- Seed data for `admin`, `user`, and base permissions.
+- Audit records for role changes.
+- Short-lived permission caching with invalidation on role changes.
+
+<Callout type="warn" title="RBAC is not authentication">
+RBAC answers “what can this signed-in user do?” It does not replace session validation. Protected routes must still pass `proxy.ts` or a server-side `getSessionUser` check.
+</Callout>
+
+## Incremental rollout
+
+1. Add permission seeds and a shared `hasPermission`.
+2. Add role management screens.
+3. Add permission caching and invalidation if roles change often.
+4. For multi-tenancy, add `tenantId` to `UserRole` or introduce a tenant model and redesign unique constraints.

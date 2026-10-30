@@ -1,0 +1,147 @@
+---
+title: Local accounts and sessions
+description: Email/password registration, bcrypt, session cookies, and route protection
+---
+
+Local authentication has no third-party dependency: the user table, password hashes, sessions, and cookies all live in the app and PostgreSQL.
+
+## Registration
+
+`POST /api/auth/register` accepts:
+
+```json
+{
+  "username": "Hucky",
+  "email": "user@example.com",
+  "password": "at least 6 characters"
+}
+```
+
+Steps:
+
+1. Validate the username, email format, and password length.
+2. Normalize the email with `trim().toLowerCase()` so casing does not create duplicate accounts.
+3. Check `User.email`.
+4. Hash the password with bcrypt (cost 12).
+5. Create the `User`.
+6. Call `createSession(user.id)` and set the httpOnly session cookie.
+7. Return safe user fields, never `passwordHash`.
+
+If concurrent requests pass the email check, the database unique index is the final guard. The endpoint catches Prisma `P2002` and returns `409`.
+
+<Mermaid
+  chart={`
+sequenceDiagram
+  participant B as Browser
+  participant R as /api/auth/register
+  participant DB as PostgreSQL
+
+  B->>R: username / email / password
+  R->>R: validate + normalize email
+  R->>DB: findUnique(email)
+  alt Email exists
+    DB-->>R: user
+    R-->>B: 409 Email already registered
+  else Available
+    R->>R: bcrypt.hash(password, 12)
+    R->>DB: create User
+    R->>DB: create Session(tokenHash)
+    R-->>B: 201 + Set-Cookie: session
+  end
+`}
+/>
+
+## Login
+
+`POST /api/auth/login` accepts only email and password:
+
+1. Validate fields and normalize the email.
+2. Find the user by email.
+3. Return 404 if missing, 403 if disabled.
+4. Verify the password with `bcrypt.compare`.
+5. Return 401 on mismatch.
+6. Create a new session and write the httpOnly cookie.
+
+<Mermaid
+  chart={`
+sequenceDiagram
+  participant B as Browser
+  participant L as /api/auth/login
+  participant DB as PostgreSQL
+
+  B->>L: email / password
+  L->>DB: findUnique(email)
+  DB-->>L: User + passwordHash
+  alt Missing or disabled
+    L-->>B: 404 / 403
+  else Wrong password
+    L->>L: bcrypt.compare
+    L-->>B: 401
+  else Success
+    L->>DB: create Session(tokenHash)
+    L-->>B: 200 + Set-Cookie: session
+  end
+`}
+/>
+
+## Session design
+
+The client holds an opaque token; the database stores only its hash:
+
+```ts
+// lib/session.ts
+const token = randomBytes(32).toString("base64url");
+const tokenHash = createHash("sha256").update(token).digest("hex");
+
+await prisma.session.create({
+  data: {
+    tokenHash,
+    userId,
+    expiresAt: new Date(Date.now() + SESSION_DURATION_MS),
+  },
+});
+```
+
+If the database leaks, the attacker only gets `tokenHash` and cannot recover the cookie token. Sessions last seven days by default.
+
+Cookie options:
+
+```ts
+{
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  path: "/",
+  maxAge: 7 * 24 * 60 * 60,
+}
+```
+
+## Route protection
+
+After next-intl adds the locale prefix, `proxy.ts`:
+
+1. Allows public routes: `/`, `/login`, `/register`, `/docs`.
+2. Reads the `session` cookie for other routes.
+3. Calls `getSessionUser(token)`.
+4. Redirects to `/<locale>/login?next=<path>` when there is no valid user.
+5. Returns to `next` after login.
+
+`next` only accepts same-site paths starting with `/` and not `//`, preventing open redirects.
+
+## Endpoints
+
+| Endpoint | Method | Purpose |
+| --- | --- | --- |
+| `/api/auth/register` | `POST` | Register and sign in |
+| `/api/auth/login` | `POST` | Email/password login |
+| `/api/auth/logout` | `POST` | Delete the current session |
+| `/api/auth/me` | `GET` | Read the current user |
+
+## Security notes
+
+- Never return `passwordHash`.
+- Do not lower bcrypt cost below 10; use 12 or higher in production.
+- Production must use HTTPS for `secure` cookies.
+- There is no login rate limiting yet. Add IP + email throttling and lockouts before launch.
+- Registration does not verify email ownership. Add verification if the business requires it.
+- Do not use a placeholder that accepts any six-digit code. This project removed that path; a real OTP must be one-time, expiring, and attempt-limited.

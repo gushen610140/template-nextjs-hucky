@@ -1,0 +1,5 @@
+{
+  "title": "Authentication & Users",
+  "pagesIndex": "index",
+  "pages": ["local", "logto", "rbac", "evolution"]
+}

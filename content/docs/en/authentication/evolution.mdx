@@ -1,0 +1,144 @@
+---
+title: Evolution and extensions
+description: Move from email linking to multiple identities, OTP, audit, and stronger sessions
+---
+
+The current design fits a basic “one email, one user” scenario. The following upgrades are ordered by risk and value.
+
+## Current boundaries
+
+| Capability | State | Risk |
+| --- | --- | --- |
+| Email/password | Implemented | No email verification or rate limit |
+| Logto | Implemented | Email-only linking; `sub` not stored |
+| Code login | Placeholder removed | Needs a real OTP service |
+| RBAC tables | Created | No authorization API, admin UI, or seed |
+| Session | Implemented | No “sign out everywhere” or audit |
+| Disabled users | Implemented | Login and old sessions are rejected |
+| Email changes | Not handled | A Logto email change may create a new user |
+
+## 1. Add an identity table
+
+To store a stable Logto `sub`, add an identity table instead of relying on email alone:
+
+```prisma
+model AuthIdentity {
+  id                String   @id @default(cuid())
+  provider          String   // "logto" | "local"
+  providerAccountId String   // Logto sub or a stable local ID
+  userId            String
+  email             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@index([email])
+}
+```
+
+Add the reverse relation to `User`:
+
+```prisma
+identities AuthIdentity[]
+```
+
+Rollout order:
+
+1. Add nullable structures without changing sign-in.
+2. Backfill `AuthIdentity` during login.
+3. Prefer `provider + providerAccountId` for lookup.
+4. Fall back to a verified email only when no identity exists.
+5. Decide later whether email matching can be reduced.
+
+<Callout type="warn" title="Never merge unverified emails">
+Email merging must require `email_verified === true`. Otherwise anyone can put a victim's email into a third-party IdP and take over the local account.
+</Callout>
+
+## 2. Implement secure OTP
+
+This project removed local code login because it accepted any six-digit code. A correct implementation needs:
+
+- Server-generated OTP, never client-generated.
+- Only a hash stored in the database.
+- Short expiry, such as 5–10 minutes.
+- Attempt limits and invalidation after too many failures.
+- Rate limits by email, IP, and device.
+- One-time use.
+- No account-existence leakage on send failures.
+
+Possible model:
+
+```prisma
+model VerificationCode {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  purpose   String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email, purpose])
+  @@index([expiresAt])
+}
+```
+
+Do not restore the “any six-digit code passes” placeholder.
+
+## 3. Email verification
+
+Add `emailVerifiedAt` to `User`, then gate sensitive actions such as publishing, inviting, and billing until verified.
+
+Migration order:
+
+1. Add the nullable field.
+2. Decide how to treat existing users.
+3. Mark new users after verification.
+4. Allow login but restrict risky actions until verified.
+
+## 4. Session hardening
+
+Consider:
+
+- Rotate the session token on login or privilege elevation.
+- “Sign out everywhere” by deleting all sessions for a `userId`.
+- Periodically clean expired sessions and add an `expiresAt` index.
+- Record login time, IP, and User-Agent for a session list.
+- Require re-authentication for sensitive actions.
+
+`getSessionUser` already cleans expired or disabled sessions and selects only safe fields. Do not reintroduce `passwordHash` into that query.
+
+## 5. Rate limiting and audit
+
+The login endpoint has no rate limit. Add:
+
+- Sliding-window limits by IP and email.
+- Temporary lockouts after repeated failures.
+- Audit logs for login success, failure, logout, and role changes.
+- Alerts for impossible travel or repeated password failures.
+
+Never log plaintext passwords, session tokens, or OTPs.
+
+## 6. RBAC management
+
+Only tables exist today. Recommended order:
+
+1. Seed roles and permissions.
+2. Add `lib/authz.ts`.
+3. Add role management APIs.
+4. Add user-role assignment UI.
+5. Add audit trails and cache invalidation.
+
+## Upgrade checklist
+
+- [ ] Run `bunx prisma migrate dev --name ...` after schema changes
+- [ ] Review generated SQL, especially drops and unique constraints
+- [ ] Run `bunx prisma generate`
+- [ ] Update types in `lib/session.ts` and `lib/logto-user.ts`
+- [ ] Add tests for failure paths on every new auth route
+- [ ] Verify `LOGTO_BASE_URL` and callback URLs in production
+- [ ] Confirm no real secrets are committed to `.env.example`
+- [ ] Verify disabled users cannot log in or reuse old sessions
