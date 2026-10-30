@@ -1,0 +1,45 @@
+---
+title: Overview
+description: What the Hucky Next.js template is and what it ships with
+---
+
+This is the documentation for **Hucky Next.js Template**.
+
+It pre-builds the parts every full-stack app needs — auth, i18n, database access, UI primitives, and tooling — so you can start with product code instead of configuration.
+
+## Tech stack
+
+| Area | Choice |
+| --- | --- |
+| Framework | Next.js 16 (App Router, React Compiler) |
+| UI | React 19, Tailwind CSS 4, shadcn/ui, Radix UI |
+| i18n | next-intl |
+| Auth | Logto |
+| Database | PostgreSQL + Prisma 7 (driver adapter) |
+| Package manager | Bun |
+| Linting | Biome |
+
+## Project layout
+
+```text
+app/
+  [locale]/           # all pages, grouped by locale
+  api/                # route handlers
+components/           # UI components
+content/docs/         # Markdown for this site
+i18n/                 # next-intl routing and request config
+lib/                  # utilities, Prisma client, session
+providers/            # global providers
+prisma/               # schema and migrations
+proxy.ts              # auth + i18n middleware
+```
+
+## Next steps
+
+- [Getting started](./getting-started): install dependencies, configure env vars, initialize the database.
+- Docs live in `content/docs/<locale>/`; adding an `.mdx` file adds a page.
+
+<Callout title="About this site">
+This page is rendered by Fumadocs. Content lives in the same repository as the code, so changes
+are picked up instantly. The search index is served from `app/api/search/route.ts`.
+</Callout>

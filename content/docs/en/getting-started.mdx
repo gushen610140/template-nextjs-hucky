@@ -1,0 +1,98 @@
+---
+title: Getting started
+description: From cloning the repo to running it locally
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+## Requirements
+
+- Node.js 20 or newer
+- Bun 1.2 or newer (`bun.lock` uses the text format)
+- A PostgreSQL database
+- A Logto application (required for local development too)
+
+## Setup
+
+<Steps>
+
+<Step>
+### Install dependencies
+
+```bash
+bun install
+```
+
+</Step>
+
+<Step>
+### Configure environment variables
+
+The project loads `.env.<NODE_ENV>`, so local development uses `.env.development`:
+
+```ini
+DATABASE_URL=postgresql://user:password@localhost:5432/hucky
+
+LOGTO_ENDPOINT=https://your-tenant.logto.app
+LOGTO_APP_ID=your-app-id
+LOGTO_APP_SECRET=your-app-secret
+LOGTO_BASE_URL=http://localhost:3000
+LOGTO_COOKIE_SECRET=a-long-random-string
+```
+
+`LOGTO_BASE_URL` is the app's own URL; Logto redirects back here. `LOGTO_COOKIE_SECRET` signs the session cookie — use a strong random value in production.
+
+</Step>
+
+<Step>
+### Initialize the database
+
+```bash
+bunx prisma generate
+bunx prisma migrate dev
+```
+
+`prisma generate` writes the client to `lib/generated/prisma`, and `migrate dev` applies migrations. Use `bunx prisma studio` to browse data.
+
+</Step>
+
+<Step>
+### Start the dev server
+
+```bash
+bun dev
+```
+
+Open `http://localhost:3000`; you will be redirected to the default locale `/zh`.
+
+</Step>
+
+</Steps>
+
+## Scripts
+
+| Command | Purpose |
+| --- | --- |
+| `bun dev` | Start the dev server |
+| `bun run build` | Production build |
+| `bun start` | Run the production build |
+| `bun run lint` | Biome checks |
+| `bun run format` | Format with Biome |
+
+## Auth and route protection
+
+`proxy.ts` does two things: it adds the locale prefix via next-intl, then verifies the Logto session cookie.
+
+- Public routes: `/`, `/login`, `/register`, `/docs`
+- Everything else redirects to `/<locale>/login?next=<original path>` when signed out
+
+When you add a public page, update `publicRoutes` in `proxy.ts` too, or it will be treated as protected.
+
+<Callout type="warn" title="New docs pages need no routing changes">
+`/docs` is already public, so any new page under `content/docs` is reachable. Mounting docs at a different path means re-checking `publicRoutes`.
+</Callout>
+
+## Next steps
+
+- Read the [overview](./index) for the project layout.
+- Add matching `.mdx` files under `content/docs/zh/` and `content/docs/en/` to keep both locales in sync.

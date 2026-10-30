@@ -1,0 +1,45 @@
+---
+title: 概览
+description: Hucky Next.js 模板是什么，以及它包含哪些能力
+---
+
+这是 **Hucky Next.js Template** 的使用文档。
+
+它把全栈项目里重复度最高的部分先搭好：认证、国际化、数据库、UI 基础组件和工程化配置，让你从业务代码开始，而不是从配置开始。
+
+## 技术栈
+
+| 领域 | 选型 |
+| --- | --- |
+| 框架 | Next.js 16（App Router、React Compiler） |
+| UI | React 19、Tailwind CSS 4、shadcn/ui、Radix UI |
+| 国际化 | next-intl |
+| 认证 | Logto |
+| 数据库 | PostgreSQL + Prisma 7（driver adapter） |
+| 包管理 | Bun |
+| 代码规范 | Biome |
+
+## 目录速览
+
+```text
+app/
+  [locale]/           # 所有页面，按语言分组
+  api/                # Route Handlers
+components/           # UI 组件
+content/docs/         # 本文件的 Markdown 内容
+i18n/                 # next-intl 路由与请求配置
+lib/                  # 工具函数、Prisma client、session
+providers/            # 全局 Provider
+prisma/               # schema 与迁移
+proxy.ts              # 鉴权 + 国际化中间件
+```
+
+## 接下来
+
+- [快速开始](./getting-started)：安装依赖、配置环境变量、初始化数据库。
+- 文档内容位于 `content/docs/<locale>/`，新增一个 `.mdx` 文件即可多一个页面。
+
+<Callout title="关于本页">
+本页由 Fumadocs 渲染。内容和代码放在同一个仓库里，改完即时生效；搜索索引在
+`app/api/search/route.ts` 中生成。
+</Callout>
