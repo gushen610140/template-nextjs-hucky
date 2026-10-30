@@ -1,0 +1,30 @@
+---
+title: Infrastructure
+description: Package management, environment variables, and local workflow rules
+---
+
+Infrastructure is what keeps the project consistent across local machines and CI. This section covers the two rules that cause the most trouble when they are broken:
+
+| Topic | What it covers |
+| --- | --- |
+| [Package manager](./package-manager) | Bun only, a committed `bun.lock`, and installing with `bun ci` |
+| [Environment variables](./environment-variables) | The difference between `.env.<NODE_ENV>` and `.env.example`, plus required values |
+| [Formatting](./formatting) | Biome and the VSCode extension for format-on-save |
+
+## Rules at a glance
+
+- Package manager: Bun. Do not install dependencies with npm, pnpm, or yarn.
+- Lockfile: commit `bun.lock` and nothing else.
+- Install: use `bun ci` on a fresh checkout or in CI; run `bun install` after changing dependencies to update the lockfile.
+- Real environment values: `.env.development`, `.env.production`, and similar files stay local and are never committed.
+- Example file: `.env.example` is committed and contains variable names with empty values only.
+
+<Callout type="warn" title="These are repository rules, not suggestions">
+Mixing package managers gives local and CI environments different dependency trees. Committing real environment values leaks secrets into Git history. Both are much more expensive to fix than to avoid.
+</Callout>
+
+## Next
+
+- [Package manager](./package-manager): why the project uses Bun, and how `bun ci` relates to `bun.lock`.
+- [Environment variables](./environment-variables): copy `.env.example` first, then fill in values per environment.
+- [Formatting](./formatting): keep the codebase consistent with Biome and the VSCode extension.

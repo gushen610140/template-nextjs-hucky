@@ -1,0 +1,143 @@
+---
+title: Prisma 概览
+description: 项目的数据库层如何组织，以及从克隆到第一次查询的完整流程
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+本项目使用 **Prisma 7** 作为 PostgreSQL 的 ORM。Prisma 在项目里承担三件事：
+
+- 用 `prisma/schema.prisma` 描述数据模型
+- 用 `prisma/migrations` 管理数据库结构变更
+- 生成类型安全的 Prisma Client，供服务端代码查询数据库
+
+数据库本身使用 PostgreSQL，驱动适配器是 `@prisma/adapter-pg`，底层连接池由 `pg` 提供。
+
+## 文件分布
+
+| 路径 | 作用 |
+| --- | --- |
+| `prisma/schema.prisma` | 数据模型、关系、索引和生成器配置 |
+| `prisma/migrations/` | 按时间排序的 SQL 迁移文件，必须提交到 Git |
+| `prisma.config.ts` | Prisma CLI 配置，负责加载环境变量和 `DATABASE_URL` |
+| `lib/prisma.ts` | 应用运行时唯一的 Prisma Client 单例 |
+| `lib/generated/prisma/` | `prisma generate` 生成的客户端，已被 Git 忽略 |
+| `lib/session.ts` | 使用 Prisma 创建、查询和删除会话 |
+| `lib/logto-user.ts` | 把 Logto 身份映射到本地 `User` 表 |
+| `app/api/auth/` | 注册、登录、登出和当前用户接口 |
+| `app/callback/route.ts` | Logto 登录回调，写入本地用户和会话 |
+
+`lib/generated/prisma` 不在版本控制中。每次全新克隆、切换分支或修改 schema 后，都需要重新生成客户端。
+
+## 从克隆到第一次查询
+
+<Steps>
+
+<Step>
+### 安装依赖
+
+```bash
+bun ci
+```
+
+依赖中包含 `prisma` CLI、`@prisma/client`、`@prisma/adapter-pg` 和 `pg`。
+</Step>
+
+<Step>
+### 配置数据库连接
+
+从 `.env.example` 复制开发环境文件，并填写 `DATABASE_URL`：
+
+```bash
+cp .env.example .env.development
+```
+
+```ini
+DATABASE_URL=postgresql://user:password@localhost:5432/hucky
+```
+
+环境变量的完整规则见[环境变量](../infrastructure/environment-variables)。还没有数据库时，先看 [PostgreSQL](./postgresql)。
+</Step>
+
+<Step>
+### 生成客户端并应用迁移
+
+```bash
+bunx prisma generate
+bunx prisma migrate dev
+```
+
+`generate` 把客户端写到 `lib/generated/prisma`。`migrate dev` 会把 `prisma/migrations` 中尚未应用的迁移执行到当前数据库；在全新数据库上，它相当于按顺序建表。
+
+生产环境不要执行 `migrate dev`，应使用 `bunx prisma migrate deploy`，详见[迁移](./migrations)。
+</Step>
+
+<Step>
+### 启动应用
+
+```bash
+bun dev
+```
+
+注册、登录、会话校验和 Logto 回调都会通过 `lib/prisma.ts` 访问数据库。
+</Step>
+
+</Steps>
+
+## 运行原理
+
+一次查询从配置到 SQL 的路径大致如下：
+
+```text
+prisma.config.ts
+  └─ dotenv 读取 .env.<NODE_ENV>
+       └─ DATABASE_URL
+
+prisma/schema.prisma
+  └─ bunx prisma generate
+       └─ lib/generated/prisma（类型安全的客户端代码）
+
+lib/prisma.ts
+  └─ new PrismaPg({ connectionString: DATABASE_URL })
+       └─ new PrismaClient({ adapter })
+            └─ pg Pool
+                 └─ PostgreSQL
+```
+
+应用代码只依赖 `lib/prisma.ts` 导出的 `prisma`。它内部完成三件事：
+
+1. 从 `process.env.DATABASE_URL` 读取连接串。
+2. 用 `PrismaPg` 创建 PostgreSQL 驱动适配器。
+3. 在开发环境中把实例挂到 `globalThis`，避免 Next.js 热更新反复创建连接池。
+
+## 开发工作流
+
+日常修改数据库相关功能时，按这个顺序进行：
+
+1. 修改 `prisma/schema.prisma`。
+2. 运行 `bunx prisma format` 和 `bunx prisma validate`。
+3. 运行 `bunx prisma migrate dev --name <变更名>` 生成并应用迁移。
+4. 检查新生成的 `migration.sql`。
+5. 运行 `bunx prisma generate` 更新客户端类型。
+6. 修改业务代码并运行测试。
+7. 一起提交 schema、迁移文件和业务代码。
+
+<Callout type="warn" title="不要直接改数据库表结构">
+手工在 PostgreSQL 里加列、删表或改类型，会让数据库与迁移历史产生 drift。后续 `migrate dev` 可能要求重置数据库。结构变更应始终从 `schema.prisma` 开始。
+</Callout>
+
+## 约定
+
+- 迁移文件必须提交到 Git；`lib/generated/prisma` 不提交。
+- 不要手动编辑已经应用过的迁移文件。
+- 开发环境使用 `migrate dev`，生产环境使用 `migrate deploy`。
+- 原型阶段可以用 `db push` 快速同步，但一旦有真实数据，应改用迁移。
+- 本项目统一使用 `bunx prisma`，不要使用 `npx prisma`，避免混用包管理器。
+- `prisma` CLI 在 `devDependencies` 中；`bunx prisma` 会使用项目内版本，不依赖全局安装。
+
+## 接下来
+
+- [PostgreSQL](./postgresql)：本地数据库、连接串、SSL、连接池和备份。
+- [数据模型](./schema)：当前模型、关系、索引和字段设计约定。
+- [Prisma Client](./client)：在 Server Component、Route Handler 和事务中使用客户端。
+- [迁移](./migrations)：增量修改、生产部署、重置和 drift 处理。

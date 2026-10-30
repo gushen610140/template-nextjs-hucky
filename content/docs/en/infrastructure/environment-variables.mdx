@@ -1,0 +1,123 @@
+---
+title: Environment variables
+description: Required variables, per-environment files, and what .env.example is for
+---
+
+The project loads environment files based on `NODE_ENV`. Real values stay local or on the deployment platform; the repository only commits `.env.example` with empty values.
+
+## Which file is loaded
+
+| Situation | `NODE_ENV` | File |
+| --- | --- | --- |
+| `bun dev` | `development` | `.env.development` |
+| `bun run build` | `production` | `.env.production` |
+| `bun start` | `production` | `.env.production` |
+| `bunx prisma ...` (no override) | `development` | `.env.development` |
+
+Next.js and the scripts set `NODE_ENV` automatically; do not put it in an env file. `prisma.config.ts` follows the same rule and loads `.env.${NODE_ENV || "development"}`, so database commands and Next.js read the same configuration.
+
+## Next.js and the Prisma CLI
+
+Environment variables are consumed by two separate processes. Do not assume Next.js env loading is available to Prisma commands:
+
+| Process | Loads env through | Typical commands |
+| --- | --- | --- |
+| Next.js app | Next.js built-in env loading | `bun dev`, `bun run build`, `bun start` |
+| Prisma CLI | `dotenv` in `prisma.config.ts` | `bunx prisma generate`, `migrate`, `studio` |
+
+Next.js injects `.env.development` or `.env.production` into `process.env` only when a Next.js command starts. `bunx prisma ...` does not go through Next.js, so the Prisma 7 config loads the env file explicitly:
+
+```ts
+// prisma.config.ts
+const envFile = `.env.${process.env.NODE_ENV || "development"}`;
+dotenv.config({ path: envFile, quiet: true });
+```
+
+`dotenv` is therefore a Prisma CLI dependency and lives in `devDependencies`; the application runtime does not import it, so there is no conflict with Next.js env loading.
+
+`dotenv.config()` does not override variables that already exist. If the deployment platform provides `DATABASE_URL`, the platform value wins and the `.env` file does not replace it.
+
+<Callout type="warn" title="Set the environment explicitly for production migrations">
+Without `NODE_ENV`, `bunx prisma migrate deploy` treats the environment as `development` and loads `.env.development`. Production should set `NODE_ENV=production`, or have CI/CD inject `DATABASE_URL` directly.
+</Callout>
+
+<Callout title="Do not override NODE_ENV">
+Setting `NODE_ENV=production` inside `.env.development` puts the file-loading logic and Next.js behavior at odds. Switch environments with the right command or with the deployment platform's environment settings.
+</Callout>
+
+## Required variables
+
+| Variable | Purpose | Notes |
+| --- | --- | --- |
+| `DATABASE_URL` | PostgreSQL connection string | Read by Prisma and `lib/prisma.ts`, e.g. `postgresql://user:password@localhost:5432/hucky` |
+| `LOGTO_ENDPOINT` | Logto tenant URL | For example `https://your-tenant.logto.app` |
+| `LOGTO_APP_ID` | Logto application ID | Obtained after creating an app in Logto |
+| `LOGTO_APP_SECRET` | Logto application secret | Server-side only; never prefix it with `NEXT_PUBLIC_` |
+| `LOGTO_BASE_URL` | The app's own URL | Usually `http://localhost:3000` in development; use the real domain in production |
+| `LOGTO_COOKIE_SECRET` | Session cookie signing secret | At least 32 characters; use a strong random value and replace it in production |
+
+Apart from the local default for `LOGTO_BASE_URL`, every variable should be set explicitly. A missing database URL prevents Prisma from connecting; missing Logto values break the sign-in flow.
+
+<Callout type="warn" title="Never prefix secrets with NEXT_PUBLIC_">
+Variables prefixed with `NEXT_PUBLIC_` are bundled into browser code. `LOGTO_APP_SECRET` and `LOGTO_COOKIE_SECRET` must stay server-side.
+</Callout>
+
+## `.env.example` is a committed template
+
+`.env.example` is part of the repository and is committed with the code. It lists variable names with empty values:
+
+```ini
+DATABASE_URL=
+
+LOGTO_ENDPOINT=
+LOGTO_APP_ID=
+LOGTO_APP_SECRET=
+LOGTO_BASE_URL=
+LOGTO_COOKIE_SECRET=
+```
+
+The app never loads it. Its job is to tell a new contributor which variables are needed. To start developing, copy it and fill in real values:
+
+```bash
+cp .env.example .env.development
+```
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env.development
+```
+
+Create the matching `.env.production` when you need to build for production.
+
+<Callout type="error" title="Never put real values in .env.example">
+`.env.example` is committed to Git history. Deleting the values later does not remove them from history. Real values belong in ignored `.env*` files or the deployment platform's environment settings.
+</Callout>
+
+## What Git tracks
+
+| File | Committed | Purpose |
+| --- | --- | --- |
+| `.env.example` | Yes | Variable list and empty template |
+| `.env` | No | Real configuration, if used |
+| `.env.development` | No | Real development values |
+| `.env.production` | No | Real production values |
+| `.env.local` | No | Local overrides |
+
+The matching `.gitignore` rules:
+
+```text
+# env files (real values stay local)
+.env
+.env.*
+!.env.example
+```
+
+`!.env.example` must come after the ignore rules to include the example file in version control again. Do not remove that line, and do not rename `.env.example` to a name that gets ignored.
+
+## Adding a variable
+
+1. Add the variable name to `.env.example` with an empty value.
+2. Add the real value to your local `.env.development` and to `.env.production` on the deployment platform.
+3. If the value is used by the client, confirm it actually needs the `NEXT_PUBLIC_` prefix. Server secrets must not have it.
+4. Update the table on this page so the docs and the actual configuration stay in sync.

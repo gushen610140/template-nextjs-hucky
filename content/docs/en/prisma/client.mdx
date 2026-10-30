@@ -1,0 +1,245 @@
+---
+title: Prisma Client
+description: Use Prisma Client safely and efficiently on the server
+---
+
+Application code does not create database connections. It imports the single `prisma` instance from `lib/prisma.ts`.
+
+## One client instance
+
+```ts
+// lib/prisma.ts
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@/lib/generated/prisma/client";
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+function createPrismaClient(): PrismaClient {
+  const adapter = new PrismaPg({
+    connectionString: process.env.DATABASE_URL,
+  });
+  return new PrismaClient({ adapter });
+}
+
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}
+```
+
+Why not call `new PrismaClient()` in each file:
+
+- Every instance creates its own connection pool; hot reload or frequent calls can exhaust database connections.
+- Prisma 7 requires an explicit driver adapter, so a new client also means another `pg` initialization.
+- A singleton gives transactions, pooling, and logging one source of truth.
+
+The `globalThis` cache is development-only. Production processes do not hot reload, so the instance does not need to be attached globally.
+
+## Imports
+
+```ts
+import { prisma } from "@/lib/prisma";
+```
+
+Import model types from the generated client when needed:
+
+```ts
+import type { User } from "@/lib/generated/prisma/client";
+```
+
+Never import `lib/prisma.ts` into a client component, and never send `DATABASE_URL` or query logic to the browser. Prisma runs on the server only.
+
+## Query examples
+
+### Find by a unique field
+
+```ts
+const existing = await prisma.user.findUnique({
+  where: { email },
+  select: { id: true },
+});
+```
+
+Select only what the caller needs. Do not return entire rows by default, especially `passwordHash`.
+
+### Create and return safe fields
+
+```ts
+const user = await prisma.user.create({
+  data: {
+    email,
+    passwordHash,
+    name: username,
+  },
+  select: {
+    id: true,
+    email: true,
+    name: true,
+    avatarUrl: true,
+    createdAt: true,
+  },
+});
+```
+
+### Query relations
+
+```ts
+const userWithRoles = await prisma.user.findUnique({
+  where: { id: userId },
+  select: {
+    id: true,
+    email: true,
+    roles: {
+      select: {
+        role: {
+          select: {
+            name: true,
+            permissions: {
+              select: {
+                permission: {
+                  select: { name: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+});
+```
+
+Nested `select` avoids loading every column from related tables. Use `include` when you need whole rows, but know what it loads.
+
+### Sessions
+
+```ts
+await prisma.session.create({
+  data: {
+    tokenHash: hashToken(token),
+    userId,
+    expiresAt: new Date(Date.now() + SESSION_DURATION_MS),
+  },
+});
+```
+
+The query in `lib/session.ts` selects only the session ID, expiry, and safe user fields. It does not load `passwordHash` just to discard it.
+
+### Transactions
+
+Use `$transaction` when multiple writes must succeed or fail together:
+
+```ts
+const [user, removedSessions] = await prisma.$transaction([
+  prisma.user.update({
+    where: { id: userId },
+    data: { isActive: false },
+  }),
+  prisma.session.deleteMany({
+    where: { userId },
+  }),
+]);
+```
+
+Use an interactive transaction when a later step depends on an earlier query:
+
+```ts
+await prisma.$transaction(async (tx) => {
+  const user = await tx.user.findUniqueOrThrow({
+    where: { id: userId },
+  });
+
+  await tx.session.deleteMany({
+    where: { userId: user.id },
+  });
+});
+```
+
+Inside the callback, always use `tx`. Continuing to use the outer `prisma` means those queries are not part of the same transaction.
+
+### Pagination
+
+```ts
+const pageSize = 20;
+const users = await prisma.user.findMany({
+  take: pageSize,
+  skip: page * pageSize,
+  orderBy: { createdAt: "desc" },
+  select: {
+    id: true,
+    email: true,
+    name: true,
+    createdAt: true,
+  },
+});
+```
+
+For large datasets, prefer cursor-based pagination to avoid the cost of deep `skip` offsets.
+
+### Raw SQL
+
+Use raw SQL only when the Prisma query API cannot express the query, and always parameterize it:
+
+```ts
+const rows = await prisma.$queryRaw<{ id: string }[]>`
+  SELECT id FROM "User" WHERE email = ${email}
+`;
+```
+
+Never use `$queryRawUnsafe` with user input.
+
+## Error handling
+
+Unique-constraint violations throw `PrismaClientKnownRequestError`, for example a duplicate email:
+
+```ts
+import { Prisma } from "@/lib/generated/prisma/client";
+
+try {
+  await prisma.user.create({ data: { email, passwordHash } });
+} catch (error) {
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  ) {
+    // Return 409, not 500
+  }
+  throw error;
+}
+```
+
+Common codes:
+
+| Code | Meaning |
+| --- | --- |
+| `P2002` | Unique constraint violation |
+| `P2003` | Foreign key constraint failed |
+| `P2025` | The record to update or delete does not exist |
+| `P1001` | Cannot reach the database |
+
+In Route Handlers, map expected constraint errors to 4xx responses instead of returning 500 for everything. The registration endpoint already catches `P2002` and returns 409; apply the same pattern when adding other unique fields.
+
+## Performance guidance
+
+- Use `select` to limit returned fields, especially for users and sessions.
+- Avoid querying inside loops; use `findMany`, `include`, or a transaction to batch work.
+- Add indexes for `where`, `orderBy`, and relation columns; see [Data model](./schema).
+- Do not create a Prisma Client per request; reuse the `lib/prisma.ts` singleton.
+- Do not run database queries from client components; expose what is needed through a Route Handler or Server Action.
+- If caching is needed, cache in the server data layer without bypassing authorization or session checks.
+
+## Where Prisma can run in Next.js
+
+| Context | Prisma allowed |
+| --- | --- |
+| Server Component | Yes |
+| Server Action | Yes |
+| Route Handler | Yes |
+| `proxy.ts` | Yes; Next.js 16 proxy runs on the Node.js runtime |
+| Client Component | No |
+| Browser event handler | No; call an API instead |
+
+If code can be bundled for the browser, do not import `lib/prisma.ts`. The server boundary is determined by file location and `"use client"`; do not rely on a runtime error to catch a mistake.

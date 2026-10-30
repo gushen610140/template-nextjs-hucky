@@ -1,0 +1,82 @@
+---
+title: Package manager
+description: Install dependencies with Bun and lock them with bun.lock
+---
+
+This project uses **Bun** as its only package manager. `bun.lock` is the only lockfile in the repository; npm, pnpm, and yarn lockfiles are never committed.
+
+## Installing dependencies
+
+Use this for a fresh clone, CI, Docker builds, and deployment:
+
+```bash
+bun ci
+```
+
+`bun ci` is equivalent to `bun install --frozen-lockfile`. It installs exactly what `bun.lock` specifies and never rewrites the lockfile. If `package.json` and `bun.lock` disagree, installation fails instead of silently producing a different dependency tree.
+
+During local development, use `bun install` when adding or upgrading dependencies so Bun can update `bun.lock`:
+
+| Situation | Command |
+| --- | --- |
+| Fresh environment / CI install | `bun ci` |
+| Install from `package.json` and update the lockfile | `bun install` |
+| Add a runtime dependency | `bun add <package>` |
+| Add a development dependency | `bun add -d <package>` |
+| Upgrade dependencies | `bun update` |
+| Run a one-off binary | `bunx <command>` |
+
+<Callout title="Check the lockfile before committing">
+If you changed `package.json`, run `bun install` locally and commit the resulting `bun.lock` change with it. Otherwise `bun ci` will fail in CI because the two files are out of sync.
+</Callout>
+
+## Why Bun
+
+The point is not to win a benchmark. The project wants one toolchain:
+
+- **One command covers install, scripts, and one-off tools.** `bun install`, `bun run`, and `bunx` come from the same executable, so there is no separate package manager to keep in sync.
+- **Consistent install behavior.** Bun's cache and linking strategy, combined with a single `bun.lock`, make it easier to get the same dependency tree locally, in CI, and in production.
+- **npm ecosystem compatibility.** Packages still come from the npm registry and dependencies are still declared in `package.json`; the ecosystem is not lost.
+- **A built-in CI install mode.** `bun ci` maps directly to `--frozen-lockfile`, with no wrapper script or extra convention needed.
+- **The project already uses Bun-specific settings.** `trustedDependencies` and `ignoreScripts` in `package.json` are read by Bun to control dependency lifecycle scripts. Other package managers do not apply those protections the same way.
+
+## Why not npm, pnpm, or yarn
+
+All three can run this project. The issue is not capability — it is that **a repository should have exactly one package manager**:
+
+1. **No duplicate lockfiles.** As soon as someone generates `package-lock.json` with npm or `pnpm-lock.yaml` with pnpm, the repository has two dependency resolutions. Which one wins becomes an informal rule, and CI and local environments drift.
+2. **No conflicting dependency layouts.** npm hoisting, pnpm's strict `node_modules`, and yarn's Plug'n'Play resolve and expose packages differently. A dependency that works under one layout may fail to resolve under another. Using one tool removes that class of environment differences.
+3. **No inconsistent lifecycle scripts.** The project relies on Bun's `trustedDependencies` / `ignoreScripts` settings to constrain install scripts. Other package managers do not interpret those fields the same way.
+4. **Lower onboarding cost.** Docs, CI, and troubleshooting only need to describe one set of commands, instead of explaining "with npm do this, with pnpm do that".
+
+For that reason, npm, pnpm, and yarn lockfiles are ignored by `.gitignore`. If one appears locally by accident, delete it rather than committing it.
+
+## Keeping bun.lock locked
+
+- **Commit `bun.lock`.** It is what makes installs reproducible and must not be added to `.gitignore`.
+- Do not edit `bun.lock` by hand. Change `package.json`, then run `bun install` and let Bun regenerate it.
+- If `bun.lock` conflicts during a merge, resolve the `package.json` conflict first, then run `bun install` to regenerate the lockfile. Do not merge lockfile contents manually.
+- Treat the `bun.lock` diff as part of dependency review; do not skip it automatically.
+
+The package-manager section of `.gitignore` looks like this:
+
+```text
+# package manager lockfiles (Bun only)
+package-lock.json
+npm-shrinkwrap.json
+pnpm-lock.yaml
+yarn.lock
+bun.lockb
+```
+
+`bun.lockb` is the old binary lockfile format. This project uses the text-based `bun.lock` and does not commit the binary one.
+
+## Common questions
+
+**Can I run `bun ci` right after cloning?**
+
+Yes. `bun.lock` is already committed. If installation fails, `package.json` and the lockfile are usually out of sync; run `bun install` and commit the updated `bun.lock`.
+
+**What if `package-lock.json` or `pnpm-lock.yaml` shows up locally?**
+
+Delete it. It is already ignored and should never be part of a commit. Use Bun commands from then on.

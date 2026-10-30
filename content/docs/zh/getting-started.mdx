@@ -20,15 +20,29 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 ### 安装依赖
 
 ```bash
-bun install
+bun ci
 ```
+
+`bun ci` 会严格按 `bun.lock` 安装，不会改写锁文件；如果锁文件与 `package.json` 不同步，安装会直接失败。
 
 </Step>
 
 <Step>
 ### 配置环境变量
 
-项目按 `NODE_ENV` 读取 `.env.<NODE_ENV>`，本地开发对应 `.env.development`：
+项目按 `NODE_ENV` 读取 `.env.<NODE_ENV>`，本地开发对应 `.env.development`。先从示例文件复制：
+
+```bash
+cp .env.example .env.development
+```
+
+Windows PowerShell：
+
+```powershell
+Copy-Item .env.example .env.development
+```
+
+然后填写数据库与 Logto 的真实值：
 
 ```ini
 DATABASE_URL=postgresql://user:password@localhost:5432/hucky
@@ -40,7 +54,7 @@ LOGTO_BASE_URL=http://localhost:3000
 LOGTO_COOKIE_SECRET=a-long-random-string
 ```
 
-`LOGTO_BASE_URL` 是应用自身的地址，Logto 回调会回到这里；`LOGTO_COOKIE_SECRET` 用于签名会话 Cookie，生产环境务必换成足够随机的值。
+`LOGTO_BASE_URL` 是应用自身的地址，Logto 回调会回到这里；`LOGTO_COOKIE_SECRET` 至少 32 个字符，生产环境务必换成足够随机的值。`.env.example` 会提交到 Git，真实的 `.env*` 文件不会；完整说明见[环境变量](./infrastructure/environment-variables)。
 
 </Step>
 
@@ -52,7 +66,7 @@ bunx prisma generate
 bunx prisma migrate dev
 ```
 
-`prisma generate` 生成客户端到 `lib/generated/prisma`，`migrate dev` 应用迁移。需要图形化查看数据时运行 `bunx prisma studio`。
+`prisma generate` 生成客户端到 `lib/generated/prisma`，`migrate dev` 应用迁移。需要图形化查看数据时运行 `bunx prisma studio`。数据库结构、PostgreSQL 配置和迁移流程见 [Prisma 数据库](./prisma)。
 
 </Step>
 
@@ -73,6 +87,8 @@ bun dev
 
 | 命令 | 作用 |
 | --- | --- |
+| `bun ci` | 按 `bun.lock` 安装依赖（CI / 全新环境） |
+| `bun install` | 安装依赖并更新 `bun.lock` |
 | `bun dev` | 启动开发服务器 |
 | `bun run build` | 生产构建 |
 | `bun start` | 运行生产构建 |
@@ -95,4 +111,6 @@ bun dev
 ## 下一步
 
 - 阅读 [概览](./index) 了解目录结构。
+- 阅读[基础设施](./infrastructure)了解包管理工具与[环境变量](./infrastructure/environment-variables)约定。
+- 阅读 [Prisma 数据库](./prisma) 了解数据库模型、PostgreSQL 和迁移。
 - 在 `content/docs/zh/` 和 `content/docs/en/` 添加对应的 `.mdx` 文件，保持两种语言同步。

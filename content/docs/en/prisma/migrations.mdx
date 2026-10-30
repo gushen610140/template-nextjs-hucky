@@ -1,0 +1,235 @@
+---
+title: Migrations
+description: From the first database setup to incremental schema changes
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+Migrations are version control for the database schema. `prisma/schema.prisma` describes the target shape, `prisma/migrations` stores the SQL steps that reach it, and both must be committed.
+
+## Existing migrations
+
+| Migration | Contents |
+| --- | --- |
+| `20260727145834_init` | Creates `User`, `Role`, `Permission`, `UserRole`, `RolePermission`, indexes, and foreign keys |
+| `20260731144740_add_session` | Creates `Session`, its unique index, user index, and foreign key |
+
+`migration_lock.toml` records the `postgresql` provider. Do not edit it manually.
+
+## Local development flow
+
+After changing the model, follow these steps:
+
+<Steps>
+
+<Step>
+### Edit the schema
+
+Update `prisma/schema.prisma`. For example, add an optional bio to users:
+
+```prisma
+model User {
+  // ...
+  bio String?
+}
+```
+</Step>
+
+<Step>
+### Format and validate
+
+```bash
+bunx prisma format
+bunx prisma validate
+```
+
+`format` normalizes the schema, and `validate` checks syntax and relations without connecting to the database.
+</Step>
+
+<Step>
+### Create and apply a migration
+
+```bash
+bunx prisma migrate dev --name add_user_bio
+```
+
+Prisma will:
+
+1. Compare the schema with existing migrations.
+2. Create `prisma/migrations/<timestamp>_add_user_bio/migration.sql`.
+3. Apply the migration to the local database.
+4. Regenerate the client when needed.
+</Step>
+
+<Step>
+### Inspect the SQL
+
+Open the new `migration.sql` and confirm it contains only the intended changes. Pay special attention to:
+
+- `DROP COLUMN`, `DROP TABLE`, or type changes.
+- Whether a new non-null column has a default or backfill step.
+- Whether indexes and foreign keys match expectations.
+</Step>
+
+<Step>
+### Regenerate the client
+
+```bash
+bunx prisma generate
+```
+
+Generated files live in `lib/generated/prisma` and are ignored by Git. Regenerate after switching branches or pulling someone else's schema change.
+</Step>
+
+<Step>
+### Update code and commit
+
+Update queries and types that use the model, run tests, and commit:
+
+- `prisma/schema.prisma`
+- The new migration directory
+- Application code that uses the new field or model
+
+</Step>
+
+</Steps>
+
+<Callout type="warn" title="Do not edit applied migrations">
+Never modify SQL in a migration that has already been committed or applied to a shared database. Add a new migration to correct it. Editing history makes migration checksums differ across environments.
+</Callout>
+
+## Command reference
+
+| Command | When to use it |
+| --- | --- |
+| `bunx prisma migrate dev` | Local development; creates and applies a new migration |
+| `bunx prisma migrate deploy` | CI/CD and production; applies existing migrations without creating new ones |
+| `bunx prisma migrate status` | Shows applied and pending migrations |
+| `bunx prisma migrate reset` | Resets a development database and replays migrations; deletes data |
+| `bunx prisma migrate resolve` | Marks a migration as applied or rolled back to recover from a failed state |
+| `bunx prisma db push` | Pushes the schema directly for prototypes; does not create migration history |
+| `bunx prisma generate` | Generates Prisma Client from the schema |
+| `bunx prisma studio` | Opens a graphical data browser |
+
+<Callout type="error" title="Commands banned in production">
+Do not run `migrate dev`, `migrate reset`, or `db push` in production. They can reset the database, create unreviewed migrations, or make the database diverge from migration history. Production should use `migrate deploy` only.
+</Callout>
+
+## Common incremental changes
+
+### Add a nullable field
+
+```prisma
+model User {
+  bio String?
+}
+```
+
+A nullable field can be added directly and does not affect existing rows. This is the safest incremental change.
+
+### Add a non-null field
+
+With existing data, adding a non-null column directly can fail or require a default. Prefer three steps:
+
+1. Add the field as nullable.
+2. Backfill existing rows with a script or SQL.
+3. After confirming there are no nulls, make it non-null in a second migration.
+
+Do not let Prisma pick a default unless every old row is genuinely allowed to share that value.
+
+### Add an index
+
+```prisma
+model Session {
+  // ...
+  @@index([expiresAt])
+}
+```
+
+Indexes should come from real query patterns, such as cleaning up sessions by expiry. They add write cost; do not index every column.
+
+### Add a relation
+
+```prisma
+model Post {
+  id       String @id @default(cuid())
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([authorId])
+}
+```
+
+Add the reverse field on `User`, such as `posts Post[]`. Foreign-key columns usually need an index; cascade behavior depends on the business meaning.
+
+### Rename a field
+
+Prisma may interpret a rename as “drop the old column, add a new one,” which loses data. To preserve it:
+
+- Use `@map("old_column")` so the new field keeps mapping to the old column, migrate the code, and handle the database rename separately.
+- Or write a safe `ALTER TABLE ... RENAME COLUMN` migration and keep Prisma's expected schema in sync.
+
+Either way, back up first and verify the migration SQL locally.
+
+### Drop a field or table
+
+Dropping is irreversible. Confirm that no code, report, or external system depends on the column before generating the migration. Back up production and run the change during a low-traffic window.
+
+## Production deployment
+
+Run migrations before the new application version starts:
+
+```bash
+bun ci
+bunx prisma generate
+bunx prisma migrate deploy
+bun run build
+bun start
+```
+
+In a real pipeline, `migrate deploy` is often a separate step using the production `DATABASE_URL`. Keep these rules:
+
+- Back up the production database first.
+- Run only committed, reviewed migrations.
+- If a migration fails, stop the deployment instead of starting the new version against a half-migrated schema.
+- When multiple instances start at once, let only one migration job run `migrate deploy`.
+- After deployment, run `bunx prisma migrate status` to verify the state.
+
+## Drift and recovery
+
+Drift means the database schema and migration history disagree. Common causes:
+
+- Manual changes in the database.
+- Editing a migration that was already applied.
+- Adopting Prisma on a database that has no migration history.
+
+Check status first:
+
+```bash
+bunx prisma migrate status
+```
+
+To compare the live database with the schema:
+
+```bash
+bunx prisma migrate diff \
+  --from-config-datasource \
+  --to-schema prisma/schema.prisma \
+  --script
+```
+
+Recovery rules:
+
+- If the database can be rebuilt locally, prefer `migrate reset` and replaying migrations.
+- If it contains real data, do not reset. Back up, inspect the failed migration, use `migrate resolve` to correct its recorded state, and add a repair migration.
+- `migrate resolve --applied` and `--rolled-back` only change migration records; they do not execute SQL. Confirm the actual database state first.
+
+<Callout type="warn" title="migrate dev may ask to reset">
+When Prisma detects drift or cannot safely create a migration, `migrate dev` may prompt to reset the database. Stop and check whether the database contains data before confirming. Never confirm this prompt on a shared development database or production.
+</Callout>
+
+## Permissions and the shadow database
+
+`migrate dev` needs a shadow database to compare schemas. A local PostgreSQL user usually needs permission to create databases. If a managed provider does not allow temporary databases, configure a shadow database according to the Prisma docs or use a reviewed SQL migration workflow instead.
+
+The production database user should have only the minimum privileges needed to run the app and migrations. Do not put a superuser connection string in application environment variables.

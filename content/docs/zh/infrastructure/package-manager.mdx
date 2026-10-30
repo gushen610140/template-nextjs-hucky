@@ -1,0 +1,82 @@
+---
+title: 包管理工具
+description: 使用 Bun 安装依赖，并只锁定 bun.lock
+---
+
+本项目统一使用 **Bun** 作为包管理器。`bun.lock` 是仓库里唯一的锁文件，npm、pnpm、yarn 的锁文件都不会被提交。
+
+## 安装依赖
+
+全新克隆、CI、Docker 构建和部署环境都使用：
+
+```bash
+bun ci
+```
+
+`bun ci` 等价于 `bun install --frozen-lockfile`。它会严格按 `bun.lock` 安装，不会修改锁文件；如果 `package.json` 与 `bun.lock` 不一致，安装会直接失败，而不是悄悄生成一份新的依赖树。
+
+日常开发中新增或升级依赖时，仍然用 `bun install` 让 Bun 更新 `bun.lock`：
+
+| 场景 | 命令 |
+| --- | --- |
+| 全新环境 / CI 安装 | `bun ci` |
+| 按当前 `package.json` 安装并更新锁文件 | `bun install` |
+| 添加运行时依赖 | `bun add <package>` |
+| 添加开发依赖 | `bun add -d <package>` |
+| 升级依赖 | `bun update` |
+| 执行一次性命令 | `bunx <command>` |
+
+<Callout title="提交前确认锁文件">
+如果你改动了 `package.json`，先在本地运行一次 `bun install`，确认 `bun.lock` 的变更一起提交。否则 CI 中的 `bun ci` 会因为两者不同步而失败。
+</Callout>
+
+## 为什么只用 Bun
+
+选择 Bun 不是为了追求某一种基准测试的分数，而是为了让仓库只保留一套工具链：
+
+- **一个命令覆盖安装、脚本和一次性工具。** `bun install`、`bun run`、`bunx` 都由同一个可执行文件提供，不需要同时维护 Node 包管理器与额外工具。
+- **安装行为一致。** Bun 使用自己的缓存和链接策略，配合唯一的 `bun.lock`，本地、CI 和部署环境更容易得到相同的依赖树。
+- **兼容 npm 生态。** 依赖仍然来自 npm registry，`package.json` 的依赖声明方式不变；使用 Bun 不会失去现有生态。
+- **内置 CI 安装模式。** `bun ci` 直接对应 `--frozen-lockfile`，不需要额外约定或包装脚本。
+- **项目已经使用 Bun 专属配置。** `package.json` 里的 `trustedDependencies` 和 `ignoreScripts` 由 Bun 读取，用来控制依赖的生命周期脚本。换用其他包管理器时，这些保护不会按原样生效。
+
+## 为什么不用 npm、pnpm 或 yarn
+
+这三个工具本身都能运行本项目，原因不是它们不可用，而是**一个仓库只能有一个包管理器**：
+
+1. **避免多份锁文件。** 一旦有人用 npm 生成 `package-lock.json`，或用 pnpm 生成 `pnpm-lock.yaml`，仓库就会同时存在两套依赖解析结果。最终以哪份为准会变成口头约定，CI 和本地很容易不一致。
+2. **避免不同的依赖布局。** npm 的 hoisting、pnpm 的严格 `node_modules` 结构、yarn 的 Plug'n'Play 等策略不同，某些依赖在一种布局下能运行，换一种布局就可能找不到模块。统一工具可以直接排除这类环境差异。
+3. **避免生命周期脚本行为不一致。** 本项目依赖 Bun 的 `trustedDependencies` / `ignoreScripts` 配置限制安装脚本。其他包管理器不会以相同方式解释这些字段。
+4. **降低新人成本。** 文档、CI 和排错步骤只需要围绕一套命令编写，不需要同时解释“如果你用 npm 要这样、用 pnpm 要那样”。
+
+因此，npm、pnpm、yarn 的锁文件都会被 `.gitignore` 忽略。即使本地误生成了，也不要提交。
+
+## 锁定 bun.lock
+
+- `bun.lock` **必须提交到 Git**。它是可复现安装的依据，不能加入 `.gitignore`。
+- 不要手工编辑 `bun.lock`。需要变更时修改 `package.json`，然后运行 `bun install` 让 Bun 重新生成。
+- 合并分支时如果 `bun.lock` 冲突，先解决 `package.json` 的冲突，再运行 `bun install` 重新生成锁文件；不要手动合并锁文件内容。
+- Code Review 时把 `bun.lock` 的 diff 当作依赖变更的一部分检查，而不是自动忽略。
+
+`.gitignore` 中与包管理器相关的部分如下：
+
+```text
+# package manager lockfiles (Bun only)
+package-lock.json
+npm-shrinkwrap.json
+pnpm-lock.yaml
+yarn.lock
+bun.lockb
+```
+
+其中 `bun.lockb` 是旧版 Bun 的二进制锁文件；本项目使用文本格式的 `bun.lock`，不需要提交它。
+
+## 常见问题
+
+**克隆后可以直接运行 `bun ci` 吗？**
+
+可以。仓库已经提交了 `bun.lock`。如果安装失败，通常说明 `package.json` 和锁文件不同步，先运行 `bun install` 并提交更新后的 `bun.lock`。
+
+**本地出现了 `package-lock.json` 或 `pnpm-lock.yaml` 怎么办？**
+
+直接删除即可。它们已经被忽略，不应该出现在提交里。之后统一使用 Bun 的命令。

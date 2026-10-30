@@ -1,0 +1,149 @@
+---
+title: PostgreSQL
+description: 本地数据库、连接串、驱动适配器、连接池和日常运维
+---
+
+Prisma 只是 ORM，真正保存数据的是 PostgreSQL。项目使用 `postgresql` provider，并通过 `@prisma/adapter-pg` 连接数据库。
+
+## 本地启动 PostgreSQL
+
+如果本机没有 PostgreSQL，可以用 Docker 启动一个开发实例：
+
+```bash
+docker run --name hucky-postgres \
+  -e POSTGRES_USER=hucky \
+  -e POSTGRES_PASSWORD=hucky_dev_password \
+  -e POSTGRES_DB=hucky \
+  -p 5432:5432 \
+  -d postgres:17
+```
+
+对应的连接串：
+
+```ini
+DATABASE_URL=postgresql://hucky:hucky_dev_password@localhost:5432/hucky
+```
+
+如果使用本机安装的 PostgreSQL，可以直接创建数据库：
+
+```bash
+createdb hucky
+```
+
+或者在 `psql` 中执行：
+
+```sql
+CREATE DATABASE hucky;
+```
+
+## 连接串结构
+
+```text
+postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require
+```
+
+| 部分 | 说明 |
+| --- | --- |
+| `postgresql://` | PostgreSQL 协议 |
+| `USER` | 数据库用户名 |
+| `PASSWORD` | 密码；包含 `@`、`:`、`/` 等字符时需要 URL 编码 |
+| `HOST` | 本机是 `localhost`，托管数据库使用提供商给出的主机 |
+| `PORT` | 默认 `5432` |
+| `DATABASE` | 数据库名，本项目示例为 `hucky` |
+| `sslmode` | 托管数据库通常要求 `require` 或 `verify-full` |
+
+把最终的 `DATABASE_URL` 写入 `.env.development`：
+
+```ini
+DATABASE_URL=postgresql://hucky:hucky_dev_password@localhost:5432/hucky
+```
+
+生产环境写入部署平台的 `.env.production` 或环境变量面板，不要提交真实连接串。
+
+<Callout type="warn" title="不要给数据库变量加 NEXT_PUBLIC_">
+`DATABASE_URL` 只能被服务端读取。加 `NEXT_PUBLIC_` 会把连接串打包进浏览器代码，等同于公开数据库凭据。
+</Callout>
+
+## Prisma 如何连接 PostgreSQL
+
+Prisma 7 使用驱动适配器。项目在 `lib/prisma.ts` 中这样创建客户端：
+
+```ts
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@/lib/generated/prisma/client";
+
+function createPrismaClient(): PrismaClient {
+  const adapter = new PrismaPg({
+    connectionString: process.env.DATABASE_URL,
+  });
+  return new PrismaClient({ adapter });
+}
+```
+
+`PrismaPg` 来自 `@prisma/adapter-pg`，底层使用 `pg` 连接池。数据库连接只在 Node.js 运行时建立：
+
+- Route Handler、Server Component、Server Action 和 `proxy.ts` 都可以使用。
+- 浏览器端组件不能导入 `lib/prisma.ts`。
+- Next.js 16 的 `proxy.ts` 运行在 Node.js runtime，因此可以在路由保护中查询会话。
+
+## 连接池
+
+`PrismaPg` 默认会创建 `pg` 连接池。`lib/prisma.ts` 已经用全局单例避免开发环境热更新重复建池：
+
+```ts
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}
+```
+
+部署时注意：
+
+- 一个应用实例应复用同一个 Prisma Client，不要在请求处理函数里 `new PrismaClient()`。
+- Serverless 环境每个实例都有自己的进程和连接池，实例一多就可能耗尽数据库连接数。优先使用托管数据库提供的连接池地址。
+- 需要限制池大小时，可以把 `pg` 的 `max` 等选项传给 `PrismaPg`，并在压测后调整，不要盲目放大。
+- 数据库连接数接近上限时，先检查是否有重复创建的 Prisma Client，再考虑升级数据库规格或接入外部连接池。
+
+## 常用运维命令
+
+```bash
+# 进入数据库
+psql "$DATABASE_URL"
+
+# 查看迁移状态
+bunx prisma migrate status
+
+# 打开图形化数据浏览器
+bunx prisma studio
+
+# 逻辑备份（custom 格式）
+pg_dump "$DATABASE_URL" --format=custom --file=hucky.dump
+
+# 恢复备份
+pg_restore --clean --if-exists --dbname="$DATABASE_URL" hucky.dump
+```
+
+执行恢复和 `migrate reset` 前先确认目标数据库，生产环境务必先备份。
+
+## 托管 PostgreSQL
+
+Neon、Supabase、Amazon RDS、Google Cloud SQL 等都可以直接使用，只要把提供商给出的连接串填入 `DATABASE_URL`。注意：
+
+- 需要 SSL 时加上 `?sslmode=require` 或提供商要求的更严格模式。
+- 密码中的特殊字符要 URL 编码。
+- 优先使用连接池地址，尤其是 Serverless 部署。
+- 有些提供商要求 IP 白名单或 VPN，先在本地用 `psql` 测试连通性。
+
+## 常见错误
+
+| 现象 | 常见原因 |
+| --- | --- |
+| `P1001` 无法连接数据库 | 数据库未启动、主机或端口错误、防火墙拦截 |
+| `P1000` 认证失败 | 用户名、密码错误，或密码没有 URL 编码 |
+| `P1010` 用户被拒绝 | 用户没有目标数据库权限 |
+| `too many connections` | 连接池过多、实例过多，或没有复用客户端 |
+| SSL 相关错误 | 缺少 `sslmode`，或证书模式与提供商要求不一致 |
+| `database "hucky" does not exist` | 数据库尚未创建，或连接串里的数据库名拼错 |
+
+先用 `psql "$DATABASE_URL"` 验证连接串，再排查 Prisma 配置。这样可以把数据库问题和 ORM 配置问题分开。

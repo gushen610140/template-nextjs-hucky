@@ -1,0 +1,235 @@
+---
+title: 迁移
+description: 从首次建库到后续增量结构变更的完整流程
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+迁移是数据库结构变更的版本控制。`prisma/schema.prisma` 描述目标结构，`prisma/migrations` 保存到达该结构的 SQL 步骤，两者必须一起提交。
+
+## 现有迁移
+
+| 迁移 | 内容 |
+| --- | --- |
+| `20260727145834_init` | 创建 `User`、`Role`、`Permission`、`UserRole`、`RolePermission` 及索引和外键 |
+| `20260731144740_add_session` | 创建 `Session` 表、唯一索引、用户索引和外键 |
+
+`migration_lock.toml` 记录 provider 为 `postgresql`，不要手动编辑。
+
+## 本地开发流程
+
+修改模型后，按以下顺序操作：
+
+<Steps>
+
+<Step>
+### 修改 schema
+
+编辑 `prisma/schema.prisma`。例如给用户增加一个可选的个人简介：
+
+```prisma
+model User {
+  // ...
+  bio String?
+}
+```
+</Step>
+
+<Step>
+### 格式化和校验
+
+```bash
+bunx prisma format
+bunx prisma validate
+```
+
+`format` 统一 schema 排版，`validate` 在不连接数据库的情况下检查语法和关系定义。
+</Step>
+
+<Step>
+### 生成并应用迁移
+
+```bash
+bunx prisma migrate dev --name add_user_bio
+```
+
+Prisma 会：
+
+1. 对比 schema 与已有迁移。
+2. 生成新的 `prisma/migrations/<时间戳>_add_user_bio/migration.sql`。
+3. 把迁移应用到本地数据库。
+4. 在需要时重新生成客户端。
+</Step>
+
+<Step>
+### 检查 SQL
+
+打开新生成的 `migration.sql`，确认它只包含预期的变更。特别注意：
+
+- 是否有 `DROP COLUMN`、`DROP TABLE` 或类型转换。
+- 新增非空列时是否提供了默认值或回填步骤。
+- 索引和外键是否符合预期。
+</Step>
+
+<Step>
+### 重新生成客户端
+
+```bash
+bunx prisma generate
+```
+
+生成文件在 `lib/generated/prisma`，已被 Git 忽略。切换分支或拉取别人的 schema 变更后也要重新生成。
+</Step>
+
+<Step>
+### 更新代码并提交
+
+修改使用该模型的查询和类型，运行测试后，把以下内容一起提交：
+
+- `prisma/schema.prisma`
+- 新生成的迁移目录
+- 使用新字段或新模型的业务代码
+
+</Step>
+
+</Steps>
+
+<Callout type="warn" title="迁移文件一旦应用就不要修改">
+已经提交或已经在共享数据库执行过的迁移，不要回头修改 SQL。需要修正时新增一个迁移。修改历史迁移会让不同环境的迁移校验和不一致。
+</Callout>
+
+## 命令对照
+
+| 命令 | 使用场景 |
+| --- | --- |
+| `bunx prisma migrate dev` | 本地开发，生成新迁移并应用 |
+| `bunx prisma migrate deploy` | CI/CD 和生产，应用已有迁移，不生成新迁移 |
+| `bunx prisma migrate status` | 查看哪些迁移已应用、哪些待应用 |
+| `bunx prisma migrate reset` | 开发环境重置数据库并重放迁移，会删除数据 |
+| `bunx prisma migrate resolve` | 标记某个迁移为已应用或已回滚，用于修复失败状态 |
+| `bunx prisma db push` | 原型阶段直接把 schema 推到数据库，不产生迁移历史 |
+| `bunx prisma generate` | 根据 schema 生成 Prisma Client |
+| `bunx prisma studio` | 图形化查看和编辑数据 |
+
+<Callout type="error" title="生产环境禁止使用的命令">
+生产环境不要运行 `migrate dev`、`migrate reset` 或 `db push`。它们可能重置数据库、生成未审查的迁移，或让数据库结构与迁移历史脱节。生产只使用 `migrate deploy`。
+</Callout>
+
+## 常见增量场景
+
+### 新增可空字段
+
+```prisma
+model User {
+  bio String?
+}
+```
+
+可空字段可以直接迁移，不会影响已有行。这是最安全的增量方式。
+
+### 新增非空字段
+
+已有数据时，直接添加非空列会失败或要求默认值。推荐分三步：
+
+1. 先加可空字段。
+2. 写脚本或 SQL 回填历史数据。
+3. 确认无空值后，再改成非空字段并生成第二个迁移。
+
+不要在没有回填的情况下让 Prisma 自动选择默认值，除非业务上确实允许所有旧数据使用同一个值。
+
+### 新增索引
+
+```prisma
+model Session {
+  // ...
+  @@index([expiresAt])
+}
+```
+
+索引应来自真实查询模式，例如按过期时间清理会话。索引会增加写入成本，不要为每个字段都建索引。
+
+### 新增关系
+
+```prisma
+model Post {
+  id       String @id @default(cuid())
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([authorId])
+}
+```
+
+同时需要在 `User` 上补反向关系字段，例如 `posts Post[]`。外键列通常需要索引；是否级联删除取决于业务语义。
+
+### 重命名字段
+
+Prisma 可能把重命名识别为“删除旧列 + 新增新列”，从而丢失数据。需要保留数据时：
+
+- 使用 `@map("旧列名")` 让新字段继续映射到旧列，先完成代码迁移，再单独处理数据库列名。
+- 或者手写一个安全的 `ALTER TABLE ... RENAME COLUMN` 迁移，并确保 Prisma 的预期结构与实际结构一致。
+
+无论哪种方式，先备份并在本地验证迁移 SQL。
+
+### 删除字段或表
+
+删除是不可逆操作。确认没有代码、报表或外部系统依赖该列后，再生成迁移。生产执行前先备份，并在低峰期操作。
+
+## 生产部署流程
+
+推荐把迁移放在应用启动之前：
+
+```bash
+bun ci
+bunx prisma generate
+bunx prisma migrate deploy
+bun run build
+bun start
+```
+
+实际 CI/CD 中，`migrate deploy` 通常作为独立步骤运行，使用生产环境的 `DATABASE_URL`。要点：
+
+- 生产数据库先备份。
+- 只运行已提交、已审查的迁移。
+- 迁移失败时停止部署，不要带着半完成的结构启动新版本。
+- 多个应用实例同时启动时，只让一个迁移任务执行 `migrate deploy`，避免并发迁移。
+- 部署后运行 `bunx prisma migrate status` 确认状态。
+
+## drift 和失败恢复
+
+数据库结构与迁移历史不一致时称为 drift。常见原因：
+
+- 手工在数据库里改表。
+- 修改了已经应用的迁移文件。
+- 从没有迁移历史的数据库开始接入 Prisma。
+
+先查看状态：
+
+```bash
+bunx prisma migrate status
+```
+
+需要比较差异时：
+
+```bash
+bunx prisma migrate diff \
+  --from-config-datasource \
+  --to-schema prisma/schema.prisma \
+  --script
+```
+
+修复原则：
+
+- 能在本地重建的数据库，优先 `migrate reset` 后重放迁移。
+- 有真实数据的数据库，不要 reset。先备份，检查失败迁移，再用 `migrate resolve` 标记状态，并补一个修复迁移。
+- `migrate resolve --applied` 和 `--rolled-back` 只是修改迁移记录，不会执行 SQL；使用前必须确认数据库实际状态。
+
+<Callout type="warn" title="migrate dev 可能要求重置数据库">
+当 Prisma 检测到 drift 或无法安全生成迁移时，`migrate dev` 可能提示重置数据库。看到这个提示先停止，确认数据库里是否有需要保留的数据，不要在共享开发库或生产库上直接确认。
+</Callout>
+
+## 权限与 shadow database
+
+`migrate dev` 需要一个 shadow database 来对比结构。本地 PostgreSQL 用户通常需要创建数据库的权限；托管数据库如果不允许创建临时库，需要按 Prisma 文档配置 shadow database，或改用经过审查的 SQL 迁移流程。
+
+生产环境的数据库用户应只拥有应用运行和迁移所需的最小权限，不要把超级用户连接串放进应用环境变量。

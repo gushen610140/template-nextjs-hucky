@@ -1,0 +1,245 @@
+---
+title: Prisma Client
+description: 在服务端安全、高效地使用 Prisma Client
+---
+
+业务代码不直接创建数据库连接，而是从 `lib/prisma.ts` 导入唯一的 `prisma` 实例。
+
+## 唯一的客户端实例
+
+```ts
+// lib/prisma.ts
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@/lib/generated/prisma/client";
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+function createPrismaClient(): PrismaClient {
+  const adapter = new PrismaPg({
+    connectionString: process.env.DATABASE_URL,
+  });
+  return new PrismaClient({ adapter });
+}
+
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}
+```
+
+为什么不能在每个文件里 `new PrismaClient()`：
+
+- 每个实例都会创建自己的连接池，热更新或高频调用会迅速耗尽数据库连接。
+- Prisma 7 需要显式传入驱动适配器，重复创建也意味着重复初始化 `pg`。
+- 单例让事务、连接池和日志配置只有一个来源。
+
+`globalThis` 缓存只用于非生产环境。生产进程本身不会热更新，不需要把实例挂到全局对象。
+
+## 导入方式
+
+```ts
+import { prisma } from "@/lib/prisma";
+```
+
+需要模型类型时，从生成客户端导入：
+
+```ts
+import type { User } from "@/lib/generated/prisma/client";
+```
+
+不要在客户端组件中导入 `lib/prisma.ts`，也不要把 `DATABASE_URL` 或查询逻辑带到浏览器。Prisma 只运行在服务端。
+
+## 查询示例
+
+### 按唯一字段查找
+
+```ts
+const existing = await prisma.user.findUnique({
+  where: { email },
+  select: { id: true },
+});
+```
+
+只取需要的字段，不要默认把整行数据（尤其是 `passwordHash`）返回给调用方。
+
+### 创建记录并只返回安全字段
+
+```ts
+const user = await prisma.user.create({
+  data: {
+    email,
+    passwordHash,
+    name: username,
+  },
+  select: {
+    id: true,
+    email: true,
+    name: true,
+    avatarUrl: true,
+    createdAt: true,
+  },
+});
+```
+
+### 查询关联数据
+
+```ts
+const userWithRoles = await prisma.user.findUnique({
+  where: { id: userId },
+  select: {
+    id: true,
+    email: true,
+    roles: {
+      select: {
+        role: {
+          select: {
+            name: true,
+            permissions: {
+              select: {
+                permission: {
+                  select: { name: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+});
+```
+
+嵌套 `select` 可以避免把关联表的全部字段都取出来。需要整行时再用 `include`，但要清楚它会加载哪些数据。
+
+### 会话创建与校验
+
+```ts
+await prisma.session.create({
+  data: {
+    tokenHash: hashToken(token),
+    userId,
+    expiresAt: new Date(Date.now() + SESSION_DURATION_MS),
+  },
+});
+```
+
+`lib/session.ts` 中的查询只选择会话 ID、过期时间和安全的用户字段，不会把 `passwordHash` 读出后再丢弃。
+
+### 事务
+
+多条写入需要原子性时使用 `$transaction`：
+
+```ts
+const [user, removedSessions] = await prisma.$transaction([
+  prisma.user.update({
+    where: { id: userId },
+    data: { isActive: false },
+  }),
+  prisma.session.deleteMany({
+    where: { userId },
+  }),
+]);
+```
+
+需要根据前一条查询结果决定后续操作时，使用交互式事务：
+
+```ts
+await prisma.$transaction(async (tx) => {
+  const user = await tx.user.findUniqueOrThrow({
+    where: { id: userId },
+  });
+
+  await tx.session.deleteMany({
+    where: { userId: user.id },
+  });
+});
+```
+
+事务里必须使用回调参数 `tx`，不要继续使用外层的 `prisma`，否则这些查询不会处于同一个事务中。
+
+### 分页
+
+```ts
+const pageSize = 20;
+const users = await prisma.user.findMany({
+  take: pageSize,
+  skip: page * pageSize,
+  orderBy: { createdAt: "desc" },
+  select: {
+    id: true,
+    email: true,
+    name: true,
+    createdAt: true,
+  },
+});
+```
+
+数据量大时优先使用基于游标的分页，避免深分页的 `skip` 成本。
+
+### 原生 SQL
+
+只有在 Prisma 查询 API 无法表达时才使用原生 SQL，并始终参数化：
+
+```ts
+const rows = await prisma.$queryRaw<{ id: string }[]>`
+  SELECT id FROM "User" WHERE email = ${email}
+`;
+```
+
+不要使用 `$queryRawUnsafe` 拼接用户输入。
+
+## 错误处理
+
+唯一约束冲突会抛出 `PrismaClientKnownRequestError`，例如重复邮箱：
+
+```ts
+import { Prisma } from "@/lib/generated/prisma/client";
+
+try {
+  await prisma.user.create({ data: { email, passwordHash } });
+} catch (error) {
+  if (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  ) {
+    // 返回 409，而不是 500
+  }
+  throw error;
+}
+```
+
+常见错误码：
+
+| 错误码 | 含义 |
+| --- | --- |
+| `P2002` | 唯一约束冲突 |
+| `P2003` | 外键约束失败 |
+| `P2025` | 要更新或删除的记录不存在 |
+| `P1001` | 无法连接数据库 |
+
+在 Route Handler 中，应把可预期的约束错误映射成 4xx，而不是统一返回 500。当前注册接口已经捕获 `P2002` 并返回 409；以后新增其他唯一字段时也要采用同样的处理方式。
+
+## 性能建议
+
+- 用 `select` 限制返回字段，尤其是用户表和会话表。
+- 避免在循环里逐条查询；用 `findMany`、`include` 或一次事务批量处理。
+- 为 `where`、`orderBy` 和关联字段建立合适索引，参考[数据模型](./schema)。
+- 不要在每个请求中创建 Prisma Client；复用 `lib/prisma.ts` 的单例。
+- 不要在客户端组件中触发数据库查询；通过 Route Handler 或 Server Action 暴露必要接口。
+- 需要缓存时，在服务端数据层做缓存，不要让缓存绕过权限和会话校验。
+
+## 在 Next.js 中的位置
+
+| 场景 | 是否可以使用 Prisma |
+| --- | --- |
+| Server Component | 可以 |
+| Server Action | 可以 |
+| Route Handler | 可以 |
+| `proxy.ts` | 可以，Next.js 16 的 proxy 运行在 Node.js runtime |
+| Client Component | 不可以 |
+| 浏览器事件处理函数 | 不可以，应调用 API |
+
+只要代码可能被打包到浏览器，就不要导入 `lib/prisma.ts`。服务端边界由文件位置和 `"use client"` 决定，不能依赖运行时才报错。

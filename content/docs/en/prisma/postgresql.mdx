@@ -1,0 +1,149 @@
+---
+title: PostgreSQL
+description: Local database, connection strings, driver adapter, pooling, and operations
+---
+
+Prisma is the ORM; PostgreSQL is where the data actually lives. The project uses the `postgresql` provider and connects through `@prisma/adapter-pg`.
+
+## Start PostgreSQL locally
+
+If PostgreSQL is not installed, run a development instance with Docker:
+
+```bash
+docker run --name hucky-postgres \
+  -e POSTGRES_USER=hucky \
+  -e POSTGRES_PASSWORD=hucky_dev_password \
+  -e POSTGRES_DB=hucky \
+  -p 5432:5432 \
+  -d postgres:17
+```
+
+The matching connection string is:
+
+```ini
+DATABASE_URL=postgresql://hucky:hucky_dev_password@localhost:5432/hucky
+```
+
+With a local PostgreSQL installation, create the database directly:
+
+```bash
+createdb hucky
+```
+
+Or from `psql`:
+
+```sql
+CREATE DATABASE hucky;
+```
+
+## Connection string anatomy
+
+```text
+postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require
+```
+
+| Part | Meaning |
+| --- | --- |
+| `postgresql://` | PostgreSQL protocol |
+| `USER` | Database user |
+| `PASSWORD` | Password; URL-encode characters such as `@`, `:`, and `/` |
+| `HOST` | `localhost` locally, or the host from your provider |
+| `PORT` | Defaults to `5432` |
+| `DATABASE` | Database name, `hucky` in this project's examples |
+| `sslmode` | Managed databases commonly require `require` or `verify-full` |
+
+Put the final value in `.env.development`:
+
+```ini
+DATABASE_URL=postgresql://hucky:hucky_dev_password@localhost:5432/hucky
+```
+
+In production, set it in `.env.production` on the deployment platform or in its environment-variable settings. Never commit a real connection string.
+
+<Callout type="warn" title="Never prefix database variables with NEXT_PUBLIC_">
+`DATABASE_URL` must stay server-side. Adding `NEXT_PUBLIC_` bundles the connection string into browser code and exposes the database credentials.
+</Callout>
+
+## How Prisma connects to PostgreSQL
+
+Prisma 7 uses driver adapters. The project creates the client like this in `lib/prisma.ts`:
+
+```ts
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@/lib/generated/prisma/client";
+
+function createPrismaClient(): PrismaClient {
+  const adapter = new PrismaPg({
+    connectionString: process.env.DATABASE_URL,
+  });
+  return new PrismaClient({ adapter });
+}
+```
+
+`PrismaPg` comes from `@prisma/adapter-pg` and uses a `pg` pool underneath. Connections are created only in the Node.js runtime:
+
+- Route Handlers, Server Components, Server Actions, and `proxy.ts` can use it.
+- Client components must not import `lib/prisma.ts`.
+- Next.js 16's `proxy.ts` runs on the Node.js runtime, so it can query sessions during route protection.
+
+## Connection pooling
+
+`PrismaPg` creates a `pg` pool by default. `lib/prisma.ts` already uses a global singleton to avoid creating a new pool on every development hot reload:
+
+```ts
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}
+```
+
+Deployment notes:
+
+- Reuse one Prisma Client per process; never call `new PrismaClient()` inside a request handler.
+- In serverless environments, every instance has its own process and pool. Prefer the provider's pooled connection string to avoid exhausting database connections.
+- To limit the pool, pass `pg` options such as `max` to `PrismaPg` and tune after load testing. Do not raise limits blindly.
+- If connections approach the database limit, check for duplicate Prisma Client instances before upgrading the database.
+
+## Operations
+
+```bash
+# Open psql
+psql "$DATABASE_URL"
+
+# Check migration state
+bunx prisma migrate status
+
+# Open the data browser
+bunx prisma studio
+
+# Logical backup in custom format
+pg_dump "$DATABASE_URL" --format=custom --file=hucky.dump
+
+# Restore a backup
+pg_restore --clean --if-exists --dbname="$DATABASE_URL" hucky.dump
+```
+
+Confirm the target database before restoring or running `migrate reset`. Back up production before any destructive operation.
+
+## Managed PostgreSQL
+
+Neon, Supabase, Amazon RDS, Google Cloud SQL, and similar services work directly: put the provider's connection string in `DATABASE_URL`. Keep in mind:
+
+- Add `?sslmode=require` or the stricter mode required by the provider.
+- URL-encode special characters in the password.
+- Prefer a pooled connection string, especially for serverless deployments.
+- Some providers require an IP allowlist or VPN; test connectivity with `psql` first.
+
+## Common errors
+
+| Symptom | Likely cause |
+| --- | --- |
+| `P1001` cannot reach the database | Database is down, wrong host or port, or a firewall is blocking it |
+| `P1000` authentication failed | Wrong user or password, or the password was not URL-encoded |
+| `P1010` user denied | The user lacks privileges on the target database |
+| `too many connections` | Too many pools or instances, or the client is not reused |
+| SSL errors | Missing `sslmode`, or the mode does not match the provider's certificate setup |
+| `database "hucky" does not exist` | The database was not created, or the name in the URL is wrong |
+
+Verify the connection string with `psql "$DATABASE_URL"` first. That separates database problems from Prisma configuration problems.

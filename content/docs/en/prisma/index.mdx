@@ -1,0 +1,143 @@
+---
+title: Prisma overview
+description: How the database layer is organized, from cloning the repo to the first query
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+The project uses **Prisma 7** as the ORM for PostgreSQL. Prisma covers three concerns:
+
+- Describing the data model in `prisma/schema.prisma`
+- Managing schema changes through `prisma/migrations`
+- Generating a type-safe Prisma Client for server-side queries
+
+The database is PostgreSQL, the driver adapter is `@prisma/adapter-pg`, and the underlying connection pool comes from `pg`.
+
+## File layout
+
+| Path | Purpose |
+| --- | --- |
+| `prisma/schema.prisma` | Models, relations, indexes, and generator configuration |
+| `prisma/migrations/` | Ordered SQL migrations; must be committed to Git |
+| `prisma.config.ts` | Prisma CLI config that loads the environment file and `DATABASE_URL` |
+| `lib/prisma.ts` | The single Prisma Client instance used at runtime |
+| `lib/generated/prisma/` | Generated client; ignored by Git |
+| `lib/session.ts` | Creates, reads, and deletes sessions with Prisma |
+| `lib/logto-user.ts` | Maps a Logto identity to the local `User` table |
+| `app/api/auth/` | Register, login, logout, and current-user endpoints |
+| `app/callback/route.ts` | Logto callback that writes the local user and session |
+
+`lib/generated/prisma` is not tracked. Regenerate it after a fresh clone, a branch switch, or any schema change.
+
+## From clone to first query
+
+<Steps>
+
+<Step>
+### Install dependencies
+
+```bash
+bun ci
+```
+
+This installs the `prisma` CLI, `@prisma/client`, `@prisma/adapter-pg`, and `pg`.
+</Step>
+
+<Step>
+### Configure the database connection
+
+Copy the example file and fill in `DATABASE_URL`:
+
+```bash
+cp .env.example .env.development
+```
+
+```ini
+DATABASE_URL=postgresql://user:password@localhost:5432/hucky
+```
+
+See [Environment variables](../infrastructure/environment-variables) for the full environment-file rules. If you do not have a database yet, start with [PostgreSQL](./postgresql).
+</Step>
+
+<Step>
+### Generate the client and apply migrations
+
+```bash
+bunx prisma generate
+bunx prisma migrate dev
+```
+
+`generate` writes the client to `lib/generated/prisma`. `migrate dev` applies pending migrations from `prisma/migrations`; on a fresh database it creates the tables in order.
+
+Do not run `migrate dev` in production. Use `bunx prisma migrate deploy` there; see [Migrations](./migrations).
+</Step>
+
+<Step>
+### Start the app
+
+```bash
+bun dev
+```
+
+Registration, login, session checks, and the Logto callback all reach the database through `lib/prisma.ts`.
+</Step>
+
+</Steps>
+
+## How it works
+
+A query travels from configuration to SQL roughly like this:
+
+```text
+prisma.config.ts
+  └─ dotenv reads .env.<NODE_ENV>
+       └─ DATABASE_URL
+
+prisma/schema.prisma
+  └─ bunx prisma generate
+       └─ lib/generated/prisma (type-safe client code)
+
+lib/prisma.ts
+  └─ new PrismaPg({ connectionString: DATABASE_URL })
+       └─ new PrismaClient({ adapter })
+            └─ pg Pool
+                 └─ PostgreSQL
+```
+
+Application code only depends on the `prisma` export from `lib/prisma.ts`. It does three things:
+
+1. Reads `process.env.DATABASE_URL`.
+2. Creates a PostgreSQL driver adapter with `PrismaPg`.
+3. Stores the instance on `globalThis` in development so Next.js hot reload does not create a new pool on every change.
+
+## Development workflow
+
+Use this order when changing database-backed features:
+
+1. Edit `prisma/schema.prisma`.
+2. Run `bunx prisma format` and `bunx prisma validate`.
+3. Run `bunx prisma migrate dev --name <change-name>` to create and apply a migration.
+4. Inspect the generated `migration.sql`.
+5. Run `bunx prisma generate` to refresh client types.
+6. Update the application code and run tests.
+7. Commit the schema, migration, and code together.
+
+<Callout type="warn" title="Do not edit database tables directly">
+Manually adding columns, dropping tables, or changing types in PostgreSQL creates drift between the database and the migration history. A later `migrate dev` may ask to reset the database. Always start schema changes from `schema.prisma`.
+</Callout>
+
+## Conventions
+
+- Commit migration files; do not commit `lib/generated/prisma`.
+- Never edit a migration that has already been applied.
+- Use `migrate dev` locally and `migrate deploy` in production.
+- `db push` is acceptable for throwaway prototypes, but real data should use migrations.
+- Use `bunx prisma` in this repository, not `npx prisma`, to avoid mixing package managers.
+- The `prisma` CLI is a dev dependency; `bunx prisma` uses the project-local version, not a global install.
+
+## Next
+
+- [PostgreSQL](./postgresql): local database, connection strings, SSL, pooling, and backups.
+- [Data model](./schema): current models, relations, indexes, and field conventions.
+- [Prisma Client](./client): usage in Server Components, Route Handlers, and transactions.
+- [Migrations](./migrations): incremental changes, production deploys, resets, and drift.

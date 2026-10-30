@@ -1,0 +1,90 @@
+---
+title: 格式化
+description: 使用 Biome 统一代码格式，并在保存时自动格式化
+---
+
+本项目使用 **Biome** 作为代码格式化和静态检查工具。格式、lint 和 import 排序都由同一份 `biome.json` 管理，不再额外维护 ESLint + Prettier 的组合。
+
+## 常用命令
+
+| 命令 | 作用 |
+| --- | --- |
+| `bun run format` | 运行 `biome format --write`，格式化代码 |
+| `bun run lint` | 运行 `biome check`，检查格式、lint 规则和 import 顺序 |
+| `bunx biome check --write` | 应用安全修复，并同时完成格式化和 import 排序 |
+| `bunx biome format --write <file>` | 只格式化指定文件 |
+
+`bun run lint` 对应的是 `biome check`，它不仅检查 lint 规则，也会检查格式是否符合要求。因此本地提交前建议至少运行一次：
+
+```bash
+bun run lint
+```
+
+## 强烈推荐 VSCode + Biome 插件
+
+推荐使用 **VSCode + Biome 官方插件** 编写代码，让格式化在保存时自动完成。插件 ID 是：
+
+```text
+biomejs.biome
+```
+
+在 VSCode 扩展市场搜索 **Biome** 并安装即可。项目已经把团队配置提交到 `.vscode/settings.json`：
+
+```json
+{
+  "css.lint.unknownAtRules": "ignore",
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports.biome": "explicit"
+  },
+  "[postcss]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}
+```
+
+这些配置分别负责：
+
+- `editor.defaultFormatter`：默认使用 Biome 格式化。
+- `editor.formatOnSave`：保存文件时自动格式化。
+- `editor.codeActionsOnSave`：保存时整理 import 顺序。
+- `[postcss]`：PostCSS 配置文件交给 Prettier 处理，这是 Biome 不覆盖该文件类型时的例外。推荐同时安装 Prettier 插件，避免保存 `.postcss` 文件时找不到格式化器。
+- `css.lint.unknownAtRules`：关闭 VSCode 内置 CSS 检查对未知 at-rule 的误报，避免干扰 Tailwind CSS。
+
+<Callout type="warn" title="不要让多个格式化器同时工作">
+如果工作区里还启用了 Prettier 或 ESLint 的保存格式化，可能会和 Biome 互相覆盖，产生来回变动的 diff。使用本项目时，请把 Biome 设为默认格式化器，并关闭其他工具的 `formatOnSave`。
+</Callout>
+
+## 为什么选择 Biome
+
+- **速度快。** Biome 使用 Rust 编写，格式化和检查大项目时通常明显快于基于 JavaScript 的工具，保存时格式化几乎无感。
+- **一个工具替代多套配置。** 格式化、lint、import 排序都内置在 Biome 中，不需要再组合 ESLint、Prettier、`eslint-plugin-import` 等依赖，也减少了插件之间的版本冲突。
+- **配置集中。** 项目只需要维护根目录的 `biome.json`，命令也统一为 `biome format` 和 `biome check`。
+- **对 Next.js 和 React 有内置支持。** `biome.json` 启用了 `next` 和 `react` 的推荐规则，不需要手工拼接大量 ESLint 插件。
+- **尊重 Git 忽略规则。** 配置中启用了 `vcs.useIgnoreFile`，Biome 会跳过 `.gitignore` 中的文件，不会去格式化 `node_modules`、`.next` 等产物。
+- **减少风格争论。** 格式化结果稳定且可预测，团队成员不需要在缩进、引号、换行等细节上反复讨论，Review 也更专注于逻辑。
+- **覆盖项目常用文件类型。** TypeScript、TSX、JSON、CSS 等都可以由同一套工具处理，适合当前的全栈 Next.js 项目。
+
+<Callout title="Biome 不负责类型检查">
+Biome 负责格式、lint 和 import 组织，但不做完整的 TypeScript 类型检查。类型错误仍然由 TypeScript 和 `next build` 负责，两者不能互相替代。
+</Callout>
+
+## 当前配置要点
+
+根目录的 `biome.json` 包含这些约定：
+
+- 使用空格缩进，宽度为 2。
+- 启用推荐 lint 规则。
+- 启用 `next` 和 `react` 领域的推荐规则。
+- 保存时自动整理 import。
+- 忽略 `node_modules`、`.next`、`dist`、`build`。
+- 关闭 `noUnknownAtRules`，避免把 Tailwind 的 at-rule 当成错误。
+
+## 建议的工作流
+
+1. 安装 VSCode 的 Biome 插件。
+2. 打开项目，确认 `.vscode/settings.json` 已生效。
+3. 正常写代码并保存，Biome 会自动格式化并整理 import。
+4. 提交前运行 `bun run lint`，确保格式和 lint 都能通过。
+5. 如果 CI 报格式错误，运行 `bunx biome check --write` 后再提交。

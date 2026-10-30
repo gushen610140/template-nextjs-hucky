@@ -1,0 +1,153 @@
+---
+title: Data model
+description: Current models, relations, indexes, and field conventions
+---
+
+`prisma/schema.prisma` is the single source of truth for the data model. Tables are created by migrations; application code accesses them through Prisma Client, never by building DDL by hand.
+
+## Schema structure
+
+The generator and datasource are defined at the top of the file:
+
+```prisma
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+```
+
+- `provider = "prisma-client"` generates TypeScript into `lib/generated/prisma`.
+- `datasource db` only declares the database type; the actual URL comes from `datasource.url` in `prisma.config.ts`.
+- The generated client is ignored by `.gitignore` and must not be edited manually.
+
+## Models
+
+| Model | Purpose |
+| --- | --- |
+| `User` | Local account, profile, active flag, and timestamps |
+| `Role` | Roles such as admin or editor |
+| `Permission` | Fine-grained permissions such as `user:create` or `post:publish` |
+| `UserRole` | Many-to-many join table between users and roles |
+| `RolePermission` | Many-to-many join table between roles and permissions |
+| `Session` | Opaque server-side sessions with token hashes and expiry |
+
+### User
+
+```prisma
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  avatarUrl    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  roles    UserRole[]
+  sessions Session[]
+}
+```
+
+Design notes:
+
+- `id` uses `cuid()` instead of exposing auto-increment IDs.
+- `email` is unique; registration and login both look users up by email.
+- `passwordHash` stores a bcrypt hash, never a plaintext password.
+- `name` and `avatarUrl` are optional so email-only accounts work.
+- `isActive` marks disabled accounts. Login, session validation, and the Logto callback reject inactive users.
+- `updatedAt` is maintained by Prisma on update.
+
+### Session
+
+```prisma
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+```
+
+Sessions use an opaque-token design:
+
+1. The server generates a random token and stores only the raw value in an httpOnly cookie.
+2. The database stores `sha256(token)` in `tokenHash`.
+3. Every request looks up the session by `tokenHash` and checks `expiresAt`.
+4. Expired and inactive-user sessions are deleted when read; logout deletes by token hash.
+5. `@@index([userId])` supports cleanup by user.
+
+<Callout title="Session to User relation">
+`Session` is many-to-one with `User`. `onDelete: Cascade` removes all sessions when a user is deleted, so no orphaned login state remains.
+</Callout>
+
+## Roles and permissions
+
+Roles and permissions use explicit many-to-many join tables:
+
+```prisma
+model UserRole {
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+```
+
+Relationship diagram:
+
+```text
+User ──< UserRole >── Role ──< RolePermission >── Permission
+  │
+  └──< Session
+```
+
+- The composite primary key `@@id([userId, roleId])` prevents assigning the same role twice.
+- Both sides use `onDelete: Cascade`, so deleting a role or permission cleans up its links.
+- `Permission.name` is unique and is a stable identifier for authorization checks.
+- `Permission.module` groups permissions by area, such as `user`, `post`, or `settings`.
+
+## Field and index conventions
+
+- Use PascalCase for models and camelCase for fields. Prisma quotes these identifiers in SQL.
+- To use snake_case in the database, add `@map` / `@@map`, but remember that this changes the actual column names and requires a migration.
+- Evaluate `@@index` for columns used in `where`, `orderBy`, or relation lookups.
+- Use `@unique` for business keys: `User.email`, `Role.name`, `Permission.name`, and `Session.tokenHash`.
+- Be explicit about delete behavior. The current project cascades users, roles, permissions, and sessions.
+- Use `DateTime` consistently; creation times use `@default(now())` and updates use `@updatedAt`.
+- Store only hashes or irreversible digests for sensitive values. Never store plaintext tokens, passwords, or secrets.
+
+## Changing the model
+
+Updating `schema.prisma` is not the whole change. See [Migrations](./migrations) for the full flow:
+
+1. Edit the model.
+2. `bunx prisma format`
+3. `bunx prisma validate`
+4. `bunx prisma migrate dev --name <change-name>`
+5. `bunx prisma generate`
+6. Update the code that uses the model
+
+Do not add columns manually in the database and then update the schema; that leaves the migration history out of sync with reality.

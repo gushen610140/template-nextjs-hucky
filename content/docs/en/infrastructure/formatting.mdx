@@ -1,0 +1,90 @@
+---
+title: Formatting
+description: Keep code consistently formatted with Biome and format on save
+---
+
+This project uses **Biome** for code formatting and static checks. Formatting, linting, and import sorting all come from one `biome.json`, so there is no separate ESLint + Prettier setup to maintain.
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `bun run format` | Run `biome format --write` to format the code |
+| `bun run lint` | Run `biome check` to verify formatting, lint rules, and import order |
+| `bunx biome check --write` | Apply safe fixes, formatting, and import sorting |
+| `bunx biome format --write <file>` | Format a single file |
+
+`bun run lint` maps to `biome check`. It checks lint rules and also verifies that files match the expected formatting. Run it before committing:
+
+```bash
+bun run lint
+```
+
+## VSCode + Biome is strongly recommended
+
+Use **VSCode with the official Biome extension** so formatting happens automatically when you save. The extension ID is:
+
+```text
+biomejs.biome
+```
+
+Search for **Biome** in the VSCode marketplace and install it. The project already commits the shared workspace settings in `.vscode/settings.json`:
+
+```json
+{
+  "css.lint.unknownAtRules": "ignore",
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports.biome": "explicit"
+  },
+  "[postcss]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}
+```
+
+What each setting does:
+
+- `editor.defaultFormatter`: makes Biome the default formatter.
+- `editor.formatOnSave`: formats the file whenever it is saved.
+- `editor.codeActionsOnSave`: organizes imports on save.
+- `[postcss]`: uses Prettier for PostCSS configuration files, since that file type is outside Biome's formatter. Install the Prettier extension as well to avoid a missing-formatter prompt when saving `.postcss` files.
+- `css.lint.unknownAtRules`: disables VSCode's built-in warning for unknown at-rules, which would otherwise flag Tailwind CSS.
+
+<Callout type="warn" title="Do not run multiple formatters at once">
+If Prettier or ESLint format-on-save is also enabled in the workspace, the tools can overwrite each other and produce diffs that keep flipping back and forth. Keep Biome as the default formatter and turn off `formatOnSave` for other tools.
+</Callout>
+
+## Why Biome
+
+- **Fast.** Biome is written in Rust, so formatting and checking large projects is typically much faster than JavaScript-based tooling. Format-on-save stays out of the way.
+- **One tool instead of several.** Formatting, linting, and import sorting are built in. There is no need to combine ESLint, Prettier, `eslint-plugin-import`, and their configuration files, which also removes version conflicts between plugins.
+- **Centralized configuration.** The project only maintains the root `biome.json`, and commands stay simple: `biome format` and `biome check`.
+- **Built-in Next.js and React support.** `biome.json` enables the recommended rules for the `next` and `react` domains, without assembling a long list of ESLint plugins.
+- **Respects Git ignores.** `vcs.useIgnoreFile` is enabled, so Biome skips files ignored by `.gitignore` and does not format build output such as `node_modules` or `.next`.
+- **Less style debate.** Formatting is deterministic and predictable, so the team does not need to discuss indentation, quotes, or line breaks. Reviews can focus on logic.
+- **Covers the files this project uses.** TypeScript, TSX, JSON, and CSS can all be handled by one tool, which fits a full-stack Next.js project.
+
+<Callout title="Biome is not a type checker">
+Biome handles formatting, linting, and import organization, but it does not perform full TypeScript type checking. Type errors remain the responsibility of TypeScript and `next build`; the two tools are not interchangeable.
+</Callout>
+
+## Current configuration
+
+The root `biome.json` sets these conventions:
+
+- Two-space indentation.
+- Recommended lint rules enabled.
+- Recommended rules for the `next` and `react` domains.
+- Import organization enabled.
+- `node_modules`, `.next`, `dist`, and `build` ignored.
+- `noUnknownAtRules` disabled so Tailwind at-rules are not treated as errors.
+
+## Suggested workflow
+
+1. Install the Biome extension for VSCode.
+2. Open the project and confirm `.vscode/settings.json` is active.
+3. Write code normally and save; Biome formats the file and organizes imports.
+4. Run `bun run lint` before committing to verify formatting and lint rules.
+5. If CI reports formatting errors, run `bunx biome check --write` and commit the result.

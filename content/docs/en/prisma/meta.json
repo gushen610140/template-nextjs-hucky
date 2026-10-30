@@ -1,0 +1,5 @@
+{
+  "title": "Prisma Database",
+  "pagesIndex": "index",
+  "pages": ["postgresql", "schema", "client", "migrations"]
+}

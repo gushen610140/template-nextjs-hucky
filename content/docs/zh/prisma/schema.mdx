@@ -1,0 +1,153 @@
+---
+title: 数据模型
+description: 当前 schema 的模型、关系、索引和字段设计约定
+---
+
+数据模型的唯一来源是 `prisma/schema.prisma`。数据库表由迁移生成，业务代码只通过 Prisma Client 访问，不直接拼接 SQL 建表。
+
+## schema 结构
+
+文件顶部定义生成器和数据源：
+
+```prisma
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+```
+
+- `provider = "prisma-client"` 生成 TypeScript 客户端到 `lib/generated/prisma`。
+- `datasource db` 只声明数据库类型；真正的连接地址由 `prisma.config.ts` 中的 `datasource.url` 提供。
+- 生成的客户端已被 `.gitignore` 忽略，不能手工修改。
+
+## 当前模型
+
+| 模型 | 作用 |
+| --- | --- |
+| `User` | 本地用户账号、资料、启用状态和时间戳 |
+| `Role` | 角色，例如管理员、编辑者 |
+| `Permission` | 细粒度权限，例如 `user:create`、`post:publish` |
+| `UserRole` | 用户与角色的多对多关联表 |
+| `RolePermission` | 角色与权限的多对多关联表 |
+| `Session` | 服务端不透明会话，保存 token 哈希和过期时间 |
+
+### User
+
+```prisma
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  avatarUrl    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  roles    UserRole[]
+  sessions Session[]
+}
+```
+
+设计要点：
+
+- `id` 使用 `cuid()`，不暴露自增 ID。
+- `email` 唯一，注册和登录都按邮箱查找。
+- `passwordHash` 只存 bcrypt 哈希，不存明文密码。
+- `name`、`avatarUrl` 可以为空，兼容只有邮箱的账号。
+- `isActive` 用于禁用账号；登录、会话校验和 Logto 回调都会检查。
+- `updatedAt` 由 Prisma 在更新时自动维护。
+
+### Session
+
+```prisma
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+```
+
+会话采用“不透明 token”方案：
+
+1. 服务端生成随机 token，只把原始值写入 httpOnly Cookie。
+2. 数据库只保存 `sha256(token)`，即 `tokenHash`。
+3. 每次请求按 `tokenHash` 查会话，并检查 `expiresAt`。
+4. 过期会话在读取时删除，登出时按 token 哈希删除。
+5. `@@index([userId])` 支持按用户清理会话。
+
+<Callout title="Session 与 User 的关系">
+`Session` 对 `User` 是多对一。删除用户时，`onDelete: Cascade` 会同时删除该用户的所有会话，避免留下无法归属的登录态。
+</Callout>
+
+## 角色与权限
+
+角色和权限是多对多关系，通过显式关联表实现：
+
+```prisma
+model UserRole {
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+```
+
+关系图：
+
+```text
+User ──< UserRole >── Role ──< RolePermission >── Permission
+  │
+  └──< Session
+```
+
+- 复合主键 `@@id([userId, roleId])` 防止重复分配同一个角色。
+- 两边的外键都使用 `onDelete: Cascade`，删除角色或权限时自动清理关联。
+- `Permission.name` 唯一，适合作为权限判断的稳定标识。
+- `Permission.module` 用于按模块分组，例如 `user`、`post`、`settings`。
+
+## 字段与索引约定
+
+- 模型名用 PascalCase，字段名用 camelCase；Prisma 会在 SQL 中使用带引号的同名标识符。
+- 如果希望数据库使用 snake_case，可以在字段或模型上添加 `@map` / `@@map`，但这会改变实际列名，需要配套迁移。
+- 经常出现在 `where`、`orderBy` 或关联条件中的列，应评估是否添加 `@@index`。
+- 唯一业务键用 `@unique`，例如 `User.email`、`Role.name`、`Permission.name`、`Session.tokenHash`。
+- 关联删除策略要明确：当前项目对用户、角色、权限和会话使用级联删除。
+- 时间字段统一使用 `DateTime`；创建时间用 `@default(now())`，更新时间用 `@updatedAt`。
+- 敏感信息只存哈希或不可逆摘要，不存明文 token、密码或密钥。
+
+## 修改模型时
+
+模型修改不能只改 `schema.prisma` 就结束。完整流程见[迁移](./migrations)：
+
+1. 修改模型。
+2. `bunx prisma format`
+3. `bunx prisma validate`
+4. `bunx prisma migrate dev --name <变更名>`
+5. `bunx prisma generate`
+6. 更新使用该模型的代码
+
+不要在数据库里手工补列后再改 schema，否则迁移历史会和实际数据库不一致。

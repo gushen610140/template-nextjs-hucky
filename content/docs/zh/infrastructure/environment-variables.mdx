@@ -1,0 +1,123 @@
+---
+title: 环境变量
+description: 必填变量、按环境加载的文件，以及 .env.example 的用途
+---
+
+项目按 `NODE_ENV` 读取不同的环境变量文件。真实值只保存在本地或部署平台，仓库里只提交不带值的 `.env.example`。
+
+## 文件如何选择
+
+| 场景 | `NODE_ENV` | 读取的文件 |
+| --- | --- | --- |
+| `bun dev` | `development` | `.env.development` |
+| `bun run build` | `production` | `.env.production` |
+| `bun start` | `production` | `.env.production` |
+| `bunx prisma ...`（未指定时） | `development` | `.env.development` |
+
+`NODE_ENV` 由 Next.js 和脚本自动设置，不需要写进环境变量文件。`prisma.config.ts` 也按同样的规则加载 `.env.${NODE_ENV || "development"}`，所以数据库命令和 Next.js 使用同一份配置。
+
+## Next.js 与 Prisma CLI
+
+环境变量在两个独立进程中使用，不要假设 Next.js 的加载会自动传给 Prisma 命令：
+
+| 进程 | 谁负责加载 env | 典型命令 |
+| --- | --- | --- |
+| Next.js 应用 | Next.js 内置的 env 加载 | `bun dev`、`bun run build`、`bun start` |
+| Prisma CLI | `prisma.config.ts` 中的 `dotenv` | `bunx prisma generate`、`migrate`、`studio` |
+
+Next.js 只会在自己启动时把 `.env.development` 或 `.env.production` 注入 `process.env`。`bunx prisma ...` 不经过 Next.js，所以 Prisma 7 的配置文件会显式加载环境文件：
+
+```ts
+// prisma.config.ts
+const envFile = `.env.${process.env.NODE_ENV || "development"}`;
+dotenv.config({ path: envFile, quiet: true });
+```
+
+因此 `dotenv` 是 Prisma CLI 的依赖，放在 `devDependencies` 中；应用运行时不会导入它，也不会和 Next.js 的 env 读取冲突。
+
+`dotenv.config()` 默认不会覆盖已经存在的环境变量。如果部署平台已经提供 `DATABASE_URL`，平台值优先，`.env` 文件不会覆盖它。
+
+<Callout type="warn" title="生产迁移要显式指定环境">
+`bunx prisma migrate deploy` 在未设置 `NODE_ENV` 时会按 `development` 读取 `.env.development`。生产环境应设置 `NODE_ENV=production`，或者直接由 CI/CD 注入 `DATABASE_URL`。
+</Callout>
+
+<Callout title="不要手动覆盖 NODE_ENV">
+在 `.env.development` 里写 `NODE_ENV=production` 会让加载逻辑和 Next.js 的行为互相矛盾。需要切换环境时，使用对应的命令或部署平台的环境变量。
+</Callout>
+
+## 必填变量
+
+| 变量 | 用途 | 说明 |
+| --- | --- | --- |
+| `DATABASE_URL` | PostgreSQL 连接串 | Prisma 和 `lib/prisma.ts` 都从这里读取，例如 `postgresql://user:password@localhost:5432/hucky` |
+| `LOGTO_ENDPOINT` | Logto 租户地址 | 例如 `https://your-tenant.logto.app` |
+| `LOGTO_APP_ID` | Logto 应用 ID | 在 Logto 控制台创建应用后获得 |
+| `LOGTO_APP_SECRET` | Logto 应用密钥 | 仅服务端使用，不能加 `NEXT_PUBLIC_` 前缀 |
+| `LOGTO_BASE_URL` | 应用自身地址 | 开发环境通常是 `http://localhost:3000`，生产环境填写实际域名 |
+| `LOGTO_COOKIE_SECRET` | 会话 Cookie 签名密钥 | 至少 32 个字符，使用足够随机的值；生产环境必须更换 |
+
+除 `LOGTO_BASE_URL` 有本地默认值外，其余变量都应显式配置。缺少数据库连接串会导致 Prisma 无法连接，缺少 Logto 配置会导致登录流程失败。
+
+<Callout type="warn" title="密钥不要加 NEXT_PUBLIC_">
+带 `NEXT_PUBLIC_` 前缀的变量会被打包进浏览器代码。`LOGTO_APP_SECRET` 和 `LOGTO_COOKIE_SECRET` 只能留在服务端。
+</Callout>
+
+## `.env.example` 是提交的模板
+
+`.env.example` 是仓库的一部分，会跟着代码一起提交。它只列出变量名，值留空：
+
+```ini
+DATABASE_URL=
+
+LOGTO_ENDPOINT=
+LOGTO_APP_ID=
+LOGTO_APP_SECRET=
+LOGTO_BASE_URL=
+LOGTO_COOKIE_SECRET=
+```
+
+它不会被应用直接读取，作用是告诉新成员“需要配置哪些变量”。开始开发时复制一份并填入真实值：
+
+```bash
+cp .env.example .env.development
+```
+
+Windows PowerShell：
+
+```powershell
+Copy-Item .env.example .env.development
+```
+
+需要构建生产版本时，再准备对应的 `.env.production`。
+
+<Callout type="error" title="不要把真实值写进 .env.example">
+`.env.example` 会被提交到 Git 历史。即使之后删掉内容，密钥仍然留在历史记录里。真实值只能写入被忽略的 `.env*` 文件或部署平台的环境变量中。
+</Callout>
+
+## 哪些文件会进入 Git
+
+| 文件 | 是否提交 | 用途 |
+| --- | --- | --- |
+| `.env.example` | 是 | 变量清单和空模板 |
+| `.env` | 否 | 真实配置（如使用） |
+| `.env.development` | 否 | 开发环境真实配置 |
+| `.env.production` | 否 | 生产环境真实配置 |
+| `.env.local` | 否 | 本地覆盖配置 |
+
+对应的 `.gitignore` 规则：
+
+```text
+# env files (real values stay local)
+.env
+.env.*
+!.env.example
+```
+
+`!.env.example` 必须放在忽略规则之后，才能把示例文件重新纳入版本控制。不要删除这一行，也不要把 `.env.example` 改成会被忽略的文件名。
+
+## 新增变量时
+
+1. 在 `.env.example` 中补一行变量名，值留空。
+2. 在本地 `.env.development` 和部署平台的 `.env.production` 中填入真实值。
+3. 如果变量会被客户端使用，确认它确实需要 `NEXT_PUBLIC_` 前缀；服务端密钥不要加。
+4. 更新本页的变量表，避免文档和实际配置脱节。

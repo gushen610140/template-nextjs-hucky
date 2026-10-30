@@ -20,15 +20,29 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 ### Install dependencies
 
 ```bash
-bun install
+bun ci
 ```
+
+`bun ci` installs exactly what `bun.lock` specifies and never rewrites the lockfile. If the lockfile and `package.json` are out of sync, installation fails instead of silently changing the dependency tree.
 
 </Step>
 
 <Step>
 ### Configure environment variables
 
-The project loads `.env.<NODE_ENV>`, so local development uses `.env.development`:
+The project loads `.env.<NODE_ENV>`, so local development uses `.env.development`. Start from the example file:
+
+```bash
+cp .env.example .env.development
+```
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env.development
+```
+
+Then fill in the real database and Logto values:
 
 ```ini
 DATABASE_URL=postgresql://user:password@localhost:5432/hucky
@@ -40,7 +54,7 @@ LOGTO_BASE_URL=http://localhost:3000
 LOGTO_COOKIE_SECRET=a-long-random-string
 ```
 
-`LOGTO_BASE_URL` is the app's own URL; Logto redirects back here. `LOGTO_COOKIE_SECRET` signs the session cookie — use a strong random value in production.
+`LOGTO_BASE_URL` is the app's own URL; Logto redirects back here. `LOGTO_COOKIE_SECRET` must be at least 32 characters and should be strongly random in production. `.env.example` is committed to Git; real `.env*` files are not. See [Environment variables](./infrastructure/environment-variables) for details.
 
 </Step>
 
@@ -52,7 +66,7 @@ bunx prisma generate
 bunx prisma migrate dev
 ```
 
-`prisma generate` writes the client to `lib/generated/prisma`, and `migrate dev` applies migrations. Use `bunx prisma studio` to browse data.
+`prisma generate` writes the client to `lib/generated/prisma`, and `migrate dev` applies migrations. Use `bunx prisma studio` to browse data. See [Prisma database](./prisma) for the schema, PostgreSQL setup, and migration workflow.
 
 </Step>
 
@@ -73,6 +87,8 @@ Open `http://localhost:3000`; you will be redirected to the default locale `/zh`
 
 | Command | Purpose |
 | --- | --- |
+| `bun ci` | Install from `bun.lock` (CI / fresh checkout) |
+| `bun install` | Install dependencies and update `bun.lock` |
 | `bun dev` | Start the dev server |
 | `bun run build` | Production build |
 | `bun start` | Run the production build |
@@ -95,4 +111,6 @@ When you add a public page, update `publicRoutes` in `proxy.ts` too, or it will 
 ## Next steps
 
 - Read the [overview](./index) for the project layout.
+- Read [Infrastructure](./infrastructure) for the package manager and [environment variable](./infrastructure/environment-variables) conventions.
+- Read [Prisma database](./prisma) for the data model, PostgreSQL, and migrations.
 - Add matching `.mdx` files under `content/docs/zh/` and `content/docs/en/` to keep both locales in sync.
