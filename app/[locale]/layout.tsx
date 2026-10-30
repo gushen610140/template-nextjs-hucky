@@ -9,6 +9,7 @@ import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { LenisProvider } from "@/providers/lenis-provider";
+import { ThemeCustomizerProvider } from "@/providers/theme-customizer-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 
 const playfairDisplayHeading = Playfair_Display({
@@ -64,13 +65,15 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
-          <LenisProvider>
-            <NextIntlClientProvider messages={messages}>
-              <TooltipProvider>
-                <AuthProvider>{children}</AuthProvider>
-              </TooltipProvider>
-            </NextIntlClientProvider>
-          </LenisProvider>
+          <ThemeCustomizerProvider>
+            <LenisProvider>
+              <NextIntlClientProvider messages={messages}>
+                <TooltipProvider>
+                  <AuthProvider>{children}</AuthProvider>
+                </TooltipProvider>
+              </NextIntlClientProvider>
+            </LenisProvider>
+          </ThemeCustomizerProvider>
         </ThemeProvider>
       </body>
     </html>

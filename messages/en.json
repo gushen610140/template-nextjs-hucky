@@ -50,6 +50,48 @@
     "dark": "Dark",
     "system": "System"
   },
+  "ThemeCustomizer": {
+    "open": "Customize theme",
+    "title": "Theme settings",
+    "baseColor": "Base color",
+    "primaryColor": "Primary color",
+    "radius": "Radius",
+    "shadow": "Shadow",
+    "reset": "Reset",
+    "base": {
+      "neutral": "Neutral",
+      "stone": "Stone",
+      "zinc": "Zinc",
+      "mauve": "Mauve",
+      "olive": "Olive",
+      "mist": "Mist",
+      "taupe": "Taupe"
+    },
+    "primary": {
+      "emerald": "Emerald",
+      "blue": "Blue",
+      "violet": "Violet",
+      "rose": "Rose",
+      "orange": "Orange",
+      "red": "Red",
+      "yellow": "Yellow",
+      "teal": "Teal"
+    },
+    "radiusPresets": {
+      "none": "None",
+      "sm": "Small",
+      "md": "Medium",
+      "lg": "Large",
+      "default": "Default",
+      "xl": "XL"
+    },
+    "shadowPresets": {
+      "none": "None",
+      "soft": "Soft",
+      "default": "Default",
+      "strong": "Strong"
+    }
+  },
   "Landing": {
     "navFeatures": "Features",
     "navTech": "Tech Stack",

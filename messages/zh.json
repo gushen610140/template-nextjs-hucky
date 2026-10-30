@@ -50,6 +50,48 @@
     "dark": "深色",
     "system": "跟随系统"
   },
+  "ThemeCustomizer": {
+    "open": "自定义主题",
+    "title": "主题配置",
+    "baseColor": "基础色",
+    "primaryColor": "主色",
+    "radius": "圆角",
+    "shadow": "阴影",
+    "reset": "重置",
+    "base": {
+      "neutral": "中性",
+      "stone": "石灰",
+      "zinc": "锌灰",
+      "mauve": "紫灰",
+      "olive": "橄榄",
+      "mist": "雾蓝",
+      "taupe": "灰褐"
+    },
+    "primary": {
+      "emerald": "翠绿",
+      "blue": "蓝色",
+      "violet": "紫罗兰",
+      "rose": "玫瑰",
+      "orange": "橙色",
+      "red": "红色",
+      "yellow": "黄色",
+      "teal": "青色"
+    },
+    "radiusPresets": {
+      "none": "无",
+      "sm": "小",
+      "md": "中",
+      "lg": "大",
+      "default": "默认",
+      "xl": "超大"
+    },
+    "shadowPresets": {
+      "none": "无",
+      "soft": "柔和",
+      "default": "默认",
+      "strong": "强烈"
+    }
+  },
   "Landing": {
     "navFeatures": "核心特性",
     "navTech": "技术栈",

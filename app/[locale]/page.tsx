@@ -1,6 +1,7 @@
 import { ArrowRight, Blocks, KeyRound, ShieldCheck, Zap } from "lucide-react";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
+import { ThemeCustomizer } from "@/components/theme-customizer";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ export default async function Home() {
             </a>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeCustomizer />
             <ThemeToggle />
             <Button asChild size="sm">
               <Link href={`/${locale}/login`}>{auth("loginTitle")}</Link>

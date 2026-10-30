@@ -1,5 +1,6 @@
 import { useTranslations } from "next-intl";
 import { AppSidebar } from "@/components/app-sidebar";
+import { ThemeCustomizer } from "@/components/theme-customizer";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Breadcrumb,
@@ -43,7 +44,8 @@ export default function Page() {
                 </BreadcrumbList>
               </Breadcrumb>
             </div>
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-1">
+              <ThemeCustomizer />
               <ThemeToggle />
             </div>
           </div>
