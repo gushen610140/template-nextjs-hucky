@@ -1,5 +1,5 @@
 // RBAC 基础模型 — User / Role / Permission
-// 使用: npx prisma migrate dev --name init
+// 使用: bunx prisma migrate dev --name init
 
 generator client {
   provider = "prisma-client"
