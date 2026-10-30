@@ -1,8 +1,8 @@
 import { i18nProvider } from "fumadocs-ui/i18n";
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import { RootProvider } from "fumadocs-ui/provider/next";
-import { ThemeCustomizer } from "@/components/theme-customizer";
-import { ThemeToggle } from "@/components/theme-toggle";
+import type { CSSProperties } from "react";
+import { DocsHeader } from "@/components/docs-header";
 import { baseOptions, translations } from "@/lib/layout.shared";
 import { source } from "@/lib/source";
 
@@ -23,14 +23,10 @@ export default async function Layout({
       <DocsLayout
         tree={source.getPageTree(locale)}
         {...baseOptions(locale)}
+        slots={{ header: DocsHeader, languageSelect: false }}
         themeSwitch={{ enabled: false }}
-        sidebar={{
-          footer: (
-            <div className="flex items-center justify-end gap-1">
-              <ThemeCustomizer />
-              <ThemeToggle />
-            </div>
-          ),
+        containerProps={{
+          style: { "--fd-header-height": "3.5rem" } as CSSProperties,
         }}
       >
         {children}
