@@ -17,14 +17,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/providers/auth-provider";
 
 type FormErrors = Partial<{
   account: string;
   password: string;
-  email: string;
-  code: string;
   agree: string;
 }>;
 
@@ -34,16 +31,11 @@ export default function LoginPage() {
 
   const router = useRouter();
   const locale = useLocale();
-  const [activeTab, setActiveTab] = useState("password");
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
-  const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitting, setSubmitting] = useState(false);
-  const [codeSent, setCodeSent] = useState(false);
-  const [countdown, setCountdown] = useState(0);
   const [logtoError, setLogtoError] = useState(false);
 
   // /callback 失败时会带 ?error=logto 回到登录页
@@ -52,22 +44,11 @@ export default function LoginPage() {
     setLogtoError(params.get("error") === "logto");
   }, []);
 
-  function validatePassword(): FormErrors {
+  function validate(): FormErrors {
     const errs: FormErrors = {};
     if (!account.trim()) errs.account = t("errorEmailRequired");
     if (!password) errs.password = t("errorPasswordRequired");
     else if (password.length < 6) errs.password = t("errorPasswordMin");
-    if (!agreeTerms) errs.agree = t("errorAgreeTerms");
-    return errs;
-  }
-
-  function validateCode(): FormErrors {
-    const errs: FormErrors = {};
-    if (!email.trim()) errs.email = t("errorEmailRequired");
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-      errs.email = t("errorEmailInvalid");
-    if (!code) errs.code = t("errorCodeRequired");
-    else if (!/^\d{6}$/.test(code)) errs.code = t("errorCodeLength");
     if (!agreeTerms) errs.agree = t("errorAgreeTerms");
     return errs;
   }
@@ -81,11 +62,12 @@ export default function LoginPage() {
     return `/${locale}/dashboard`;
   }
 
-  async function handlePasswordSubmit(e: React.SubmitEvent) {
+  async function handleSubmit(e: React.SubmitEvent) {
     e.preventDefault();
-    const errs = validatePassword();
+    const errs = validate();
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
+
     setSubmitting(true);
     const res = await fetch("/api/auth/login", {
       method: "POST",
@@ -104,58 +86,6 @@ export default function LoginPage() {
     }
   }
 
-  async function handleCodeSubmit(e: React.SubmitEvent) {
-    e.preventDefault();
-    const errs = validateCode();
-    setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
-
-    setSubmitting(true);
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, code }),
-    });
-    const data = await res.json();
-
-    if (res.ok) {
-      setUser(data.user);
-      router.push(getRedirectDestination());
-      setSubmitting(false);
-    } else {
-      setErrors(data.errors ?? {});
-      setSubmitting(false);
-    }
-  }
-
-  function handleSendCode() {
-    if (!email.trim()) {
-      setErrors((prev) => ({ ...prev, email: t("errorEmailRequired") }));
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setErrors((prev) => ({ ...prev, email: t("errorEmailInvalid") }));
-      return;
-    }
-    setErrors((prev) => {
-      const { email: _, ...rest } = prev;
-      return rest;
-    });
-    setCodeSent(true);
-    setCountdown(60);
-    // TODO: call send-code API
-
-    const timer = setInterval(() => {
-      setCountdown((c) => {
-        if (c <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return c - 1;
-      });
-    }, 1000);
-  }
-
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm">
@@ -163,207 +93,84 @@ export default function LoginPage() {
           <CardTitle>{t("loginTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList variant="line" className="mb-6 w-full">
-              <TabsTrigger value="password" className="flex-1">
-                {t("loginTabPassword")}
-              </TabsTrigger>
-              <TabsTrigger value="code" className="flex-1">
-                {t("loginTabCode")}
-              </TabsTrigger>
-            </TabsList>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="account">{t("emailLabel")}</Label>
+              <Input
+                id="account"
+                type="text"
+                placeholder={t("emailPlaceholder")}
+                value={account}
+                onChange={(e) => setAccount(e.target.value)}
+                aria-invalid={!!errors.account}
+              />
+              {errors.account && (
+                <p className="text-xs text-destructive">{errors.account}</p>
+              )}
+            </div>
 
-            {/* ── Password tab ── */}
-            <TabsContent value="password">
-              <form
-                onSubmit={handlePasswordSubmit}
-                className="flex flex-col gap-5"
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="password">{t("passwordLabel")}</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder={t("passwordPlaceholder")}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                aria-invalid={!!errors.password}
+              />
+              {errors.password && (
+                <p className="text-xs text-destructive">{errors.password}</p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="agree-password"
+                checked={agreeTerms}
+                onCheckedChange={(v) => {
+                  setAgreeTerms(v === true);
+                  setErrors((prev) => {
+                    const { agree: _, ...rest } = prev;
+                    return rest;
+                  });
+                }}
+              />
+              <Label
+                htmlFor="agree-password"
+                className="text-xs font-normal tracking-normal normal-case"
               >
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="account">{t("emailLabel")}</Label>
-                  <Input
-                    id="account"
-                    type="text"
-                    placeholder={t("emailPlaceholder")}
-                    value={account}
-                    onChange={(e) => setAccount(e.target.value)}
-                    aria-invalid={!!errors.account}
-                  />
-                  {errors.account && (
-                    <p className="text-xs text-destructive">{errors.account}</p>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="password">{t("passwordLabel")}</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder={t("passwordPlaceholder")}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    aria-invalid={!!errors.password}
-                  />
-                  {errors.password && (
-                    <p className="text-xs text-destructive">
-                      {errors.password}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="agree-password"
-                    checked={agreeTerms}
-                    onCheckedChange={(v) => {
-                      setAgreeTerms(v === true);
-                      setErrors((prev) => {
-                        const { agree: _, ...rest } = prev;
-                        return rest;
-                      });
-                    }}
-                  />
-                  <Label
-                    htmlFor="agree-password"
-                    className="text-xs font-normal tracking-normal normal-case"
-                  >
-                    {t("agreeTerms")}{" "}
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <button
-                          type="button"
-                          className="ml-0.5 cursor-pointer underline underline-offset-2 hover:text-foreground"
-                        >
-                          {t("termsOfService")}
-                        </button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>{t("termsTitle")}</DialogTitle>
-                          <DialogDescription>{t("termsP1")}</DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-3 text-sm text-muted-foreground">
-                          <p>{t("termsP2")}</p>
-                          <p>{t("termsP3")}</p>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </Label>
-                </div>
-                {errors.agree && (
-                  <p className="-mt-3 text-xs text-destructive">
-                    {errors.agree}
-                  </p>
-                )}
-
-                <Button type="submit" disabled={submitting}>
-                  {submitting ? "…" : t("loginButton")}
-                </Button>
-              </form>
-            </TabsContent>
-
-            {/* ── Code tab ── */}
-            <TabsContent value="code">
-              <form onSubmit={handleCodeSubmit} className="flex flex-col gap-5">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="email">{t("emailLabel")}</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder={t("emailPlaceholder")}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    aria-invalid={!!errors.email}
-                  />
-                  {errors.email && (
-                    <p className="text-xs text-destructive">{errors.email}</p>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="code">{t("codeLabel")}</Label>
-                  <div className="flex items-end gap-2">
-                    <div className="flex-1">
-                      <Input
-                        id="code"
-                        type="text"
-                        placeholder={t("codePlaceholder")}
-                        value={code}
-                        onChange={(e) => setCode(e.target.value)}
-                        aria-invalid={!!errors.code}
-                        maxLength={6}
-                      />
-                    </div>
-                    <Button
+                {t("agreeTerms")}{" "}
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <button
                       type="button"
-                      variant="outline"
-                      className="shrink-0"
-                      disabled={countdown > 0}
-                      onClick={handleSendCode}
+                      className="ml-0.5 cursor-pointer underline underline-offset-2 hover:text-foreground"
                     >
-                      {countdown > 0
-                        ? t("resendCode", { seconds: countdown })
-                        : codeSent
-                          ? t("getCode")
-                          : t("getCode")}
-                    </Button>
-                  </div>
-                  {errors.code && (
-                    <p className="text-xs text-destructive">{errors.code}</p>
-                  )}
-                </div>
+                      {t("termsOfService")}
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>{t("termsTitle")}</DialogTitle>
+                      <DialogDescription>{t("termsP1")}</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 text-sm text-muted-foreground">
+                      <p>{t("termsP2")}</p>
+                      <p>{t("termsP3")}</p>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </Label>
+            </div>
+            {errors.agree && (
+              <p className="-mt-3 text-xs text-destructive">{errors.agree}</p>
+            )}
 
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="agree-code"
-                    checked={agreeTerms}
-                    onCheckedChange={(v) => {
-                      setAgreeTerms(v === true);
-                      setErrors((prev) => {
-                        const { agree: _, ...rest } = prev;
-                        return rest;
-                      });
-                    }}
-                  />
-                  <Label
-                    htmlFor="agree-code"
-                    className="text-xs font-normal tracking-normal normal-case"
-                  >
-                    {t("agreeTerms")}
-                    <Dialog>
-                      <DialogTrigger asChild>
-                        <button
-                          type="button"
-                          className="ml-0.5 cursor-pointer underline underline-offset-2 hover:text-foreground"
-                        >
-                          {t("termsOfService")}
-                        </button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>{t("termsTitle")}</DialogTitle>
-                          <DialogDescription>{t("termsP1")}</DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-3 text-sm text-muted-foreground">
-                          <p>{t("termsP2")}</p>
-                          <p>{t("termsP3")}</p>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
-                  </Label>
-                </div>
-                {errors.agree && (
-                  <p className="-mt-3 text-xs text-destructive">
-                    {errors.agree}
-                  </p>
-                )}
-
-                <Button type="submit" disabled={submitting}>
-                  {submitting ? "…" : t("loginButton")}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "…" : t("loginButton")}
+            </Button>
+          </form>
 
           {logtoError && (
             <p className="mt-4 text-center text-xs text-destructive">
