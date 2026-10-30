@@ -26,7 +26,13 @@ export default async function Layout({
         slots={{ header: DocsHeader, languageSelect: false }}
         themeSwitch={{ enabled: false }}
         containerProps={{
-          style: { "--fd-header-height": "3.5rem" } as CSSProperties,
+          style: {
+            "--fd-header-height": "3.5rem",
+            gridTemplate: `"sidebar sidebar header header header"
+"sidebar sidebar toc-popover toc toc"
+"sidebar sidebar tabs toc toc"
+"sidebar sidebar main toc toc" 1fr / minmax(min-content, 1fr) var(--fd-sidebar-col) minmax(0, calc(var(--fd-layout-width,97rem) - var(--fd-sidebar-width) - var(--fd-toc-width))) var(--fd-toc-width) minmax(min-content, 1fr)`,
+          } as CSSProperties,
         }}
       >
         {children}

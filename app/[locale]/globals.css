@@ -232,3 +232,8 @@
     font-family: var(--font-family) !important;
   }
 }
+
+/* ── Fumadocs docs chrome ── */
+#nd-docs-layout [data-sidebar-panel] {
+  display: none;
+}
