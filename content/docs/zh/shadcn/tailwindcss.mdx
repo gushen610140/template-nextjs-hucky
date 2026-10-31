@@ -1,0 +1,113 @@
+---
+title: Tailwind CSS
+description: 为什么项目使用 Tailwind CSS，它和 shadcn 的关系，以及何时写原生 CSS
+---
+
+Tailwind CSS 是本项目的默认样式方案。shadcn/ui 生成的所有组件都依赖 Tailwind utility 和 CSS 变量，因此只要使用 `components/ui/`，就必须保留 Tailwind。
+
+<Callout type="warn" title="Tailwind 是 shadcn 的硬性条件">
+`components/ui/` 里的 class 全部是 Tailwind utility，例如 `bg-primary`、`border-border`、`data-[state=open]:animate-in`。移除 Tailwind 会让这些组件失去样式。这里的“硬性条件”指的是 **shadcn 组件必须依赖 Tailwind**，而不是要求业务代码的每一行样式都写成 utility。
+</Callout>
+
+## 为什么用 Tailwind
+
+- **样式和结构在同一个文件**：读一个组件就能看到它的完整外观，不需要在 JSX 和 CSS 文件之间来回跳。
+- **天然受 CSS 变量控制**：`bg-primary` 最终读取 `--primary`，主题定制器改变量就能全局生效。
+- **没有运行时**：Tailwind 在构建时生成 CSS，不会把样式方案带进浏览器运行时。
+- **响应式和状态直观**：`md:grid-cols-3`、`data-[state=open]:bg-muted` 直接表达条件和断点。
+- **删除组件时样式一起删除**：不会留下无人引用的 CSS 文件。
+
+## 项目里的 Tailwind v4
+
+项目使用 Tailwind CSS v4，没有 `tailwind.config.js`。入口在 `app/[locale]/globals.css`：
+
+```css
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "fumadocs-ui/css/shadcn.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-primary: var(--primary);
+  --radius-lg: var(--radius);
+}
+```
+
+- `@import "tailwindcss"` 加载 Tailwind v4。
+- `@theme inline` 把 CSS 变量映射成 Tailwind 颜色和圆角工具类。
+- `@custom-variant dark` 让 `dark:` 跟随 `<html class="dark">`。
+- `fumadocs-ui/css/shadcn.css` 把文档站点的 `--color-fd-*` 变量映射到同一套 shadcn token。
+
+## 常用写法
+
+```tsx
+<div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-6">
+  <h2 className="text-lg font-semibold text-card-foreground">Title</h2>
+  <p className="text-sm text-muted-foreground">Description</p>
+</div>
+```
+
+规则：
+
+| 场景 | 推荐 |
+| --- | --- |
+| 颜色 | `bg-background`、`text-foreground`、`border-border`、`text-primary` |
+| 间距 | `gap-2`、`p-4`、`mt-6`；纵向排列用 `flex flex-col gap-*` |
+| 尺寸 | 宽高相同用 `size-4`，不要写 `h-4 w-4` |
+| 条件 class | 用 `cn()`，不要手写模板字符串三元表达式 |
+| 图标 | 交给 Button/菜单等组件控制尺寸，不额外写 `size-4` |
+| 暗色 | 用语义 token，不要手写 `dark:bg-zinc-900` |
+
+<Callout type="warn" title="不要拼接动态 class">
+Tailwind 在构建时扫描源码，`bg-${color}-500` 这种运行时拼接不会生成对应 CSS。动态颜色请使用 CSS 变量、内联 style，或提前定义完整的 class 映射。
+</Callout>
+
+## 什么时候用原生 CSS
+
+Tailwind 不是“所有样式都必须写成 utility”的规定。以下情况可以写原生 CSS：
+
+- 复杂的关键帧动画、`@property`、`@supports` 组合。
+- 需要覆盖第三方组件（例如 Mermaid SVG）的内部选择器。
+- 打印样式、滚动条、选区、autofill 等全局浏览器行为。
+- 一段样式被多个组件共享，写成 utility 反而难读。
+
+推荐放在：
+
+```text
+app/[locale]/globals.css   # 全局行为、主题变量、第三方覆盖
+components/<name>.css      # 单个复杂组件的局部样式
+```
+
+即使写原生 CSS，也优先引用主题变量，而不是写死颜色：
+
+```css
+.custom-surface {
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+```
+
+这样切换浅色/深色或主题预设时，原生 CSS 也会一起变化。
+
+## 和 shadcn 的关系
+
+| 能力 | 由谁提供 |
+| --- | --- |
+| 组件结构和行为 | shadcn/ui + Radix |
+| 样式工具类 | Tailwind CSS |
+| 颜色、圆角、阴影 token | `app/[locale]/globals.css` + 主题定制器 |
+| 变体管理 | `class-variance-authority`（shadcn 内部使用） |
+| class 合并 | `cn()`（`clsx` + `tailwind-merge`） |
+
+## 检查清单
+
+- 新增颜色是否用了语义 token？
+- 是否出现了 `space-x-*` / `space-y-*`？改成 `flex` + `gap-*`。
+- 是否在组件里写死了十六进制颜色或 Tailwind 调色板颜色？
+- 是否为了一个样式覆盖而修改了 `components/ui/`？
+- 复杂样式是否放进了 `globals.css` 或局部 CSS，而不是堆一长串 arbitrary value？

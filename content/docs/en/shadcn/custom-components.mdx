@@ -1,0 +1,154 @@
+---
+title: Custom components
+description: Wrap shadcn components without modifying components/ui
+---
+
+`components/ui/` is a read-only upstream mirror. Extra styling, defaults, and composition belong in new components under `components/`.
+
+## Structure
+
+```text
+components/ui/button.tsx        # upstream, never edited
+components/docs/callout.tsx     # custom wrapper built on Alert
+components/app-sidebar.tsx      # business composition: Sidebar + Menu + Avatar
+```
+
+A custom component does three things:
+
+1. **Compose**: combine shadcn primitives into a business component.
+2. **Narrow defaults**: fix common variants, sizes, and spacing.
+3. **Adapt data**: map business props to shadcn props.
+
+## Wrapper example
+
+The docs `<Callout>` works this way. It does not modify `alert.tsx`; it selects an icon and variant from `type`:
+
+```tsx
+// components/docs/callout.tsx
+import { CircleAlert, Info, TriangleAlert } from "lucide-react";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
+import { cn } from "@/lib/utils";
+
+export function DocsCallout({ type = "info", title, children, className }) {
+  const Icon = type === "error" ? CircleAlert : type === "info" ? Info : TriangleAlert;
+
+  return (
+    <Alert
+      variant={type === "error" ? "destructive" : "default"}
+      className={cn("my-6", className)}
+    >
+      <Icon />
+      {title ? <AlertTitle>{title}</AlertTitle> : null}
+      <AlertDescription>{children}</AlertDescription>
+    </Alert>
+  );
+}
+```
+
+Key points:
+
+- Use `Alert`, `AlertTitle`, and `AlertDescription`; do not rebuild the callout styling.
+- Pass `className` through `cn()` so callers can still adjust layout.
+- Express visual differences with `variant` and semantic tokens, not hardcoded colors.
+- Let the component choose the icon; callers should not repeat it.
+
+## Wrappers with variants
+
+When a business component has a real set of appearances, define variants with `cva` and forward the result to shadcn:
+
+```tsx
+import { cva, type VariantProps } from "class-variance-authority";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+const actionButtonVariants = cva("", {
+  variants: {
+    tone: {
+      default: "",
+      danger: "text-destructive hover:text-destructive",
+    },
+    size: {
+      sm: "h-8 px-3",
+      md: "",
+    },
+  },
+  defaultVariants: { tone: "default", size: "md" },
+});
+
+type ActionButtonProps = React.ComponentProps<typeof Button> &
+  VariantProps<typeof actionButtonVariants>;
+
+export function ActionButton({ tone, size, className, ...props }: ActionButtonProps) {
+  return (
+    <Button
+      variant={tone === "danger" ? "ghost" : "default"}
+      className={cn(actionButtonVariants({ tone, size }), className)}
+      {...props}
+    />
+  );
+}
+```
+
+<Callout type="warn" title="Check shadcn first">
+If only the color or size differs, check whether `button.tsx` already has the variant or size. Do not create a variant system for one button.
+</Callout>
+
+## asChild and composition
+
+shadcn triggers and buttons support `asChild`, forwarding styles and events to the child to avoid nested `<button>` elements:
+
+```tsx
+<DialogTrigger asChild>
+  <Button variant="link">Terms of service</Button>
+</DialogTrigger>
+```
+
+Common compositions (this is not an installed list; run `bunx --bun shadcn@latest add <component>` first):
+
+| Need | Composition |
+| --- | --- |
+| Settings page | `Tabs` + `Card` + `Input` + `Button` |
+| Confirmation | `AlertDialog` + `Button` |
+| User menu | `DropdownMenu` + `Avatar` + `Separator` |
+| Empty state | `Empty` + `Button` |
+| Loading state | `Skeleton` / `Spinner` |
+| Docs callout | `Alert` (wrapped as `DocsCallout` here) |
+
+## Avoid
+
+- ❌ Editing `components/ui/button.tsx` to add a business color.
+- ❌ Copying `button.tsx` into `components/` and editing the copy.
+- ❌ Faking a button with `div` + `onClick`.
+- ❌ Using `span` as a Badge or `hr` as a Separator.
+- ❌ Reimplementing focus rings, keyboard interaction, or ARIA in a wrapper.
+
+The right move is: **compose shadcn components, and add a thin wrapper when needed**.
+
+## Accessibility checklist
+
+- Dialog, Sheet, and AlertDialog need a title; use `className="sr-only"` when visually hidden.
+- Icon-only buttons need `aria-label`.
+- Form controls must be bound to a `Label` via `htmlFor`.
+- Custom triggers should use `asChild` to keep Radix keyboard and focus behavior.
+- Menu items and SelectItems must stay inside their group.
+
+## Where files go
+
+| Case | Location |
+| --- | --- |
+| Shared business component | `components/<name>.tsx` |
+| Feature composition | `components/<feature>/` |
+| Docs-only wrapper | `components/docs/` |
+| shadcn primitives | `components/ui/` (CLI only) |
+
+## Checklist
+
+- Does it import only from `@/components/ui/*` and business components?
+- Does it forward `className` through `cn()` for layout tweaks?
+- Does it prefer existing variants over color overrides?
+- Does it preserve Radix keyboard, focus, and ARIA behavior?
+- Did the upstream difference stay in the wrapper instead of `components/ui/`?

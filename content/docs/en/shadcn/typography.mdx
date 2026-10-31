@@ -1,0 +1,110 @@
+---
+title: Typography
+description: next/font supplies Latin glyphs, the system stack covers Chinese, and components only handle layout
+---
+
+shadcn components never declare a font family. Open `components/ui/button.tsx` and you only find typographic parameters such as `text-xs font-semibold tracking-widest uppercase` — font size, weight, letter spacing, casing — and not a single `font-family`. Fonts arrive by CSS inheritance from the root element, so the whole project only needs to decide once, on `<html>`.
+
+## Responsibilities
+
+| token | Latin glyphs | Chinese glyphs | Used by |
+| --- | --- | --- | --- |
+| `--font-sans` | DM Sans | System sans stack | Global default, inherited by every component |
+| `--font-heading` | Playfair Display | System serif stack | Components that opt in with `font-heading`, e.g. `SheetTitle` |
+| `--font-mono` | Geist Mono | System mono stack | `font-mono`, code blocks |
+
+Every Latin face comes from `next/font/google`, downloaded and self-hosted at build time. No Chinese webfont is loaded at all.
+
+## The full chain
+
+1. **next/font produces the font files.** `app/[locale]/layout.tsx` calls `DM_Sans(...)` at module scope. At build time Next.js downloads the woff2 files, generates `@font-face` rules, and emits a class carrying the font stack with a metric-adjusted fallback (`"DM Sans", "DM Sans Fallback"`, where the fallback uses `size-adjust` to reduce CLS).
+2. **The class goes on `<html>`.** `dmSans.variable` is a class name; adding it to `<html className>` makes `--font-latin-sans` visible on that element and its descendants. Nothing is fetched from Google at runtime.
+3. **The stack is assembled.** `:root` in `globals.css` joins the Latin face with the Chinese system stack.
+4. **Tailwind utilities are generated.** `@theme inline` maps `--app-font-*` to `font-sans` / `font-mono` / `font-heading`.
+5. **The family is applied once.** `html { @apply font-sans }` inside `@layer base` is the only place that actually sets `font-family`.
+6. **Components inherit.** They override size and weight only. Inheritance also covers components portalled into `body` — Dialog, Popover, DropdownMenu.
+
+The three essential pieces:
+
+```tsx
+// app/[locale]/layout.tsx
+const dmSans = DM_Sans({ variable: "--font-latin-sans", subsets: ["latin"] });
+```
+
+```css
+/* app/[locale]/globals.css */
+:root {
+  --app-font-sans: var(--font-latin-sans, sans-serif), var(--font-cjk-sans);
+  --font-cjk-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei", sans-serif;
+}
+
+@theme inline {
+  --font-sans: var(--app-font-sans);
+}
+```
+
+<Callout type="warn" title="Never write --font-sans: var(--font-sans)">
+A self-reference only works under `@theme inline`, which inlines the value into the utility instead of emitting it to `:root`. Remove `inline` and the declaration becomes the cycle `:root { --font-sans: var(--font-sans) }`, and the font stops working. The `--app-font-*` indirection avoids that, and matches the existing `--app-shadow-*` pattern.
+</Callout>
+
+## Why Chinese uses the system stack
+
+- **Size.** A complete Chinese font is easily 2MB or more. Even a common-character subset runs into hundreds of KB, which is a poor trade for the first paint.
+- **`subsets: ["latin"]` does nothing for Chinese.** next/font slices fonts by unicode-range; Chinese is not in the latin subset, so glyphs still fall back to the system font after paying the download cost.
+- **System faces are already tuned.** PingFang SC on macOS and Microsoft YaHei on Windows are adapted to their platforms for weight, spacing, and rendering.
+- **The cost is cross-platform variance.** The same Chinese text looks different on macOS and Windows. Only if the design demands absolute consistency is `next/font/local` plus a custom subset worth the trade.
+
+Order matters: Latin first, Chinese second. DM Sans contains no Chinese glyphs, so the browser resolves each character to the first family in the stack that has it — `--font-cjk-sans`. Mixed Chinese/English text needs no extra handling.
+
+## Changing fonts
+
+Latin faces and the Chinese stack are separate concerns. Change them independently.
+
+**Swap the Latin face:** edit the `next/font` call in `layout.tsx`, keep the `variable` name, and leave CSS untouched.
+
+```tsx
+const dmSans = Inter({ variable: "--font-latin-sans", subsets: ["latin"] });
+```
+
+**Swap the Chinese stack:** edit only `--font-cjk-*` under `:root`. To try a webfont, put it at the front of the stack.
+
+**Add a new token** (say `--font-serif`) in three places:
+
+1. the `variable` name in `next/font` inside `layout.tsx`;
+2. `--app-font-serif` under `:root`;
+3. `--font-serif: var(--app-font-serif)` inside `@theme inline`.
+
+Skip step 3 and the utility is never generated; skip step 2 and the utility exists but resolves to nothing.
+
+## Common questions
+
+**`font-sans` in a component has no effect?**
+
+Check Computed → `font-family` in DevTools first, then confirm `--font-latin-sans` exists on `<html>`. A name mismatch fails silently and falls through to the next family.
+
+**Why doesn't editing only `globals.css` work?**
+
+`--font-latin-*` is injected by next/font. Editing CSS only changes the reference, not which font file loads. Conversely, editing only `layout.tsx` without updating `:root` has no effect either.
+
+**Why does `var()` take two arguments?**
+
+In `font-family: var(--a), var(--b)`, a single undefined variable invalidates the entire declaration at computed-value time, so `font-family` falls back to inheritance or the browser default. `var(--font-latin-sans, sans-serif)` keeps the Chinese stack usable in the worst case.
+
+**Dialog and Popover use the wrong font?**
+
+Portals render into `body`, so the inheritance chain is `body → html`. Fonts on `<html>` survive; fonts scoped to a business `div` do not. That is exactly why the family belongs on the root element.
+
+**Chinese headings look inconsistent with the Latin ones?**
+
+`--font-heading` uses the serif display face Playfair Display, so `--font-cjk-heading` prefers serif Chinese faces (Songti family). On Windows it lands on SimSun, which looks noticeably different from Songti on macOS — an inherent limit of system stacks.
+
+**What about `uppercase` and `tracking-widest` in Chinese?**
+
+The current style (`radix-sera`) leans on uppercase plus wide tracking. Neither has any visual effect on Chinese; they only stretch the letter spacing. Review Chinese pages separately and override `tracking-*` where necessary.
+
+## Next
+
+- [Tailwind CSS](./tailwindcss): how `@theme inline` turns variables into utilities.
+- [Custom components](./custom-components): keeping this font system when wrapping shadcn.
+- [Theme configuration](../theme): runtime switching for colors, radius, and shadows.

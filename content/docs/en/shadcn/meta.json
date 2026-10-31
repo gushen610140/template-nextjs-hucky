@@ -1,0 +1,5 @@
+{
+  "title": "shadcn & styling",
+  "pagesIndex": "index",
+  "pages": ["tailwindcss", "typography", "custom-components"]
+}

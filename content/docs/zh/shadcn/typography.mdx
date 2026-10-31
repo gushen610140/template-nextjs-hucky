@@ -1,0 +1,110 @@
+---
+title: 字体
+description: next/font 提供拉丁字形，系统字体栈接管中文字形，组件只负责排版
+---
+
+shadcn 组件不声明字体族。打开 `components/ui/button.tsx` 只会看到 `text-xs font-semibold tracking-widest uppercase` 这类排版参数（字号、字重、字距、大小写），没有一个 `font-family`。字体靠 CSS 继承从根元素传下来，所以整个项目只需要在 `<html>` 上决定一次。
+
+## 分工
+
+| token | 拉丁字形 | 中文字形 | 用在哪 |
+| --- | --- | --- | --- |
+| `--font-sans` | DM Sans | 系统无衬线栈 | 全局默认，所有组件继承 |
+| `--font-heading` | Playfair Display | 系统衬线栈 | 组件显式写 `font-heading`，例如 `SheetTitle` |
+| `--font-mono` | Geist Mono | 系统等宽栈 | `font-mono`、代码块 |
+
+拉丁字体全部由 `next/font/google` 提供，在构建期下载并自托管；中文字形不加载任何 webfont。
+
+## 完整链路
+
+1. **next/font 生成字体文件。** `app/[locale]/layout.tsx` 在模块顶层调用 `DM_Sans(...)`，构建时下载 woff2、生成 `@font-face` 和一个带 fallback 字体的 class（`"DM Sans", "DM Sans Fallback"`，fallback 带 `size-adjust`，用来压 CLS）。
+2. **class 挂到 `<html>`。** `dmSans.variable` 是一个 class，写进 `<html className>` 后，`--font-latin-sans` 这个变量就只在这个元素及其后代上可见。运行时不访问 Google Fonts。
+3. **拼成完整字体栈。** `globals.css` 的 `:root` 把拉丁字体和中文系统字体拼在一起。
+4. **映射成 Tailwind utility。** `@theme inline` 把 `--app-font-*` 映射成 `font-sans` / `font-mono` / `font-heading`。
+5. **写到根元素。** `@layer base` 里的 `html { @apply font-sans }` 是唯一一次真正设置 `font-family` 的地方。
+6. **组件继承。** 组件只覆盖字号和字重，字体族继续继承，包括 Portal 到 `body` 的 Dialog、Popover、DropdownMenu。
+
+三段关键代码：
+
+```tsx
+// app/[locale]/layout.tsx
+const dmSans = DM_Sans({ variable: "--font-latin-sans", subsets: ["latin"] });
+```
+
+```css
+/* app/[locale]/globals.css */
+:root {
+  --app-font-sans: var(--font-latin-sans, sans-serif), var(--font-cjk-sans);
+  --font-cjk-sans: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei", sans-serif;
+}
+
+@theme inline {
+  --font-sans: var(--app-font-sans);
+}
+```
+
+<Callout type="warn" title="不要写成 --font-sans: var(--font-sans)">
+自引用只在 `@theme inline` 下成立：inline 不把变量写进 `:root`，而是把值内联进 utility。一旦有人去掉 `inline`，这条声明就会变成 `:root { --font-sans: var(--font-sans) }` 的循环，字体直接失效。所以这里加了 `--app-font-*` 这层间接，和已有的 `--app-shadow-*` 保持一致。
+</Callout>
+
+## 为什么中文用系统字体栈
+
+- **体积。** 完整的中文字体动辄 2MB 以上，即使只取常用字，子集也有几百 KB，首屏代价明显高于收益。
+- **`subsets: ["latin"]` 对中文无效。** next/font 的子集是按 unicode-range 切的，中文不在 latin 子集里，最终仍然回落到系统字体，等于白下载。
+- **系统字体已经调好。** macOS 的 PingFang SC、Windows 的微软雅黑在字重、字距和 ClearType 渲染上都做过平台适配。
+- **代价是跨平台不一致。** 同一段中文在 macOS 和 Windows 上字形不同。如果设计上必须绝对统一，才值得改成 `next/font/local` + 自建子集，用体积换一致性。
+
+字体的选择顺序是「先拉丁，后中文」：DM Sans 没有中文字形，浏览器逐字回落到栈里第一个包含该字形的字体，也就是 `--font-cjk-sans`。中英混排因此不需要额外处理。
+
+## 改字体
+
+拉丁字体和中文栈是两件事，分别改，不要互相影响。
+
+**换拉丁字体**：改 `layout.tsx` 的 `next/font` 调用，保持 `variable` 名不变即可，CSS 不用动。
+
+```tsx
+const dmSans = Inter({ variable: "--font-latin-sans", subsets: ["latin"] });
+```
+
+**换中文字体栈**：只改 `:root` 里的 `--font-cjk-*`，`layout.tsx` 不用动。想临时换成 webfont 时，把它加到栈首即可。
+
+**新增一个字体 token**（例如 `--font-serif`）需要三处同步：
+
+1. `layout.tsx` 里 `next/font` 的 `variable` 名；
+2. `:root` 里的 `--app-font-*`；
+3. `@theme inline` 里的 `--font-*: var(--app-font-*)`。
+
+漏掉第 3 步，`font-serif` 这类 utility 不会生成；漏掉第 2 步，utility 存在但解析不到值。
+
+## 常见问题
+
+**组件里写了 `font-sans` 却没生效？**
+
+先看 DevTools 的 Computed → `font-family`，再看 `<html>` 上有没有 `--font-latin-sans`。变量名对不上时不会报错，只会静默回退到下一个字体。
+
+**只改 `globals.css` 为什么不管用？**
+
+`--font-latin-*` 由 next/font 注入，改 CSS 只是改引用，不改变实际加载的字体文件。反过来，只改 `layout.tsx` 而不改 `:root` 也不会生效。
+
+**为什么 `var()` 要用两个参数？**
+
+`font-family: var(--a), var(--b)` 里任何一个变量未定义，整条声明在计算值阶段就失效，`font-family` 会退回继承值或浏览器默认字体。`var(--font-latin-sans, sans-serif)` 的兜底值保证最坏情况下还有中文栈可用。
+
+**Dialog、Popover 里的字体对不上？**
+
+Portal 渲染到 `body`，继承链是 `body → html`，只要字体写在 `<html>` 上就没问题。如果字体写在某个业务容器的 `div` 上，Portal 出去的浮层就会丢失，这也是字体必须放在根元素的原因。
+
+**中文标题看起来和英文不搭？**
+
+`--font-heading` 的拉丁部分是衬线体 Playfair Display，所以 `--font-cjk-heading` 优先选衬线中文（宋体系）。Windows 上会落到 SimSun，与 macOS 的 Songti 观感差异较大，这是系统字体栈的固有限制。
+
+**中文里的 `uppercase` 和 `tracking-widest`？**
+
+当前 style（`radix-sera`）大量使用大写 + 字距，这些属性对中文没有视觉作用，只会把字距拉开。中文页面需要单独审一遍排版，必要时在业务组件里覆盖 `tracking-*`。
+
+## 接下来
+
+- [Tailwind CSS](./tailwindcss)：`@theme inline` 如何把变量变成 utility。
+- [自定义组件](./custom-components)：包装组件时如何继续使用这套字体。
+- [主题配置](../theme)：颜色、圆角、阴影的运行时切换。

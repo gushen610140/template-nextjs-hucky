@@ -1,0 +1,154 @@
+---
+title: 自定义组件
+description: 在不修改 components/ui 的前提下包装 shadcn 组件
+---
+
+`components/ui/` 是只读的上游镜像。业务需要的额外样式、默认值、组合结构，都放在 `components/` 下新建的自定义组件里。
+
+## 基本结构
+
+```text
+components/ui/button.tsx        # 上游组件，不改
+components/docs/callout.tsx     # 自定义包装：用 Alert 实现文档提示框
+components/app-sidebar.tsx      # 业务组合：Sidebar + Menu + Avatar
+```
+
+自定义组件负责三件事：
+
+1. **组合**：把多个 shadcn 原子组件拼成一个业务组件。
+2. **收敛默认值**：固定常用的 variant、size、间距。
+3. **适配业务数据**：把 props 映射成 shadcn 组件的 props。
+
+## 包装示例
+
+文档里的 `<Callout>` 就是这样实现的。它没有改 `alert.tsx`，而是在外层根据 `type` 选择图标和 variant：
+
+```tsx
+// components/docs/callout.tsx
+import { CircleAlert, Info, TriangleAlert } from "lucide-react";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
+import { cn } from "@/lib/utils";
+
+export function DocsCallout({ type = "info", title, children, className }) {
+  const Icon = type === "error" ? CircleAlert : type === "info" ? Info : TriangleAlert;
+
+  return (
+    <Alert
+      variant={type === "error" ? "destructive" : "default"}
+      className={cn("my-6", className)}
+    >
+      <Icon />
+      {title ? <AlertTitle>{title}</AlertTitle> : null}
+      <AlertDescription>{children}</AlertDescription>
+    </Alert>
+  );
+}
+```
+
+要点：
+
+- 使用 `Alert`、`AlertTitle`、`AlertDescription`，不重新写一套提示框样式。
+- `className` 透传并交给 `cn()`，让调用方仍能调布局。
+- 视觉差异用 `variant` 和语义 token 表达，不写死颜色。
+- 图标由组件内部决定，调用方不需要重复传。
+
+## 带变体的包装
+
+当业务组件有成组的外观差异时，用 `cva` 定义变体，再把结果传给 shadcn 组件：
+
+```tsx
+import { cva, type VariantProps } from "class-variance-authority";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+const actionButtonVariants = cva("", {
+  variants: {
+    tone: {
+      default: "",
+      danger: "text-destructive hover:text-destructive",
+    },
+    size: {
+      sm: "h-8 px-3",
+      md: "",
+    },
+  },
+  defaultVariants: { tone: "default", size: "md" },
+});
+
+type ActionButtonProps = React.ComponentProps<typeof Button> &
+  VariantProps<typeof actionButtonVariants>;
+
+export function ActionButton({ tone, size, className, ...props }: ActionButtonProps) {
+  return (
+    <Button
+      variant={tone === "danger" ? "ghost" : "default"}
+      className={cn(actionButtonVariants({ tone, size }), className)}
+      {...props}
+    />
+  );
+}
+```
+
+<Callout type="warn" title="先看 shadcn 是否已经支持">
+如果只是颜色或尺寸不同，先检查 `button.tsx` 的 variant/size 是否已经覆盖。不要为了一个按钮新建一套变体系统。
+</Callout>
+
+## asChild 与组合
+
+shadcn 的触发器和按钮支持 `asChild`，可以把样式和事件交给子元素，避免嵌套 `<button>`：
+
+```tsx
+<DialogTrigger asChild>
+  <Button variant="link">Terms of service</Button>
+</DialogTrigger>
+```
+
+常见组合（下表不是预装清单，用到时先执行 `bunx --bun shadcn@latest add <component>`）：
+
+| 需求 | 组合 |
+| --- | --- |
+| 设置页 | `Tabs` + `Card` + `Input` + `Button` |
+| 确认操作 | `AlertDialog` + `Button` |
+| 用户菜单 | `DropdownMenu` + `Avatar` + `Separator` |
+| 空状态 | `Empty` + `Button` |
+| 加载状态 | `Skeleton` / `Spinner` |
+| 文档提示 | `Alert`（本项目封装为 `DocsCallout`） |
+
+## 不要这样做
+
+- ❌ 直接修改 `components/ui/button.tsx` 加业务颜色。
+- ❌ 复制一份 `button.tsx` 到 `components/` 再改。
+- ❌ 用 `div` + `onClick` 模拟按钮。
+- ❌ 用 `span` 做 Badge，用 `hr` 做 Separator。
+- ❌ 在自定义组件里重新实现 focus ring、键盘交互和 ARIA。
+
+正确做法是：**组合 shadcn 组件，必要时加一层很薄的包装**。
+
+## 可访问性检查
+
+- Dialog、Sheet、AlertDialog 必须有标题；视觉上不需要时用 `className="sr-only"`。
+- 图标按钮必须有 `aria-label`。
+- 表单控件必须绑定 `Label` 的 `htmlFor`。
+- 自定义触发器优先用 `asChild`，保留 Radix 的键盘和焦点行为。
+- 菜单项、SelectItem 等必须放在对应的 Group 中。
+
+## 文件放在哪
+
+| 场景 | 位置 |
+| --- | --- |
+| 通用业务组件 | `components/<name>.tsx` |
+| 某个功能模块的组合组件 | `components/<feature>/` |
+| 文档专用包装 | `components/docs/` |
+| shadcn 原子组件 | `components/ui/`（只由 CLI 写入） |
+
+## 检查清单
+
+- 是否只 import 了 `@/components/ui/*` 和业务组件？
+- 是否通过 `className` + `cn()` 允许调用方微调布局？
+- 是否优先使用现有 variant，而不是覆盖颜色？
+- 是否保留了 Radix 提供的键盘、焦点和 ARIA 行为？
+- 是否把上游差异留在了自定义组件，而不是 `components/ui/`？

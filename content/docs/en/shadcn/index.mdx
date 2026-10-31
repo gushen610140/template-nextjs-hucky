@@ -1,0 +1,139 @@
+---
+title: shadcn/ui components
+description: The project's only UI component source, directory rules, and daily usage
+---
+
+Every frontend component in this project comes from **shadcn/ui**. It is not a runtime component library installed from npm; component source is copied into the repository and styled with Tailwind CSS and CSS variables.
+
+## Repository rules
+
+| Rule | Detail |
+| --- | --- |
+| shadcn/ui only | Do not add MUI, Ant Design, Chakra, Mantine, or a second component library |
+| `components/ui/` mirrors upstream | Do not hand-edit it; update through the shadcn CLI |
+| Custom components live in `components/` | Compose or wrap shadcn components |
+| Prefer semantic tokens | `bg-primary`, `text-muted-foreground`; never hardcode `bg-blue-500` |
+| Use Lucide icons | `lucide-react` is configured in `components.json` |
+| Theme comes from CSS variables | Colors, radius, and shadows all derive from `app/[locale]/globals.css` and the theme customizer |
+| Fonts are decided once, at the root | Latin glyphs come from next/font, Chinese glyphs from the system stack; components never declare `font-family` |
+
+<Callout type="warn" title="Do not edit components/ui">
+`components/ui/` mirrors upstream code. Hand edits cause conflicts on the next `shadcn add` or upgrade and blur the line between framework code and business customization. Wrap the component under `components/` instead.
+</Callout>
+
+## Why shadcn/ui
+
+- **Source in the repository**: components are ordinary React files you can read and debug. No black box.
+- **Controllable styling**: components use Tailwind utilities and CSS variables, so one theme change updates business pages and docs together.
+- **Composition first**: shadcn provides primitives; pages compose Card, Tabs, Dialog, Sidebar, and friends instead of hunting for a ready-made business component.
+- **Replaceable**: when a component falls short, wrap it in a custom component instead of coupling to a third-party API.
+
+## Directory layout
+
+```text
+components/
+  ui/                 # shadcn upstream components, never hand-edited
+  docs/               # docs-only custom wrappers
+  app-sidebar.tsx     # business component composed from ui/
+  theme-customizer.tsx
+```
+
+| Location | Purpose |
+| --- | --- |
+| `components/ui/` | Only files produced by `shadcn add` |
+| `components/<feature>/` | Composed components for one feature |
+| `components/<name>.tsx` | Shared custom components |
+| `components/docs/` | Docs-only wrappers such as `callout.tsx` |
+
+## Adding components
+
+Check that the component is not installed yet:
+
+```bash
+bunx --bun shadcn@latest search @shadcn -q "dialog"
+```
+
+Then add it to `components/ui/`:
+
+```bash
+bunx --bun shadcn@latest add dialog
+bunx --bun shadcn@latest add tabs card separator
+```
+
+`components.json` is already configured:
+
+```json
+{
+  "style": "radix-sera",
+  "tailwind": {
+    "css": "app/[locale]/globals.css",
+    "cssVariables": true
+  },
+  "aliases": {
+    "components": "@/components",
+    "ui": "@/components/ui",
+    "utils": "@/lib/utils",
+    "hooks": "@/hooks"
+  }
+}
+```
+
+<Callout type="warn" title="Check import paths after adding">
+The CLI occasionally writes `import { cn } from "cn"`. This project always uses `@/lib/utils`; change `"cn"` to `import { cn } from "@/lib/utils"` and make sure `package.json` did not gain an unrelated `cn` dependency.
+</Callout>
+
+Use the component directly:
+
+```tsx
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+export function Example() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Hello</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Button>Continue</Button>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+## Usage principles
+
+1. **Use an existing component first**: need a menu? Check `dropdown-menu`. Need confirmation? Check `alert-dialog`. Do not hand-roll a `div` with click handlers.
+2. **Prefer variants**: `Button variant="outline"`, `Badge variant="secondary"`; do not rewrite colors in `className`.
+3. **Use semantic tokens**: `bg-background`, `text-foreground`, `border-border`, `bg-primary/10`.
+4. **Use `className` for layout**: `flex`, `gap-*`, `grid`, `size-*`; leave colors and typography to the component.
+5. **Keep forms accessible**: inputs need a `Label`; Dialog/Sheet need a `DialogTitle`/`SheetTitle`.
+
+## Updating components
+
+`components/ui/` stays upstream, but you can follow upstream updates:
+
+```bash
+bunx --bun shadcn@latest add button --dry-run
+bunx --bun shadcn@latest add button --diff button.tsx
+```
+
+Review the diff before overwriting. If the project truly needs different behavior, put the difference in a wrapper under `components/`, not in `components/ui/`.
+
+## Rejecting a second component library
+
+Before adding a dependency, ask:
+
+- Does shadcn already have this component?
+- Can existing components compose it?
+- Are we adding a whole library for one or two custom styles?
+
+If the answers are "yes", "yes", and "yes", do not add another library. Headless logic libraries (date math, chart calculations) are fine, but the visual layer stays with shadcn.
+
+## Next
+
+- [Tailwind CSS](./tailwindcss): why it is a hard requirement for shadcn, and when to use native CSS.
+- [Typography](./typography): how next/font and the system stack split the work, and why components contain no `font-family`.
+- [Custom components](./custom-components): how to wrap shadcn without touching `components/ui/`.
+- [Theme configuration](../theme): colors, radius, shadows, and unified docs theming.

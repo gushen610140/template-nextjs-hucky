@@ -1,0 +1,139 @@
+---
+title: shadcn/ui 组件库
+description: 项目唯一的 UI 组件来源、目录约定和日常使用方法
+---
+
+本项目的前端组件只从一个地方来：**shadcn/ui**。它不是通过 npm 引入的运行时组件库，而是把组件源码复制到仓库里，由 Tailwind CSS 和 CSS 变量驱动样式。
+
+## 仓库规则
+
+| 规则 | 说明 |
+| --- | --- |
+| 只用 shadcn/ui | 不再引入 MUI、Ant Design、Chakra、Mantine 等第二套组件库 |
+| `components/ui/` 保持上游原样 | 不手动修改；需要升级时用 shadcn CLI 覆盖 |
+| 自定义组件放在 `components/` | 通过组合、二次包装 shadcn 组件实现 |
+| 样式优先用语义 token | 例如 `bg-primary`、`text-muted-foreground`，不要写死 `bg-blue-500` |
+| 图标统一用 Lucide | `lucide-react` 已在 `components.json` 中配置 |
+| 主题由 CSS 变量驱动 | 所有颜色、圆角、阴影都来自 `app/[locale]/globals.css` 和主题定制器 |
+| 字体只在根元素决定一次 | 拉丁字形用 next/font，中文字形用系统字体栈，组件不声明 `font-family` |
+
+<Callout type="warn" title="不要直接改 components/ui">
+`components/ui/` 是上游代码的镜像。直接修改会让后续 `shadcn add` 或升级产生冲突，也会让其他项目成员无法判断哪些是框架代码、哪些是业务定制。需要不同行为时，在 `components/` 下包一层。
+</Callout>
+
+## 为什么选 shadcn/ui
+
+- **代码在仓库里**：组件就是普通 React 文件，可以读、可以调试，不存在黑盒依赖。
+- **样式可控**：组件使用 Tailwind utility 和 CSS 变量，主题定制器改一次变量，业务页面和文档页面一起变化。
+- **组合优先**：shadcn 提供的是原子组件，页面由 Card、Tabs、Dialog、Sidebar 等组合而成，不需要为每个业务场景找“现成组件”。
+- **可替换**：某个组件不满足需求时，可以复制一份包在自定义组件里，而不是和第三方库的 API 绑定。
+
+## 目录约定
+
+```text
+components/
+  ui/                 # shadcn 上游组件，禁止手动修改
+  docs/               # 文档专用的自定义包装组件
+  app-sidebar.tsx     # 业务组件：组合 ui/ 下的原子组件
+  theme-customizer.tsx
+```
+
+| 位置 | 放什么 |
+| --- | --- |
+| `components/ui/` | 只放 `shadcn add` 生成的文件 |
+| `components/<feature>/` | 某个业务模块的组合组件 |
+| `components/<name>.tsx` | 跨模块复用的自定义组件 |
+| `components/docs/` | 只服务文档站点的包装组件，例如 `callout.tsx` |
+
+## 添加组件
+
+先确认组件还没有安装：
+
+```bash
+bunx --bun shadcn@latest search @shadcn -q "dialog"
+```
+
+然后添加到 `components/ui/`：
+
+```bash
+bunx --bun shadcn@latest add dialog
+bunx --bun shadcn@latest add tabs card separator
+```
+
+`components.json` 已经配置好：
+
+```json
+{
+  "style": "radix-sera",
+  "tailwind": {
+    "css": "app/[locale]/globals.css",
+    "cssVariables": true
+  },
+  "aliases": {
+    "components": "@/components",
+    "ui": "@/components/ui",
+    "utils": "@/lib/utils",
+    "hooks": "@/hooks"
+  }
+}
+```
+
+<Callout type="warn" title="添加后检查 import 路径">
+当前 CLI 偶尔会把 class 合并工具写成 `import { cn } from "cn"`。本项目统一使用 `@/lib/utils`，如果看到 `"cn"`，把它改成 `import { cn } from "@/lib/utils"`，并确认 `package.json` 没有被加入多余的 `cn` 依赖。
+</Callout>
+
+添加后直接使用：
+
+```tsx
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+export function Example() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Hello</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Button>Continue</Button>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+## 使用原则
+
+1. **先找现成组件**：需要菜单先看 `dropdown-menu`，需要确认框先看 `alert-dialog`，不要直接写 `div` + 事件。
+2. **优先用 variant**：`Button variant="outline"`、`Badge variant="secondary"`，不要在 `className` 里重写颜色。
+3. **用语义 token**：`bg-background`、`text-foreground`、`border-border`、`bg-primary/10`。
+4. **布局才用 className**：`flex`、`gap-*`、`grid`、`size-*` 是布局；颜色和字号尽量交给组件自身。
+5. **表单必须可访问**：输入框要有 `Label`，Dialog/Sheet 必须有 `DialogTitle`/`SheetTitle`。
+
+## 更新组件
+
+`components/ui/` 不允许手改，但可以跟随上游更新：
+
+```bash
+bunx --bun shadcn@latest add button --dry-run
+bunx --bun shadcn@latest add button --diff button.tsx
+```
+
+确认差异后再覆盖。如果本地确实需要不同行为，应该把差异放到 `components/` 下的包装组件，而不是留在 `components/ui/`。
+
+## 拒绝第二套组件库
+
+新增依赖前先问三个问题：
+
+- shadcn 是否已经有对应组件？
+- 能否用现有组件组合出来？
+- 是否只是为了一两个特殊样式而引入整套库？
+
+如果答案分别是“有”“能”“是”，就不要引入新组件库。第三方无样式逻辑库（如日期处理、图表计算）可以按需引入，但 UI 外观仍由 shadcn 负责。
+
+## 接下来
+
+- [Tailwind CSS](./tailwindcss)：为什么它是 shadcn 的硬性条件，以及什么时候用原生 CSS。
+- [字体](./typography)：next/font 与系统字体栈如何分工，以及为什么组件里没有 `font-family`。
+- [自定义组件](./custom-components)：如何包装 shadcn 组件而不修改 `components/ui/`。
+- [主题配置](../theme)：颜色、圆角、阴影和文档页面的统一主题。
