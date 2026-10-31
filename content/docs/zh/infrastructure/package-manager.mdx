@@ -30,6 +30,51 @@ bun ci
 如果你改动了 `package.json`，先在本地运行一次 `bun install`，确认 `bun.lock` 的变更一起提交。否则 CI 中的 `bun ci` 会因为两者不同步而失败。
 </Callout>
 
+## 运行一次性命令：`bunx` 与 `--bun`
+
+`bunx <command>` 是 `bun x` 的别名，作用类似 `npx`：优先使用 `node_modules/.bin` 里已安装的可执行文件，找不到时才临时下载到 Bun 的全局缓存。它不会修改 `package.json`，也不会影响 `bun.lock`。
+
+默认情况下，`bunx` 尊重可执行文件的 shebang。绝大多数 CLI 的入口都是 `#!/usr/bin/env node`，所以即使命令由 Bun 启动，真正执行它的仍然是 Node 进程，机器上也必须装有 Node：
+
+```bash
+bunx some-cli
+```
+
+加上 `--bun` 可以让 CLI 改用 Bun 运行时执行：
+
+```bash
+bunx --bun some-cli
+```
+
+`--bun` 必须写在可执行文件名之前，写在后面会被原样传给 CLI 自己的参数解析：
+
+```bash
+bunx --bun some-cli   # 由 Bun 执行
+bunx some-cli --bun   # --bun 被传给 some-cli
+```
+
+Bun 的做法不是改写 shebang，而是在临时目录里创建一个指向自身的 `node`，并把该目录前置到 `PATH`。因此整个进程树里对 `node` 的调用都会命中 Bun，包括子进程；但可执行文件里的 `process.argv0` 仍然是 `node`。
+
+| 对比项 | `bunx <command>` | `bunx --bun <command>` |
+| --- | --- | --- |
+| 执行运行时 | 按 shebang，通常是 Node | 强制 Bun |
+| 机器上必须有 Node | 是 | 否 |
+| 子进程中的 `node` | 真正的 Node | 也是 Bun |
+| 兼容性风险 | 低 | 有 |
+
+需要加 `--bun` 的场景：
+
+- CLI 直接执行 TypeScript/JSX，希望跳过一次编译。
+- CLI 用到了 Bun 专属 API。
+- 构建环境没有安装 Node。
+- 正在验证某个工具能否在 Bun 下运行。
+
+大多数时候不需要加 `--bun`。带 native addon、或依赖特定 Node 行为的工具在 Bun 下可能出现难以定位的问题；遇到异常时优先去掉这个 flag，也可以先用 `bunx --bun which node` 确认实际使用的是哪个运行时。
+
+<Callout title="--bun 只影响运行时">
+`--bun` 不改变安装方式、缓存位置或依赖解析，也不会改动 `bun.lock`。它只决定由谁来执行那个 CLI。
+</Callout>
+
 ## 为什么只用 Bun
 
 选择 Bun 不是为了追求某一种基准测试的分数，而是为了让仓库只保留一套工具链：

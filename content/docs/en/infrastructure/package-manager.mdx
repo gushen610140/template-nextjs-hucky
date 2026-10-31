@@ -30,6 +30,51 @@ During local development, use `bun install` when adding or upgrading dependencie
 If you changed `package.json`, run `bun install` locally and commit the resulting `bun.lock` change with it. Otherwise `bun ci` will fail in CI because the two files are out of sync.
 </Callout>
 
+## Running one-off commands: `bunx` and `--bun`
+
+`bunx <command>` is an alias for `bun x` and works like `npx`: it prefers binaries already installed in `node_modules/.bin` and downloads the package into Bun's global cache only when it is missing. It does not modify `package.json` or `bun.lock`.
+
+By default, `bunx` respects the shebang in the executable. Most CLIs start with `#!/usr/bin/env node`, so even though Bun launches the command, a Node process executes it and Node must be installed on the machine:
+
+```bash
+bunx some-cli
+```
+
+Pass `--bun` to run the CLI on Bun's runtime instead:
+
+```bash
+bunx --bun some-cli
+```
+
+`--bun` must come before the executable name. Anything after the name is forwarded to the CLI's own argument parser:
+
+```bash
+bunx --bun some-cli   # runs on Bun
+bunx some-cli --bun   # --bun is passed to some-cli
+```
+
+Bun does not rewrite the shebang. It creates a `node` executable pointing at itself in a temporary directory and prepends that directory to `PATH`, so every `node` lookup in the process tree resolves to Bun, including child processes. `process.argv0` inside the CLI still reports `node`.
+
+| | `bunx <command>` | `bunx --bun <command>` |
+| --- | --- | --- |
+| Runtime | Whatever the shebang specifies, usually Node | Bun |
+| Node required on the machine | Yes | No |
+| `node` in child processes | Real Node | Bun |
+| Compatibility risk | Low | Present |
+
+Use `--bun` when:
+
+- The CLI executes TypeScript or JSX directly and you want to skip a build step.
+- The CLI uses Bun-specific APIs.
+- The environment has no Node installed.
+- You are checking whether a tool works under Bun.
+
+Most commands do not need it. Tools with native addons or behavior tied to a specific Node version can fail in ways that are hard to diagnose under Bun; if something misbehaves, drop the flag first, or run `bunx --bun which node` to see which runtime is actually in use.
+
+<Callout title="--bun only changes the runtime">
+`--bun` does not change how packages are installed, where they are cached, or how dependencies resolve, and it never touches `bun.lock`. It only decides which runtime executes the CLI.
+</Callout>
+
 ## Why Bun
 
 The point is not to win a benchmark. The project wants one toolchain:
