@@ -1,0 +1,155 @@
+---
+title: 滚动与 Lenis
+description: 全局滚动条重置、Lenis 平滑滚动，以及文档页为什么跳过 Lenis
+---
+
+项目对滚动的处理分两层：外观是滚动条样式，行为是 Lenis 平滑滚动。两者分别落在 `app/[locale]/globals.css` 和 `providers/lenis-provider.tsx`。
+
+## 滚动条重置
+
+`app/[locale]/globals.css` 在 `@layer base` 中重写了浏览器默认滚动条：
+
+```css
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb-hover) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 9999px;
+  transition: background 0.3s ease;
+}
+```
+
+要点：
+
+| 规则 | 作用 |
+| --- | --- |
+| `scrollbar-width: thin` | Firefox 下使用细滚动条 |
+| `scrollbar-color` | Firefox 的轨道与滑块配色 |
+| `::-webkit-scrollbar` 4px | Chromium / Safari 下统一为 4px |
+| 透明 track | 滚动条不额外占视觉空间 |
+| `border-radius: 9999px` | 滑块为胶囊形 |
+| `transition` | 悬停时颜色平滑过渡 |
+
+滑块默认完全透明（浅色主题是 `oklch(0.72 0 0 / 0%)`），只有悬停或拖动时才显示：
+
+```css
+@media (hover: hover) {
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+  }
+  *:hover::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb-hover);
+  }
+}
+```
+
+这样页面在静止时更干净，触摸设备也不会常驻一条滚动条。Firefox 没有对应的悬停伪类，因此 `scrollbar-color` 直接使用 `--scrollbar-thumb-hover`，滑块会一直可见。
+
+颜色通过 CSS 变量控制，浅色和深色主题各有一套：
+
+```text
+--scrollbar-thumb
+--scrollbar-thumb-hover
+--scrollbar-thumb-active
+```
+
+因为规则写在 `@layer base` 且作用于 `*`，所有内部滚动区域（侧边栏、TOC、代码块、弹层）都会继承同一套样式。需要单独调整时，用 Tailwind utility 或自定义 class 覆盖即可。
+
+## Lenis 平滑滚动
+
+`providers/lenis-provider.tsx` 是一个客户端 Provider，在 `app/[locale]/layout.tsx` 中包住整个应用：
+
+```tsx
+<LenisProvider>
+  <NextIntlClientProvider messages={messages}>
+    {/* ... */}
+  </NextIntlClientProvider>
+</LenisProvider>
+```
+
+它负责平滑浏览器窗口的滚动，配置为：
+
+| 选项 | 值 | 说明 |
+| --- | --- | --- |
+| `duration` | `1.2` | 滚动动画时长 |
+| `easing` | `1.001 - 2^(-10t)` | 先快后慢的缓出曲线 |
+| `touchMultiplier` | `1.5` | 触摸板 / 触摸屏的滚动倍率 |
+
+实现上用 `requestAnimationFrame` 持续调用 `lenis.raf(time)`，卸载时依次取消动画帧并执行 `lenis.destroy()`，避免路由切换后残留实例。
+
+Lenis 还需要一组配套 CSS，同样在 `globals.css` 中：
+
+```css
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: clip;
+}
+
+.lenis.lenis-smooth iframe {
+  pointer-events: none;
+}
+```
+
+几个容易忽略的点：
+
+- `.lenis-smooth` 会强制关掉原生 `scroll-behavior: smooth`，避免两套平滑滚动叠加。
+- `[data-lenis-prevent]` 用来标记**不交给 Lenis 接管**的内部滚动容器，滚轮会正常作用于该容器。
+- 启用平滑滚动时 iframe 的指针事件会被禁用，防止 iframe 吞掉滚轮。
+
+<Callout title="内部滚动区域">
+如果某个普通页面里有独立滚动区域，例如下拉面板、日志列表或横向代码块，给它加上 `data-lenis-prevent`。否则 Lenis 会把它当成 window 滚动的一部分，出现滚不动或滚动穿透。
+</Callout>
+
+## 文档页为什么跳过 Lenis
+
+`LenisProvider` 会根据当前路径判断是否启用：
+
+```tsx
+const isDocsPage = routing.locales.some((locale) =>
+  pathname.startsWith(`/${locale}/docs`),
+);
+
+useEffect(() => {
+  if (isDocsPage) return;
+  // 创建 Lenis 实例...
+}, [isDocsPage]);
+```
+
+文档路由下不会创建 Lenis 实例，原因是：
+
+1. **滚动容器冲突**：Fumadocs 的文档布局有自己的侧边栏、TOC 和内容区，部分区域是独立滚动容器。Lenis 接管的是 window，会拦截 `wheel` 事件并驱动虚拟滚动，内部容器容易和它抢事件。
+2. **锚点与目录定位失效**：TOC 和标题锚点依赖原生滚动定位。Lenis 的 RAF 循环会持续校正滚动位置，点击目录后可能出现位置被覆盖、跳转不到位或来回抖动。
+3. **破坏原生滚动行为**：键盘滚动（PageUp / PageDown / Home / End）、焦点自动滚动、浏览器查找、`scrollIntoView` 和 URL hash 恢复都依赖原生滚动。文档阅读对这些行为更敏感。
+4. **收益很低**：文档以阅读和定位为主，平滑动画带来的观感提升远小于它引入的不确定性。
+
+因此 docs 路由完全走原生滚动；从首页进入文档或返回首页时，`isDocsPage` 变化会销毁 / 重建 Lenis 实例。首页、Dashboard 等展示型页面仍然保留平滑滚动。
+
+## 文件速查
+
+| 路径 | 作用 |
+| --- | --- |
+| `app/[locale]/globals.css` | 滚动条重置、Lenis 配套 CSS、主题变量 |
+| `providers/lenis-provider.tsx` | 创建 / 销毁 Lenis，文档路由跳过 |
+| `app/[locale]/layout.tsx` | 挂载 `LenisProvider` |

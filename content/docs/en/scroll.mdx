@@ -1,0 +1,155 @@
+---
+title: Scrolling & Lenis
+description: Global scrollbar reset, Lenis smooth scrolling, and why docs skip Lenis
+---
+
+Scrolling is handled at two levels: appearance through scrollbar styles, and behavior through Lenis. They live in `app/[locale]/globals.css` and `providers/lenis-provider.tsx`.
+
+## Scrollbar reset
+
+`app/[locale]/globals.css` overrides the browser scrollbar inside `@layer base`:
+
+```css
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb-hover) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 9999px;
+  transition: background 0.3s ease;
+}
+```
+
+Key points:
+
+| Rule | Effect |
+| --- | --- |
+| `scrollbar-width: thin` | Thin scrollbars in Firefox |
+| `scrollbar-color` | Firefox track and thumb colors |
+| `::-webkit-scrollbar` 4px | Consistent 4px size in Chromium / Safari |
+| Transparent track | No extra visual weight |
+| `border-radius: 9999px` | Pill-shaped thumb |
+| `transition` | Smooth color change on hover |
+
+The thumb is fully transparent at rest (light theme uses `oklch(0.72 0 0 / 0%)`) and only appears on hover or drag:
+
+```css
+@media (hover: hover) {
+  *::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+  }
+  *:hover::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb-hover);
+  }
+}
+```
+
+This keeps pages visually quiet and avoids a permanently visible bar on touch devices. Firefox has no equivalent hover pseudo-class, so `scrollbar-color` uses `--scrollbar-thumb-hover` directly and the thumb stays visible.
+
+Colors come from CSS variables, with separate values for light and dark themes:
+
+```text
+--scrollbar-thumb
+--scrollbar-thumb-hover
+--scrollbar-thumb-active
+```
+
+Because the rules sit in `@layer base` and target `*`, every inner scroll area (sidebar, TOC, code blocks, popovers) inherits the same styling. Override with Tailwind utilities or a custom class when a specific area needs something different.
+
+## Lenis smooth scrolling
+
+`providers/lenis-provider.tsx` is a client provider that wraps the app in `app/[locale]/layout.tsx`:
+
+```tsx
+<LenisProvider>
+  <NextIntlClientProvider messages={messages}>
+    {/* ... */}
+  </NextIntlClientProvider>
+</LenisProvider>
+```
+
+It smooths scrolling for the browser window, configured as:
+
+| Option | Value | Purpose |
+| --- | --- | --- |
+| `duration` | `1.2` | Scroll animation duration |
+| `easing` | `1.001 - 2^(-10t)` | Ease-out curve: fast start, slow finish |
+| `touchMultiplier` | `1.5` | Scroll multiplier for touch and trackpads |
+
+Internally it drives `lenis.raf(time)` from `requestAnimationFrame` and calls `lenis.destroy()` after cancelling the frame on unmount, so no instance leaks across route changes.
+
+Lenis also needs a small set of CSS rules in `globals.css`:
+
+```css
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: clip;
+}
+
+.lenis.lenis-smooth iframe {
+  pointer-events: none;
+}
+```
+
+A few details that are easy to miss:
+
+- `.lenis-smooth` disables native `scroll-behavior: smooth` so two smoothing systems never fight each other.
+- `[data-lenis-prevent]` marks inner scroll containers that Lenis should **not** take over, so the wheel keeps scrolling that container.
+- While smooth scrolling is active, pointer events on iframes are disabled so they cannot swallow wheel input.
+
+<Callout title="Inner scroll areas">
+If a regular page has its own scrollable region, such as a dropdown panel, log list, or horizontal code block, add `data-lenis-prevent` to it. Otherwise Lenis treats it as part of the window scroll, which leads to scroll trapping or scroll chaining.
+</Callout>
+
+## Why docs skip Lenis
+
+`LenisProvider` decides whether to enable Lenis from the current pathname:
+
+```tsx
+const isDocsPage = routing.locales.some((locale) =>
+  pathname.startsWith(`/${locale}/docs`),
+);
+
+useEffect(() => {
+  if (isDocsPage) return;
+  // create the Lenis instance...
+}, [isDocsPage]);
+```
+
+No Lenis instance is created on docs routes because:
+
+1. **Scroll container conflicts**: the Fumadocs layout has its own sidebar, TOC, and content areas, some of which scroll independently. Lenis takes over the window, intercepts `wheel`, and drives a virtual scroll, so inner containers end up competing for the same events.
+2. **Broken anchors and TOC jumps**: TOC links and heading anchors rely on native scroll positioning. Lenis' RAF loop keeps correcting the scroll position, which can override the target, stop short, or cause back-and-forth jitter.
+3. **Lost native behavior**: keyboard scrolling (PageUp / PageDown / Home / End), focus-driven scrolling, browser find, `scrollIntoView`, and URL hash restoration all depend on native scrolling. Documentation readers depend on these behaviors.
+4. **Low payoff**: docs are about reading and navigating; the visual gain from smooth animation is much smaller than the uncertainty it introduces.
+
+Docs therefore use native scrolling. When navigating between the landing page and docs, `isDocsPage` changes and the Lenis instance is destroyed or recreated. Presentation-heavy pages such as the landing page and dashboard keep smooth scrolling.
+
+## File reference
+
+| Path | Purpose |
+| --- | --- |
+| `app/[locale]/globals.css` | Scrollbar reset, Lenis CSS, theme variables |
+| `providers/lenis-provider.tsx` | Create / destroy Lenis, skip docs routes |
+| `app/[locale]/layout.tsx` | Mounts `LenisProvider` |
