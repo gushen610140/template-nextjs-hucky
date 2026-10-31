@@ -214,6 +214,113 @@ const PRIMARY_SCALES = {
     "900": "oklch(38.6% 0.063 188.416)",
     "950": "oklch(27.7% 0.046 192.524)",
   },
+  // ── Macaron tones ──
+  // Softer chroma at the same lightness stops, so primary buttons stay readable
+  // with primary-50 text while the palette keeps a pastel character.
+  blush: {
+    "50": "oklch(97% 0.02 15)",
+    "100": "oklch(94% 0.04 15)",
+    "200": "oklch(89% 0.07 15)",
+    "300": "oklch(82% 0.10 15)",
+    "400": "oklch(74% 0.13 15)",
+    "500": "oklch(67% 0.15 15)",
+    "600": "oklch(60% 0.16 15)",
+    "700": "oklch(51% 0.15 15)",
+    "800": "oklch(45% 0.13 15)",
+    "900": "oklch(40% 0.11 15)",
+    "950": "oklch(28% 0.07 15)",
+  },
+  peach: {
+    "50": "oklch(98% 0.02 55)",
+    "100": "oklch(95% 0.04 55)",
+    "200": "oklch(91% 0.07 55)",
+    "300": "oklch(85% 0.10 55)",
+    "400": "oklch(78% 0.13 55)",
+    "500": "oklch(71% 0.15 55)",
+    "600": "oklch(64% 0.16 55)",
+    "700": "oklch(51% 0.15 55)",
+    "800": "oklch(45% 0.13 55)",
+    "900": "oklch(42% 0.11 55)",
+    "950": "oklch(29% 0.07 55)",
+  },
+  butter: {
+    "50": "oklch(99% 0.02 95)",
+    "100": "oklch(97% 0.05 95)",
+    "200": "oklch(94% 0.09 95)",
+    "300": "oklch(90% 0.13 95)",
+    "400": "oklch(85% 0.16 95)",
+    "500": "oklch(79% 0.18 95)",
+    "600": "oklch(70% 0.19 95)",
+    "700": "oklch(61% 0.17 95)",
+    "800": "oklch(53% 0.14 95)",
+    "900": "oklch(46% 0.11 95)",
+    "950": "oklch(31% 0.07 95)",
+  },
+  mint: {
+    "50": "oklch(98% 0.02 165)",
+    "100": "oklch(95% 0.05 165)",
+    "200": "oklch(90% 0.08 165)",
+    "300": "oklch(84% 0.11 165)",
+    "400": "oklch(77% 0.13 165)",
+    "500": "oklch(70% 0.14 165)",
+    "600": "oklch(63% 0.14 165)",
+    "700": "oklch(51% 0.13 165)",
+    "800": "oklch(45% 0.11 165)",
+    "900": "oklch(41% 0.09 165)",
+    "950": "oklch(28% 0.06 165)",
+  },
+  sage: {
+    "50": "oklch(98% 0.01 135)",
+    "100": "oklch(95% 0.03 135)",
+    "200": "oklch(90% 0.05 135)",
+    "300": "oklch(84% 0.07 135)",
+    "400": "oklch(77% 0.09 135)",
+    "500": "oklch(70% 0.10 135)",
+    "600": "oklch(63% 0.10 135)",
+    "700": "oklch(51% 0.09 135)",
+    "800": "oklch(45% 0.08 135)",
+    "900": "oklch(41% 0.07 135)",
+    "950": "oklch(28% 0.04 135)",
+  },
+  sky: {
+    "50": "oklch(98% 0.02 230)",
+    "100": "oklch(95% 0.04 230)",
+    "200": "oklch(90% 0.07 230)",
+    "300": "oklch(84% 0.10 230)",
+    "400": "oklch(77% 0.12 230)",
+    "500": "oklch(70% 0.13 230)",
+    "600": "oklch(63% 0.14 230)",
+    "700": "oklch(51% 0.13 230)",
+    "800": "oklch(45% 0.11 230)",
+    "900": "oklch(41% 0.09 230)",
+    "950": "oklch(28% 0.06 230)",
+  },
+  lilac: {
+    "50": "oklch(98% 0.02 310)",
+    "100": "oklch(95% 0.04 310)",
+    "200": "oklch(90% 0.07 310)",
+    "300": "oklch(84% 0.10 310)",
+    "400": "oklch(77% 0.12 310)",
+    "500": "oklch(70% 0.14 310)",
+    "600": "oklch(63% 0.15 310)",
+    "700": "oklch(51% 0.14 310)",
+    "800": "oklch(45% 0.12 310)",
+    "900": "oklch(41% 0.10 310)",
+    "950": "oklch(28% 0.07 310)",
+  },
+  periwinkle: {
+    "50": "oklch(98% 0.02 275)",
+    "100": "oklch(95% 0.04 275)",
+    "200": "oklch(90% 0.07 275)",
+    "300": "oklch(84% 0.10 275)",
+    "400": "oklch(77% 0.12 275)",
+    "500": "oklch(70% 0.13 275)",
+    "600": "oklch(63% 0.14 275)",
+    "700": "oklch(51% 0.13 275)",
+    "800": "oklch(45% 0.11 275)",
+    "900": "oklch(41% 0.09 275)",
+    "950": "oklch(28% 0.06 275)",
+  },
 } satisfies Record<string, Scale>;
 
 export const SHADOW_PRESETS = {
@@ -316,11 +423,16 @@ export function getThemeVariables(
   const isLight = mode === "light";
   const primaryMain = isLight ? primary["700"] : primary["600"];
   const primaryForeground =
-    customization.primaryColor === "yellow" ? primary["950"] : primary["50"];
+    customization.primaryColor === "yellow" ||
+    customization.primaryColor === "butter"
+      ? primary["950"]
+      : primary["50"];
 
   const variables: Record<string, string> = {
     "--base-400": base["400"],
-    "--background": isLight ? "oklch(1 0 0)" : base["950"],
+    // 浅色模式也用 base 色阶：背景取 base-100，卡片保持白色，形成画布与卡片的层次。
+    // 如果浅色背景固定为纯白，切换 baseColor 只会影响边框和文字，几乎看不出来。
+    "--background": isLight ? base["100"] : base["950"],
     "--foreground": isLight ? base["950"] : base["50"],
     "--card": isLight ? "oklch(1 0 0)" : base["900"],
     "--card-foreground": isLight ? base["950"] : base["50"],
@@ -328,17 +440,17 @@ export function getThemeVariables(
     "--popover-foreground": isLight ? base["950"] : base["50"],
     "--primary": primaryMain,
     "--primary-foreground": primaryForeground,
-    "--secondary": isLight ? base["100"] : base["800"],
+    "--secondary": isLight ? base["200"] : base["800"],
     "--secondary-foreground": isLight ? base["900"] : base["50"],
-    "--muted": isLight ? base["100"] : base["800"],
+    "--muted": isLight ? base["200"] : base["800"],
     "--muted-foreground": isLight ? base["500"] : base["400"],
-    "--accent": isLight ? base["100"] : base["800"],
+    "--accent": isLight ? base["200"] : base["800"],
     "--accent-foreground": isLight ? base["900"] : base["50"],
     "--destructive": isLight
       ? "oklch(0.577 0.245 27.325)"
       : "oklch(0.704 0.191 22.216)",
-    "--border": isLight ? base["200"] : DARK_BORDER,
-    "--input": isLight ? base["200"] : DARK_INPUT,
+    "--border": isLight ? base["300"] : DARK_BORDER,
+    "--input": isLight ? base["300"] : DARK_INPUT,
     "--ring": isLight ? base["400"] : base["500"],
     "--chart-1": isLight ? primary["400"] : primary["300"],
     "--chart-2": isLight ? primary["500"] : primary["400"],
@@ -349,9 +461,9 @@ export function getThemeVariables(
     "--sidebar-foreground": isLight ? base["950"] : base["50"],
     "--sidebar-primary": primaryMain,
     "--sidebar-primary-foreground": primaryForeground,
-    "--sidebar-accent": isLight ? base["100"] : base["800"],
+    "--sidebar-accent": isLight ? base["200"] : base["800"],
     "--sidebar-accent-foreground": isLight ? base["900"] : base["50"],
-    "--sidebar-border": isLight ? base["200"] : DARK_BORDER,
+    "--sidebar-border": isLight ? base["300"] : DARK_BORDER,
     "--sidebar-ring": isLight ? base["400"] : base["500"],
     "--radius": RADIUS_PRESETS[customization.radius],
   };

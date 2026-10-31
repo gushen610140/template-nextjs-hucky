@@ -64,7 +64,7 @@ bunx --bun shadcn@latest add tabs card separator
 
 ```json
 {
-  "style": "radix-sera",
+  "style": "radix-vega",
   "tailwind": {
     "css": "app/[locale]/globals.css",
     "cssVariables": true
@@ -78,8 +78,24 @@ bunx --bun shadcn@latest add tabs card separator
 }
 ```
 
-<Callout type="warn" title="添加后检查 import 路径">
-当前 CLI 偶尔会把 class 合并工具写成 `import { cn } from "cn"`。本项目统一使用 `@/lib/utils`，如果看到 `"cn"`，把它改成 `import { cn } from "@/lib/utils"`，并确认 `package.json` 没有被加入多余的 `cn` 依赖。
+<Callout type="warn" title="添加后必须检查 cn import">
+shadcn 线上 registry 目前用 `cn` 作为工具函数的占位符，而 CLI 4.23 会把它当成真实的 npm 包处理，生成 `import { cn } from "cn"` 并往 `package.json` 里加入 `cn` 依赖。本项目统一使用 `@/lib/utils`，每次 `add` 后都要检查并修复：
+
+```powershell
+# 1. 查找错误 import
+rg 'from "cn"' components/ui
+
+# 2. 批量替换为项目路径
+Get-ChildItem components/ui/*.tsx | ForEach-Object {
+  $p = $_.FullName
+  (Get-Content -Raw $p) -replace 'from "cn"', 'from "@/lib/utils"' | Set-Content -NoNewline $p
+}
+
+# 3. 删除误装的依赖
+bun remove cn
+```
+
+如果替换后还有 `@/registry/...` 或 `@/app/(create)/...` 形式的导入，也一并改成项目里的 `@/components/ui/...`、`@/hooks/...`，再运行 `npx tsc --noEmit` 确认。
 </Callout>
 
 添加后直接使用：

@@ -10,7 +10,7 @@ description: 用 Popover 调整基础色、主色、圆角和阴影，并同步�
 | 选项 | 内容 |
 | --- | --- |
 | 基础色 | Neutral、Stone、Zinc、Mauve、Olive、Mist、Taupe |
-| 主色 | Emerald、Blue、Violet、Rose、Orange、Red、Yellow、Teal |
+| 主色 | Emerald、Blue、Violet、Rose、Orange、Red、Yellow、Teal；第二排为马卡龙色：Blush、Peach、Butter、Mint、Sage、Sky、Lilac、Periwinkle |
 | 圆角 | None、Small、Medium、Large、Default、XL |
 | 阴影 | None、Soft、Default、Strong |
 
@@ -54,6 +54,10 @@ hucky-theme-customization
 ```
 
 圆角通过 `--radius` 控制，项目已有的 `--radius-sm` 到 `--radius-4xl` 会基于它计算。
+
+浅色和深色共用同一套基础色阶，不需要分别配置。浅色模式用 base-100 作为页面背景、base-200 作为中性面、base-300 作为边框，卡片和浮层保持白色；深色模式用 base-950/900/800。这样切换基础色时，浅色模式下的画布也会明显变化，而不只是影响边框和文字。
+
+`components/ui` 使用 shadcn 的经典默认样式 `radix-vega`，组件通过 `--radius-*` 等语义 token 控制圆角，而不是像 `sera` 那样把 `rounded-none` 写进每个组件。只有 Tabs 的 line 变体、ToggleGroup 的 `spacing=0` 这类结构性直角是设计意图。调整上面的变量即可让 Button、Card、Popover、DropdownMenu、Tooltip、Sidebar 等组件一起变化。新增组件时保持 `components.json` 的 `style` 不变，用 CLI 添加即可。
 
 阴影通过一层间接变量控制：
 

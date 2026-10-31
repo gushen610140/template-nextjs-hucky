@@ -10,7 +10,7 @@ The home and dashboard top bars expose a theme configuration button (palette ico
 | Option | Values |
 | --- | --- |
 | Base color | Neutral, Stone, Zinc, Mauve, Olive, Mist, Taupe |
-| Primary color | Emerald, Blue, Violet, Rose, Orange, Red, Yellow, Teal |
+| Primary color | Emerald, Blue, Violet, Rose, Orange, Red, Yellow, Teal; the second row adds macaron tones: Blush, Peach, Butter, Mint, Sage, Sky, Lilac, Periwinkle |
 | Radius | None, Small, Medium, Large, Default, XL |
 | Shadow | None, Soft, Default, Strong |
 
@@ -54,6 +54,10 @@ The customizer updates:
 ```
 
 Radius is controlled by `--radius`; the existing `--radius-sm` through `--radius-4xl` tokens derive from it.
+
+Light and dark share one base scale, so no separate configuration is needed. Light mode uses base-100 for the canvas, base-200 for neutral surfaces, base-300 for borders, and keeps cards and popovers white; dark mode uses base-950/900/800. Switching the base color therefore changes the light canvas visibly, not only the borders and text.
+
+`components/ui` uses shadcn's classic default style, `radix-vega`. Components derive their corners from semantic tokens such as `--radius-*` instead of hardcoding `rounded-none` in every file, as the `sera` style did. Only structural cases, such as the line variant of Tabs and ToggleGroup with `spacing=0`, are intentionally square. Changing the variables above updates Button, Card, Popover, DropdownMenu, Tooltip, Sidebar, and the rest together. Keep the `style` in `components.json` unchanged when adding new components with the CLI.
 
 Shadows use one indirection layer:
 

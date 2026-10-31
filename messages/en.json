@@ -75,7 +75,15 @@
       "orange": "Orange",
       "red": "Red",
       "yellow": "Yellow",
-      "teal": "Teal"
+      "teal": "Teal",
+      "blush": "Blush",
+      "peach": "Peach",
+      "butter": "Butter",
+      "mint": "Mint",
+      "sage": "Sage",
+      "sky": "Sky",
+      "lilac": "Lilac",
+      "periwinkle": "Periwinkle"
     },
     "radiusPresets": {
       "none": "None",

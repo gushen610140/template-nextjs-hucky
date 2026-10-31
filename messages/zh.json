@@ -75,7 +75,15 @@
       "orange": "橙色",
       "red": "红色",
       "yellow": "黄色",
-      "teal": "青色"
+      "teal": "青色",
+      "blush": "腮红粉",
+      "peach": "蜜桃",
+      "butter": "奶油黄",
+      "mint": "薄荷",
+      "sage": "鼠尾草",
+      "sky": "天空蓝",
+      "lilac": "丁香紫",
+      "periwinkle": "长春花蓝"
     },
     "radiusPresets": {
       "none": "无",

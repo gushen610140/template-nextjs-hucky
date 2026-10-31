@@ -44,8 +44,8 @@ export function ThemeCustomizer() {
           <Palette data-icon="inline-start" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80">
-        <div className="flex max-h-[70vh] flex-col gap-5 overflow-y-auto p-1">
+      <PopoverContent align="end" className="max-h-[70vh] w-80 overflow-y-auto">
+        <div className="flex flex-col gap-5">
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm font-semibold">{t("title")}</span>
             <Button
@@ -72,7 +72,7 @@ export function ThemeCustomizer() {
                 }
               }}
               spacing={2}
-              className="flex flex-wrap"
+              className="flex flex-wrap gap-1.5"
             >
               {BASE_COLORS.map((color) => (
                 <ToggleGroupItem
@@ -100,7 +100,7 @@ export function ThemeCustomizer() {
                 }
               }}
               spacing={2}
-              className="flex flex-wrap"
+              className="flex flex-wrap gap-1.5"
             >
               {PRIMARY_COLORS.map((color) => (
                 <ToggleGroupItem
@@ -123,7 +123,6 @@ export function ThemeCustomizer() {
               type="single"
               variant="outline"
               size="sm"
-              spacing={0}
               value={customization.radius}
               onValueChange={(value) => {
                 if (value) {
@@ -152,7 +151,6 @@ export function ThemeCustomizer() {
               type="single"
               variant="outline"
               size="sm"
-              spacing={0}
               value={customization.shadow}
               onValueChange={(value) => {
                 if (value) {

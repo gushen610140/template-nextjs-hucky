@@ -64,7 +64,7 @@ bunx --bun shadcn@latest add tabs card separator
 
 ```json
 {
-  "style": "radix-sera",
+  "style": "radix-vega",
   "tailwind": {
     "css": "app/[locale]/globals.css",
     "cssVariables": true
@@ -78,8 +78,24 @@ bunx --bun shadcn@latest add tabs card separator
 }
 ```
 
-<Callout type="warn" title="Check import paths after adding">
-The CLI occasionally writes `import { cn } from "cn"`. This project always uses `@/lib/utils`; change `"cn"` to `import { cn } from "@/lib/utils"` and make sure `package.json` did not gain an unrelated `cn` dependency.
+<Callout type="warn" title="Always check the cn import after adding">
+The live shadcn registry currently uses `cn` as a placeholder for the utility helper, while CLI 4.23 treats it as a real npm package. It writes `import { cn } from "cn"` and adds a `cn` dependency to `package.json`. This project always uses `@/lib/utils`, so check and repair after every `add`:
+
+```powershell
+# 1. Find the broken imports
+rg 'from "cn"' components/ui
+
+# 2. Replace them with the project alias
+Get-ChildItem components/ui/*.tsx | ForEach-Object {
+  $p = $_.FullName
+  (Get-Content -Raw $p) -replace 'from "cn"', 'from "@/lib/utils"' | Set-Content -NoNewline $p
+}
+
+# 3. Remove the bogus dependency
+bun remove cn
+```
+
+If you still see imports such as `@/registry/...` or `@/app/(create)/...`, rewrite them to `@/components/ui/...` or `@/hooks/...`, then run `npx tsc --noEmit` to confirm.
 </Callout>
 
 Use the component directly:
