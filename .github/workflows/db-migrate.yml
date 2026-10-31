@@ -1,0 +1,78 @@
+name: DB Migrate
+
+# 只在 main 上、且改动涉及 schema / 迁移 / Prisma 版本时触发。
+# 需要手动补跑时，在 Actions 页面点 "Run workflow"。
+on:
+  push:
+    branches: [main]
+    paths:
+      - "prisma/**"
+      - "prisma.config.ts"
+      - "package.json"
+      - "bun.lock"
+      # 让本文件的首次提交也能触发一次，省得手动点 Run workflow
+      - ".github/workflows/db-migrate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 迁移必须串行，且绝不能被中途取消：
+# 被 kill 的迁移会在 _prisma_migrations 里留下未完成记录，之后一直报 P3009。
+concurrency:
+  group: prisma-migrate-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: prisma migrate deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # DATABASE_URL 存放在 Settings → Environments → production 下，
+    # 所以这里必须声明同名的 environment 才能读到。
+    # 加上 required reviewers 后，迁移会自动等待人工批准。
+    environment: production
+
+    env:
+      # 必须使用「直连」地址（Vercel Postgres 对应的 POSTGRES_URL_NON_POOLING），
+      # 不能用 pooler 地址：migrate 依赖 PostgreSQL advisory lock 串行化，
+      # PgBouncer 的 transaction 模式不支持这类会话级特性。
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # prisma CLI 的入口是 `#!/usr/bin/env node`，所以 runner 上必须有 Node。
+      # 版本对齐 Vercel 项目设置里选的 22.x。
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.x
+
+      # 用 lockfile 里锁定的 Prisma 版本，保证迁移引擎版本稳定。
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate schema
+        run: bunx prisma validate
+
+      # 只打印当前迁移状态，不阻断流程。
+      # 注意：存在未应用的迁移时 migrate status 会以非 0 退出，
+      # 而首次部署本来就有 pending 迁移，所以必须 continue-on-error。
+      - name: Show migration status (before)
+        continue-on-error: true
+        run: bunx prisma migrate status
+
+      - name: Apply migrations
+        run: bunx prisma migrate deploy
+
+      # 应用后再查一次，确认数据库与迁移历史一致。
+      - name: Verify migration status
+        run: bunx prisma migrate status
