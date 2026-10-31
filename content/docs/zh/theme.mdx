@@ -30,6 +30,8 @@ hucky-theme-customization
 | `providers/theme-customizer-provider.tsx` | 读取/保存配置，把变量写到 `<html>` |
 | `components/theme-customizer.tsx` | Popover 配置面板 |
 | `components/ui/popover.tsx` | 通用 Popover 基础组件 |
+| `components/ui/toggle-group.tsx` | 色板、圆角、阴影选项的 ToggleGroup |
+| `app/[locale]/globals.css` | shadcn token 与 Fumadocs 的桥接 |
 
 配置变化时，Provider 会根据当前 `resolvedTheme` 选择浅色或深色色板，然后把 CSS 变量设置到 `document.documentElement.style`。
 
@@ -63,18 +65,24 @@ hucky-theme-customization
 
 ## Fumadocs 同步
 
-Fumadocs 使用 `--color-fd-*` 变量。Provider 会同步设置这些变量，例如：
+Fumadocs 使用自己的 `--color-fd-*` 变量。项目在 `app/[locale]/globals.css` 中引入官方桥接：
 
-```text
---color-fd-background
---color-fd-foreground
---color-fd-primary
---color-fd-primary-foreground
---color-fd-border
---color-fd-ring
+```css
+@import "fumadocs-ui/css/shadcn.css";
 ```
 
-所以修改基础色或主色后，文档侧边栏、按钮、边框和强调色也会一起变化。
+这个文件会把 `--color-fd-*` 映射到 shadcn token，例如：
+
+```text
+--color-fd-background  →  --background
+--color-fd-foreground  →  --foreground
+--color-fd-primary     →  --primary
+--color-fd-border      →  --border
+--color-fd-ring        →  --ring
+#nd-sidebar            →  --sidebar / --sidebar-*
+```
+
+因此 Provider 只需要写 shadcn 变量，文档侧边栏、按钮、边框和强调色会自动跟随。文档正文里的 `<Callout>` 也已经替换为基于 shadcn `Alert` 的自定义组件。
 
 ## 增加新预设
 

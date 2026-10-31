@@ -30,6 +30,8 @@ They are restored after a reload. The Reset button returns to Neutral + Emerald 
 | `providers/theme-customizer-provider.tsx` | Load/save settings and write CSS variables to `<html>` |
 | `components/theme-customizer.tsx` | Popover UI |
 | `components/ui/popover.tsx` | Shared popover primitive |
+| `components/ui/toggle-group.tsx` | Toggle groups for palette, radius, and shadow options |
+| `app/[locale]/globals.css` | Bridge between shadcn tokens and Fumadocs |
 
 The provider selects the light or dark palette from `resolvedTheme`, then applies the generated variables to `document.documentElement.style`.
 
@@ -63,18 +65,24 @@ That means `shadow-sm`, `shadow-md`, `shadow-xl`, and similar utilities follow t
 
 ## Fumadocs
 
-Fumadocs reads `--color-fd-*`. The provider mirrors the app palette into variables such as:
+Fumadocs reads its own `--color-fd-*` variables. The project imports the official bridge in `app/[locale]/globals.css`:
 
-```text
---color-fd-background
---color-fd-foreground
---color-fd-primary
---color-fd-primary-foreground
---color-fd-border
---color-fd-ring
+```css
+@import "fumadocs-ui/css/shadcn.css";
 ```
 
-Changing the base or primary color also updates the docs sidebar, buttons, borders, and accents.
+It maps `--color-fd-*` onto shadcn tokens:
+
+```text
+--color-fd-background  →  --background
+--color-fd-foreground  →  --foreground
+--color-fd-primary     →  --primary
+--color-fd-border      →  --border
+--color-fd-ring        →  --ring
+#nd-sidebar            →  --sidebar / --sidebar-*
+```
+
+The provider therefore only writes shadcn variables, and the docs sidebar, buttons, borders, and accents follow automatically. Docs `<Callout>` is also wrapped around shadcn `Alert`.
 
 ## Adding presets
 

@@ -1,7 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "fumadocs-ui/css/neutral.css";
+/* Fumadocs 直接复用 shadcn token，文档与业务组件共享同一套主题变量 */
+@import "fumadocs-ui/css/shadcn.css";
 @import "fumadocs-ui/css/preset.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -9,9 +10,10 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-heading);
+  /* 字体栈在 :root 的 --app-font-* 中定义，见下方 Typography 注释 */
+  --font-sans: var(--app-font-sans);
+  --font-mono: var(--app-font-mono);
+  --font-heading: var(--app-font-heading);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -60,14 +62,43 @@
 }
 
 :root {
+  /* ── Typography ──
+    拉丁字形来自 next/font（app/[locale]/layout.tsx 注入 --font-latin-*），
+    中文字形不下载 webfont，直接使用系统字体栈。
+    var() 的第二个参数是兜底值：变量缺失时整条 font-family 会失效，
+    所以这里显式给出 sans-serif / serif / ui-monospace。
+    Fumadocs 内部直接读 var(--font-sans) / var(--font-mono)，最后一并覆盖成同一套栈。
+  */
+  --app-font-sans: var(--font-latin-sans, sans-serif), var(--font-cjk-sans);
+  --app-font-mono: var(--font-latin-mono, ui-monospace), var(--font-cjk-mono);
+  --app-font-heading: var(--font-latin-heading, serif), var(--font-cjk-heading);
+
+  --font-cjk-sans:
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
+    "Source Han Sans SC", "WenQuanYi Micro Hei", sans-serif;
+  --font-cjk-heading:
+    "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun",
+    "Songti TC", serif;
+  --font-cjk-mono:
+    "Sarasa Mono SC", "Noto Sans Mono CJK SC", "Microsoft YaHei", monospace;
+
+  --font-sans: var(--app-font-sans);
+  --font-mono: var(--app-font-mono);
+
+  /* ── Shadows ── */
   --app-shadow-2xs: 0 1px rgb(0 0 0 / 0.05);
   --app-shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --app-shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --app-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --app-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --app-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --app-shadow-sm:
+    0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --app-shadow-md:
+    0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --app-shadow-lg:
+    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --app-shadow-xl:
+    0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
   --app-shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
-  --app-shadow-DEFAULT: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --app-shadow-DEFAULT:
+    0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
   --app-shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
@@ -104,6 +135,8 @@
   --scrollbar-thumb: oklch(0.72 0 0 / 0%);
   --scrollbar-thumb-hover: oklch(0.55 0 0 / 50%);
   --scrollbar-thumb-active: oklch(0.45 0 0 / 65%);
+  /* Fumadocs 的 shadcn 桥接没有覆盖 overlay，这里补一个中性遮罩 */
+  --color-fd-overlay: oklch(0 0 0 / 0.5);
 }
 
 .dark {
@@ -151,6 +184,7 @@
     @apply bg-background text-foreground;
   }
   html {
+    /* 唯一一处把字体族写到根元素的地方，之后所有组件靠继承 */
     @apply font-sans;
     color-scheme: light;
   }
@@ -228,8 +262,6 @@
     transition: background-color 5000s ease-in-out 0s !important;
     -webkit-text-fill-color: var(--foreground) !important;
     caret-color: var(--foreground) !important;
-    /** TODO: 字体在 preview autofill 的时候还是有问题 */
-    font-family: var(--font-family) !important;
   }
 }
 

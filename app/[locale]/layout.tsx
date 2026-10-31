@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DM_Sans, Geist, Geist_Mono, Playfair_Display } from "next/font/google";
+import { DM_Sans, Geist_Mono, Playfair_Display } from "next/font/google";
 import { notFound } from "next/navigation";
 import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { getMessages } from "next-intl/server";
@@ -12,20 +12,24 @@ import { LenisProvider } from "@/providers/lenis-provider";
 import { ThemeCustomizerProvider } from "@/providers/theme-customizer-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 
-const playfairDisplayHeading = Playfair_Display({
-  subsets: ["latin"],
-  variable: "--font-heading",
-});
-
-const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" });
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+/**
+ * 字体分工（详见 content/docs/zh/shadcn/typography.mdx）：
+ * - 拉丁字形由 next/font 在构建期下载并自托管，运行时不请求外部字体服务。
+ * - 中文字形不加载 webfont，由 globals.css 里的系统字体栈接管。
+ * - 这里的 variable 名必须和 globals.css 的 `--font-latin-*` 一一对应。
+ */
+const dmSans = DM_Sans({
+  variable: "--font-latin-sans",
   subsets: ["latin"],
 });
 
 const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+  variable: "--font-latin-mono",
+  subsets: ["latin"],
+});
+
+const playfairDisplay = Playfair_Display({
+  variable: "--font-latin-heading",
   subsets: ["latin"],
 });
 
@@ -54,13 +58,11 @@ export default async function RootLayout({
       lang={locale}
       suppressHydrationWarning
       className={cn(
-        "h-full",
-        "antialiased",
-        geistSans.variable,
-        geistMono.variable,
-        "font-sans",
+        "h-full antialiased",
+        // 字体变量由 next/font 注入到 <html>，font-family 本身在 globals.css 的 base 层设置
         dmSans.variable,
-        playfairDisplayHeading.variable,
+        geistMono.variable,
+        playfairDisplay.variable,
       )}
     >
       <body className="min-h-full flex flex-col">
