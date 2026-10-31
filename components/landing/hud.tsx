@@ -68,9 +68,11 @@ export function LandingHud({
 }
 
 export function LandingIntro({
+  error = false,
   onEnter,
   onSkip,
 }: {
+  error?: boolean;
   onEnter: () => void;
   onSkip: () => void;
 }) {
@@ -92,6 +94,11 @@ export function LandingIntro({
       >
         {t("resume")}
       </Button>
+      {error && (
+        <p className="mt-4 max-w-xs text-xs leading-relaxed text-destructive">
+          {t("lockError")}
+        </p>
+      )}
       <button
         type="button"
         onClick={onSkip}

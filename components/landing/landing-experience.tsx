@@ -54,6 +54,7 @@ export function LandingExperience() {
   const [minElapsed, setMinElapsed] = useState(false);
   const [progress, setProgress] = useState(8);
   const [showLoader, setShowLoader] = useState(true);
+  const [lockError, setLockError] = useState(false);
 
   const modeRef = useRef<LandingMode>("intro");
   const controlsRef = useRef<LandingControls | null>(null);
@@ -68,11 +69,13 @@ export function LandingExperience() {
   }, []);
 
   const resume = useCallback(() => {
+    setLockError(false);
     controlsRef.current?.lock();
   }, []);
 
   const handleLock = useCallback(() => {
     if (modeRef.current === "panel" || modeRef.current === "leaving") return;
+    setLockError(false);
     setMode("explore");
   }, [setMode]);
 
@@ -81,7 +84,9 @@ export function LandingExperience() {
   }, [setMode]);
 
   const handleLockError = useCallback(() => {
-    if (modeRef.current !== "leaving") setMode("paused");
+    if (modeRef.current === "leaving") return;
+    setLockError(true);
+    setMode("paused");
   }, [setMode]);
 
   const openPanel = useCallback(() => {
@@ -240,7 +245,7 @@ export function LandingExperience() {
           <LandingHud mode={mode} hover={hover} />
 
           {(mode === "intro" || mode === "paused") && (
-            <LandingIntro onEnter={resume} onSkip={skip} />
+            <LandingIntro error={lockError} onEnter={resume} onSkip={skip} />
           )}
 
           <SettingsDialog

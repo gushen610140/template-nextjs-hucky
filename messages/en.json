@@ -104,6 +104,7 @@
     "loading": "Building the space",
     "hintMove": "WASD to move · Mouse to look · E / click to interact",
     "resume": "Connect",
+    "lockError": "Could not lock the mouse. Click Connect again.",
     "releaseCursor": "Release cursor",
     "skip": "Skip to dashboard",
     "terminalName": "Console",
