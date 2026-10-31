@@ -6,6 +6,8 @@
     "getting-started",
     "---Configuration---",
     "infrastructure",
+    "---Frontend---",
+    "theme",
     "---Backend---",
     "prisma",
     "authentication"

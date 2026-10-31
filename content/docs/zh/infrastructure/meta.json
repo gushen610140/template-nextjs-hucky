@@ -1,5 +1,5 @@
 {
   "title": "基础设施",
   "pagesIndex": "index",
-  "pages": ["package-manager", "environment-variables", "formatting", "theme"]
+  "pages": ["package-manager", "environment-variables", "formatting"]
 }
