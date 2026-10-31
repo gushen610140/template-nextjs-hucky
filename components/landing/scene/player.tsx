@@ -1,6 +1,5 @@
 "use client";
 
-import { PointerLockControls } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useCallback, useEffect, useRef } from "react";
 import * as THREE from "three";
@@ -52,20 +51,25 @@ export function Player({
   active,
   onLock,
   onUnlock,
+  onLockError,
   onControls,
 }: {
   active: boolean;
   onLock: () => void;
   onUnlock: () => void;
+  onLockError: () => void;
   onControls: (controls: LandingControls | null) => void;
 }) {
-  const { camera } = useThree();
+  const { camera, gl } = useThree();
   const keys = useRef<Keys>({ ...IDLE_KEYS });
   const velocity = useRef(new THREE.Vector3());
   const forward = useRef(new THREE.Vector3());
   const right = useRef(new THREE.Vector3());
   const wish = useRef(new THREE.Vector3());
   const activeRef = useRef(active);
+  const onLockRef = useRef(onLock);
+  const onUnlockRef = useRef(onUnlock);
+  const onLockErrorRef = useRef(onLockError);
 
   useEffect(() => {
     activeRef.current = active;
@@ -73,6 +77,95 @@ export function Player({
       keys.current = { ...IDLE_KEYS };
     }
   }, [active]);
+
+  useEffect(() => {
+    onLockRef.current = onLock;
+  }, [onLock]);
+
+  useEffect(() => {
+    onUnlockRef.current = onUnlock;
+  }, [onUnlock]);
+
+  useEffect(() => {
+    onLockErrorRef.current = onLockError;
+  }, [onLockError]);
+
+  /**
+   * Minimal pointer-lock controller. We intentionally do not use drei's
+   * PointerLockControls: it logs on every rejected request and ignores the
+   * requestPointerLock() promise, which produces noisy console errors when a
+   * browser briefly refuses to re-lock after Esc.
+   */
+  const lock = useCallback(() => {
+    const element = gl.domElement;
+    if (document.pointerLockElement === element) return;
+
+    try {
+      const request = element.requestPointerLock() as unknown;
+      if (request instanceof Promise) {
+        request.catch(() => onLockErrorRef.current());
+      }
+    } catch {
+      onLockErrorRef.current();
+    }
+  }, [gl]);
+
+  const unlock = useCallback(() => {
+    if (document.pointerLockElement) {
+      document.exitPointerLock();
+    }
+  }, []);
+
+  useEffect(() => {
+    const element = gl.domElement;
+    const euler = new THREE.Euler(0, 0, 0, "YXZ");
+    let locked = false;
+
+    const onMouseMove = (event: MouseEvent) => {
+      if (!locked) return;
+
+      euler.setFromQuaternion(camera.quaternion);
+      euler.y -= event.movementX * 0.002;
+      euler.x -= event.movementY * 0.002;
+
+      const limit = Math.PI / 2 - 0.01;
+      euler.x = Math.max(-limit, Math.min(limit, euler.x));
+      camera.quaternion.setFromEuler(euler);
+    };
+
+    const onPointerLockChange = () => {
+      const nextLocked = document.pointerLockElement === element;
+      if (nextLocked === locked) return;
+
+      locked = nextLocked;
+      if (nextLocked) {
+        onLockRef.current();
+      } else {
+        onUnlockRef.current();
+      }
+    };
+
+    const onPointerLockError = () => {
+      onLockErrorRef.current();
+    };
+
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("pointerlockchange", onPointerLockChange);
+    document.addEventListener("pointerlockerror", onPointerLockError);
+
+    onControls({ lock, unlock });
+
+    return () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("pointerlockchange", onPointerLockChange);
+      document.removeEventListener("pointerlockerror", onPointerLockError);
+      onControls(null);
+
+      if (document.pointerLockElement === element) {
+        document.exitPointerLock();
+      }
+    };
+  }, [camera, gl, lock, onControls, unlock]);
 
   useEffect(() => {
     const update = (code: string, pressed: boolean) => {
@@ -179,20 +272,5 @@ export function Player({
     }
   });
 
-  const setRef = useCallback(
-    (instance: { lock: () => void; unlock: () => void } | null) => {
-      onControls(instance);
-    },
-    [onControls],
-  );
-
-  return (
-    <PointerLockControls
-      ref={setRef}
-      makeDefault
-      selector="#landing-surface"
-      onLock={onLock}
-      onUnlock={onUnlock}
-    />
-  );
+  return null;
 }

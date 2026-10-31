@@ -102,9 +102,6 @@
   },
   "Landing": {
     "loading": "Building the space",
-    "introTitle": "An interface you can walk through",
-    "introSubtitle": "A portfolio organized as a room. Move, look around, and talk to the objects inside.",
-    "enter": "Click to enter",
     "hintMove": "WASD to move · Mouse to look · E / click to interact",
     "resume": "Connect",
     "releaseCursor": "Release cursor",

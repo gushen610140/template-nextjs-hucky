@@ -1,6 +1,5 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { HoverInfo } from "@/components/landing/scene/interaction";
 import type { LandingMode } from "@/components/landing/types";
@@ -69,27 +68,21 @@ export function LandingHud({
 }
 
 export function LandingIntro({
-  variant,
   onEnter,
   onSkip,
 }: {
-  variant: "intro" | "paused";
   onEnter: () => void;
   onSkip: () => void;
 }) {
   const t = useTranslations("Landing");
-  const isIntro = variant === "intro";
 
   return (
     <div className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center bg-gradient-to-b from-background/85 via-background/60 to-background/85 px-6 text-center">
-      <p className="text-[10px] tracking-[0.6em] text-muted-foreground uppercase">
-        Hucky · Space 01
-      </p>
-      <h1 className="mt-6 max-w-2xl font-heading text-5xl leading-none tracking-tight text-balance md:text-7xl">
-        {isIntro ? t("introTitle") : "Hucky"}
+      <h1 className="max-w-2xl font-heading text-5xl leading-none tracking-tight text-balance md:text-7xl">
+        Hucky
       </h1>
       <p className="mt-5 max-w-md text-sm leading-relaxed text-foreground/70">
-        {isIntro ? t("introSubtitle") : t("hintMove")}
+        {t("hintMove")}
       </p>
       <Button
         type="button"
@@ -97,21 +90,12 @@ export function LandingIntro({
         onClick={onEnter}
         className="pointer-events-auto mt-9 rounded-full bg-foreground px-7 tracking-normal text-background normal-case hover:bg-foreground/90"
       >
-        {isIntro ? t("enter") : t("resume")}
-        {isIntro && <ArrowRight data-icon="inline-end" />}
+        {t("resume")}
       </Button>
-      {isIntro && (
-        <p className="mt-6 text-[11px] tracking-[0.3em] text-muted-foreground uppercase">
-          {t("hintMove")}
-        </p>
-      )}
       <button
         type="button"
         onClick={onSkip}
-        className={cn(
-          "pointer-events-auto text-xs text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground",
-          isIntro ? "mt-12" : "mt-10",
-        )}
+        className="pointer-events-auto mt-10 text-xs text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
       >
         {t("skip")}
       </button>

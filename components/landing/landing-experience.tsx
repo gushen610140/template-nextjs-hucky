@@ -80,6 +80,10 @@ export function LandingExperience() {
     if (modeRef.current === "explore") setMode("paused");
   }, [setMode]);
 
+  const handleLockError = useCallback(() => {
+    if (modeRef.current !== "leaving") setMode("paused");
+  }, [setMode]);
+
   const openPanel = useCallback(() => {
     if (modeRef.current !== "explore") return;
     setMode("panel");
@@ -161,41 +165,6 @@ export function LandingExperience() {
     setSceneReady(true);
   }, []);
 
-  /**
-   * PointerLockControls locks on any click inside #landing-surface. A click that
-   * just opened a panel or the door must not immediately grab the cursor again,
-   * so swallow that one click in the capture phase.
-   */
-  useEffect(() => {
-    const swallowClick = (event: MouseEvent) => {
-      if (modeRef.current !== "panel" && modeRef.current !== "leaving") return;
-
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (!target.closest("#landing-surface")) return;
-
-      event.stopPropagation();
-      event.preventDefault();
-    };
-
-    document.addEventListener("click", swallowClick, true);
-    return () => document.removeEventListener("click", swallowClick, true);
-  }, []);
-
-  // If a resume attempt is rejected (for example when Esc closed the panel and
-  // the browser withholds user activation), fall back to the resumed overlay.
-  useEffect(() => {
-    const onPointerLockError = () => {
-      if (modeRef.current === "explore" && !document.pointerLockElement) {
-        setMode("paused");
-      }
-    };
-
-    document.addEventListener("pointerlockerror", onPointerLockError);
-    return () =>
-      document.removeEventListener("pointerlockerror", onPointerLockError);
-  }, [setMode]);
-
   useEffect(() => {
     const coarse = window.matchMedia("(hover: none) and (pointer: coarse)");
     const mobile = coarse.matches || window.innerWidth < 768;
@@ -262,6 +231,7 @@ export function LandingExperience() {
               onEnterDoor={enterDoor}
               onLock={handleLock}
               onUnlock={handleUnlock}
+              onLockError={handleLockError}
               onControls={handleControls}
               onReady={handleSceneReady}
             />
@@ -270,7 +240,7 @@ export function LandingExperience() {
           <LandingHud mode={mode} hover={hover} />
 
           {(mode === "intro" || mode === "paused") && (
-            <LandingIntro variant={mode} onEnter={resume} onSkip={skip} />
+            <LandingIntro onEnter={resume} onSkip={skip} />
           )}
 
           <SettingsDialog

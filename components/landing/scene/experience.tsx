@@ -30,6 +30,7 @@ export type ExperienceProps = {
   onEnterDoor: () => void;
   onLock: () => void;
   onUnlock: () => void;
+  onLockError: () => void;
   onControls: (controls: LandingControls | null) => void;
   onReady: () => void;
 };
@@ -44,6 +45,7 @@ export function Experience({
   onEnterDoor,
   onLock,
   onUnlock,
+  onLockError,
   onControls,
   onReady,
 }: ExperienceProps) {
@@ -183,6 +185,7 @@ export function Experience({
         active={enabled}
         onLock={onLock}
         onUnlock={onUnlock}
+        onLockError={onLockError}
         onControls={onControls}
       />
 
