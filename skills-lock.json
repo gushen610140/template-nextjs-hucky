@@ -60,6 +60,12 @@
       "sourceType": "github",
       "skillPath": "prisma-upgrade-v7/SKILL.md",
       "computedHash": "dcc6c71adca6b22f37c5bda5ac7fd63c3bb59495596a22e06a29c7c85371558f"
+    },
+    "shadcn": {
+      "source": "shadcn/ui",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "7859e9a064940a1a0010c992b63e4633c4f5f39ed367a23c16f24029816b1703"
     }
   }
 }
