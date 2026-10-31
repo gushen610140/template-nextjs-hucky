@@ -9,6 +9,19 @@ import { type LogtoNextConfig, UserScope } from "@logto/next";
  * 注意: 本文件包含 appSecret / cookieSecret, 只能在服务端使用。
  * 不要加 "use client", 也不要被客户端组件直接 import。
  */
+/**
+ * Logto 回调路径。
+ *
+ * SDK 默认使用 `${baseUrl}/callback`, 这里必须与 app/api/auth/callback/route.ts
+ * 以及 Logto 控制台注册的 Redirect URI 保持一致。
+ */
+export const LOGTO_CALLBACK_PATH = "/api/auth/callback";
+
+/** Logto 控制台注册的完整 Redirect URI */
+export function getLogtoRedirectUri(): string {
+  return new URL(LOGTO_CALLBACK_PATH, logtoConfig.baseUrl).toString();
+}
+
 export const logtoConfig: LogtoNextConfig = {
   endpoint: process.env.LOGTO_ENDPOINT ?? "",
   appId: process.env.LOGTO_APP_ID ?? "",

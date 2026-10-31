@@ -25,7 +25,7 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 | `lib/session.ts` | 使用 Prisma 创建、查询和删除会话 |
 | `lib/logto-user.ts` | 把 Logto 身份映射到本地 `User` 表 |
 | `app/api/auth/` | 注册、登录、登出和当前用户接口 |
-| `app/callback/route.ts` | Logto 登录回调，写入本地用户和会话 |
+| `app/api/auth/callback/route.ts` | Logto 登录回调，写入本地用户和会话 |
 
 `lib/generated/prisma` 不在版本控制中。每次全新克隆、切换分支或修改 schema 后，都需要重新生成客户端。
 

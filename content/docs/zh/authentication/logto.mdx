@@ -21,10 +21,10 @@ LOGTO_COOKIE_SECRET=a-long-random-string
 - Redirect URI 应配置为：
 
 ```text
-http://localhost:3000/callback
+http://localhost:3000/api/auth/callback
 ```
 
-生产环境换成实际域名，并确保 `/callback` 不需要语言前缀。
+生产环境换成实际域名。回调位于 `/api` 下，不经过 next-intl 中间件，因此不需要语言前缀。
 
 ## 登录流程
 
@@ -32,7 +32,7 @@ http://localhost:3000/callback
 2. 浏览器访问 `/api/auth/logto?next=...`。
 3. `next` 被写入短期的 `logto_next` httpOnly Cookie。
 4. Logto SDK 的 `signIn` 重定向到 Logto 授权页。
-5. Logto 回调到 `/callback`。
+5. Logto 回调到 `/api/auth/callback`。
 6. `handleSignIn` 用授权码换取 token。
 7. `getLogtoContext` 读取 claims。
 8. `upsertLogtoUser` 把 claims 映射到本地 `User`。
@@ -50,8 +50,8 @@ sequenceDiagram
   B->>App: GET /api/auth/logto?next=/zh/dashboard
   App->>B: 302 Logto 授权页 + logto_next Cookie
   B->>L: 登录
-  L->>B: 302 /callback?code=...
-  B->>App: GET /callback
+  L->>B: 302 /api/auth/callback?code=...
+  B->>App: GET /api/auth/callback
   App->>L: 用 code 换 token
   L-->>App: ID token / claims
   App->>DB: findUnique(email) / update / create
@@ -103,7 +103,7 @@ sequenceDiagram
 
 ## 调试清单
 
-- Logto 控制台的 Redirect URI 是否是 `<LOGTO_BASE_URL>/callback`。
+- Logto 控制台的 Redirect URI 是否是 `<LOGTO_BASE_URL>/api/auth/callback`。
 - `LOGTO_BASE_URL` 是否与浏览器实际访问地址一致。
 - `LOGTO_COOKIE_SECRET` 是否至少 32 个字符。
 - 用户是否真的拥有已验证邮箱。

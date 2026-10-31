@@ -25,7 +25,7 @@ The database is PostgreSQL, the driver adapter is `@prisma/adapter-pg`, and the 
 | `lib/session.ts` | Creates, reads, and deletes sessions with Prisma |
 | `lib/logto-user.ts` | Maps a Logto identity to the local `User` table |
 | `app/api/auth/` | Register, login, logout, and current-user endpoints |
-| `app/callback/route.ts` | Logto callback that writes the local user and session |
+| `app/api/auth/callback/route.ts` | Logto callback that writes the local user and session |
 
 `lib/generated/prisma` is not tracked. Regenerate it after a fresh clone, a branch switch, or any schema change.
 

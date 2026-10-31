@@ -19,7 +19,7 @@ flowchart TB
   Login["/api/auth/login"]
   Register["/api/auth/register"]
   LogtoStart["/api/auth/logto"]
-  Callback["/callback"]
+  Callback["/api/auth/callback"]
   Session["本地 Session<br/>httpOnly Cookie"]
   DB[("PostgreSQL<br/>User / Session / RBAC")]
 
@@ -100,7 +100,7 @@ sequenceDiagram
 | `app/api/auth/logout/route.ts` | 删除本地会话并清理 Cookie |
 | `app/api/auth/me/route.ts` | 返回当前登录用户 |
 | `app/api/auth/logto/route.ts` | 发起 Logto 登录 |
-| `app/callback/route.ts` | Logto 回调、映射用户、创建本地会话 |
+| `app/api/auth/callback/route.ts` | Logto 回调、映射用户、创建本地会话 |
 | `lib/logto-user.ts` | Logto claims → 本地 User |
 | `lib/session.ts` | Session 创建、校验、删除 |
 | `lib/prisma.ts` | Prisma Client 单例 |

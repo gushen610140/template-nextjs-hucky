@@ -2,7 +2,7 @@ import { getLogtoContext, handleSignIn } from "@logto/next/server-actions";
 import { cookies } from "next/headers";
 import { type NextRequest, NextResponse } from "next/server";
 import { routing } from "@/i18n/routing";
-import { logtoConfig } from "@/lib/logto";
+import { LOGTO_CALLBACK_PATH, logtoConfig } from "@/lib/logto";
 import { upsertLogtoUser } from "@/lib/logto-user";
 import {
   createSession,
@@ -36,7 +36,15 @@ function loginErrorUrl(): URL {
  */
 export async function GET(request: NextRequest) {
   try {
-    await handleSignIn(logtoConfig, request.nextUrl.searchParams);
+    // 必须显式传入新的回调 URL: SDK 默认值是 `${baseUrl}/callback`,
+    // 而 handleSignInCallback 会校验 callbackUri 与 signIn 时的 redirectUri 一致。
+    await handleSignIn(
+      logtoConfig,
+      new URL(
+        `${LOGTO_CALLBACK_PATH}?${request.nextUrl.searchParams.toString()}`,
+        logtoConfig.baseUrl,
+      ),
+    );
   } catch (error) {
     console.error("Logto sign-in callback failed:", error);
     return NextResponse.redirect(loginErrorUrl());

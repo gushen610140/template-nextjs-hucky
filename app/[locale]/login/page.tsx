@@ -38,7 +38,7 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [logtoError, setLogtoError] = useState(false);
 
-  // /callback 失败时会带 ?error=logto 回到登录页
+  // /api/auth/callback 失败时会带 ?error=logto 回到登录页
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setLogtoError(params.get("error") === "logto");

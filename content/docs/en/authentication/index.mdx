@@ -19,7 +19,7 @@ flowchart TB
   Login["/api/auth/login"]
   Register["/api/auth/register"]
   LogtoStart["/api/auth/logto"]
-  Callback["/callback"]
+  Callback["/api/auth/callback"]
   Session["Local session<br/>httpOnly Cookie"]
   DB[("PostgreSQL<br/>User / Session / RBAC")]
 
@@ -100,7 +100,7 @@ sequenceDiagram
 | `app/api/auth/logout/route.ts` | Delete local session and clear cookies |
 | `app/api/auth/me/route.ts` | Return the current user |
 | `app/api/auth/logto/route.ts` | Start Logto sign-in |
-| `app/callback/route.ts` | Logto callback, user mapping, local session |
+| `app/api/auth/callback/route.ts` | Logto callback, user mapping, local session |
 | `lib/logto-user.ts` | Logto claims → local User |
 | `lib/session.ts` | Create, validate, delete sessions |
 | `lib/prisma.ts` | Prisma Client singleton |

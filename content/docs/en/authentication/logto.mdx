@@ -21,10 +21,10 @@ LOGTO_COOKIE_SECRET=a-long-random-string
 - Register this Redirect URI:
 
 ```text
-http://localhost:3000/callback
+http://localhost:3000/api/auth/callback
 ```
 
-Use the production domain in production, and keep `/callback` outside the locale prefix.
+Use the production domain in production. The callback lives under `/api`, so it bypasses the next-intl middleware and needs no locale prefix.
 
 ## Sign-in flow
 
@@ -32,7 +32,7 @@ Use the production domain in production, and keep `/callback` outside the locale
 2. The browser goes to `/api/auth/logto?next=...`.
 3. `next` is stored in a short-lived `logto_next` httpOnly cookie.
 4. The Logto SDK redirects to the authorization page.
-5. Logto redirects back to `/callback`.
+5. Logto redirects back to `/api/auth/callback`.
 6. `handleSignIn` exchanges the code for tokens.
 7. `getLogtoContext` reads the claims.
 8. `upsertLogtoUser` maps claims to a local `User`.
@@ -50,8 +50,8 @@ sequenceDiagram
   B->>App: GET /api/auth/logto?next=/zh/dashboard
   App->>B: 302 Logto + logto_next Cookie
   B->>L: Sign in
-  L->>B: 302 /callback?code=...
-  B->>App: GET /callback
+  L->>B: 302 /api/auth/callback?code=...
+  B->>App: GET /api/auth/callback
   App->>L: Exchange code for tokens
   L-->>App: ID token / claims
   App->>DB: findUnique(email) / update / create
@@ -103,7 +103,7 @@ If the user still has a Logto SSO session, clicking Logto again may return witho
 
 ## Debug checklist
 
-- Is the Redirect URI in Logto exactly `<LOGTO_BASE_URL>/callback`?
+- Is the Redirect URI in Logto exactly `<LOGTO_BASE_URL>/api/auth/callback`?
 - Does `LOGTO_BASE_URL` match the browser URL?
 - Is `LOGTO_COOKIE_SECRET` at least 32 characters?
 - Does the user actually have a verified email?
