@@ -192,27 +192,28 @@ export default function RegisterPage() {
                 className="text-xs font-normal tracking-normal normal-case"
               >
                 {t("agreeTerms")}
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <button
-                      type="button"
-                      className="ml-0.5 cursor-pointer underline underline-offset-2 hover:text-foreground"
-                    >
-                      {t("termsOfService")}
-                    </button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>{t("termsTitle")}</DialogTitle>
-                      <DialogDescription>{t("termsP1")}</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-3 text-sm text-muted-foreground">
-                      <p>{t("termsP2")}</p>
-                      <p>{t("termsP3")}</p>
-                    </div>
-                  </DialogContent>
-                </Dialog>
               </Label>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto p-0 text-xs font-normal tracking-normal normal-case"
+                  >
+                    {t("termsOfService")}
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>{t("termsTitle")}</DialogTitle>
+                    <DialogDescription>{t("termsP1")}</DialogDescription>
+                  </DialogHeader>
+                  <div className="flex flex-col gap-3 text-sm text-muted-foreground">
+                    <p>{t("termsP2")}</p>
+                    <p>{t("termsP3")}</p>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
             {errors.agree && (
               <p className="-mt-3 text-xs text-destructive">{errors.agree}</p>

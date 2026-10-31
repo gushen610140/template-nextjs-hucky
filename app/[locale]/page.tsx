@@ -73,7 +73,7 @@ export default async function Home() {
       <section className="mx-auto flex w-full max-w-6xl flex-1 flex-col items-center justify-center px-6 py-24 text-center">
         <Badge
           variant="outline"
-          className="rounded-full border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          className="rounded-full border-primary/30 bg-primary/10 text-primary"
         >
           {t("heroBadge")}
         </Badge>
@@ -94,7 +94,10 @@ export default async function Home() {
               className="flex items-center gap-2"
             >
               {t("heroCta")}
-              <ArrowRight className="h-4 w-4 transition-transform group-hover/button:translate-x-1" />
+              <ArrowRight
+                data-icon="inline-end"
+                className="transition-transform group-hover/button:translate-x-1"
+              />
             </Link>
           </Button>
           <Button
@@ -117,8 +120,8 @@ export default async function Home() {
           {features.map(({ icon: Icon, title, desc }) => (
             <Card key={title} className="[--card-spacing:--spacing(6)]">
               <CardContent className="relative flex items-start gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15">
-                  <Icon className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <Icon className="size-5 text-primary" />
                 </div>
                 <div>
                   <CardTitle className="text-lg font-semibold text-foreground">
@@ -170,7 +173,7 @@ export default async function Home() {
             className="flex items-center gap-2"
           >
             {t("ctaButton")}
-            <ArrowRight className="h-5 w-5" />
+            <ArrowRight data-icon="inline-end" />
           </Link>
         </Button>
       </section>

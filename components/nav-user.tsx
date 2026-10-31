@@ -1,14 +1,14 @@
 "use client";
 
 import {
-  RiArrowUpDownLine,
-  RiBankCardLine,
-  RiCheckboxCircleLine,
-  RiLoginBoxLine,
-  RiLogoutBoxLine,
-  RiNotificationLine,
-  RiSparklingLine,
-} from "@remixicon/react";
+  Bell,
+  ChevronsUpDown,
+  CircleCheck,
+  CreditCard,
+  LogIn,
+  LogOut,
+  Sparkles,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -47,7 +47,7 @@ export function NavUser() {
             className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground cursor-pointer"
           >
             <div className="flex size-8 items-center justify-center rounded-lg bg-sidebar-accent">
-              <RiLoginBoxLine className="size-4" />
+              <LogIn className="size-4" />
             </div>
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-medium">Log in</span>
@@ -87,7 +87,7 @@ export function NavUser() {
                 </span>
                 <span className="truncate text-xs">{user?.email ?? ""}</span>
               </div>
-              <RiArrowUpDownLine className="ml-auto size-4" />
+              <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -115,28 +115,28 @@ export function NavUser() {
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem>
-                <RiSparklingLine />
+                <Sparkles />
                 {t("upgrade")}
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem onClick={() => {}}>
-                <RiCheckboxCircleLine />
+                <CircleCheck />
                 {t("account")}
               </DropdownMenuItem>
               <DropdownMenuItem>
-                <RiBankCardLine />
+                <CreditCard />
                 {t("billing")}
               </DropdownMenuItem>
               <DropdownMenuItem>
-                <RiNotificationLine />
+                <Bell />
                 {t("notifications")}
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => signOut()}>
-              <RiLogoutBoxLine />
+              <LogOut />
               {t("logout")}
             </DropdownMenuItem>
           </DropdownMenuContent>

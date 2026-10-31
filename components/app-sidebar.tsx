@@ -1,17 +1,18 @@
 "use client";
 
 import {
-  RiBookOpenLine,
-  RiCommandLine,
-  RiCropLine,
-  RiLifebuoyLine,
-  RiMapLine,
-  RiPieChartLine,
-  RiRobotLine,
-  RiSendPlaneLine,
-  RiSettingsLine,
-  RiTerminalBoxLine,
-} from "@remixicon/react";
+  BookOpen,
+  Bot,
+  Command,
+  LifeBuoy,
+  Map as MapIcon,
+  PieChart,
+  Send,
+  Settings,
+  Shapes,
+  SquareTerminal,
+} from "lucide-react";
+import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import type * as React from "react";
 import { NavMain } from "@/components/nav-main";
@@ -37,7 +38,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       {
         title: t("playground"),
         url: "#",
-        icon: <RiTerminalBoxLine />,
+        icon: <SquareTerminal />,
         isActive: true,
         items: [
           { title: t("history"), url: "#" },
@@ -48,7 +49,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       {
         title: t("models"),
         url: "#",
-        icon: <RiRobotLine />,
+        icon: <Bot />,
         items: [
           { title: t("genesis"), url: "#" },
           { title: t("explorer"), url: "#" },
@@ -58,7 +59,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       {
         title: t("documentation"),
         url: "#",
-        icon: <RiBookOpenLine />,
+        icon: <BookOpen />,
         items: [
           { title: t("introduction"), url: "#" },
           { title: t("getStarted"), url: "#" },
@@ -69,7 +70,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       {
         title: t("settings"),
         url: "#",
-        icon: <RiSettingsLine />,
+        icon: <Settings />,
         items: [
           { title: t("general"), url: "#" },
           { title: t("team"), url: "#" },
@@ -79,13 +80,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       },
     ],
     navSecondary: [
-      { title: t("support"), url: "#", icon: <RiLifebuoyLine /> },
-      { title: t("feedback"), url: "#", icon: <RiSendPlaneLine /> },
+      { title: t("support"), url: "#", icon: <LifeBuoy /> },
+      { title: t("feedback"), url: "#", icon: <Send /> },
     ],
     projects: [
-      { name: t("designEngineering"), url: "#", icon: <RiCropLine /> },
-      { name: t("salesMarketing"), url: "#", icon: <RiPieChartLine /> },
-      { name: t("travel"), url: "#", icon: <RiMapLine /> },
+      { name: t("designEngineering"), url: "#", icon: <Shapes /> },
+      { name: t("salesMarketing"), url: "#", icon: <PieChart /> },
+      { name: t("travel"), url: "#", icon: <MapIcon /> },
     ],
   };
 
@@ -95,15 +96,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <a href={`/${locale}/dashboard`}>
+              <Link href={`/${locale}/dashboard`}>
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  <RiCommandLine className="size-4" />
+                  <Command className="size-4" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{t("brandName")}</span>
                   <span className="truncate text-xs">{t("brandSlogan")}</span>
                 </div>
-              </a>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

@@ -1,17 +1,19 @@
 "use client";
 
-import { Check, ChevronDown, Languages } from "lucide-react";
+import { ChevronDown, Languages } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useLocale } from "next-intl";
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { routing } from "@/i18n/routing";
-import { cn } from "@/lib/utils";
 
 const LANGUAGE_LABELS: Record<string, string> = {
   zh: "简体中文",
@@ -22,10 +24,8 @@ export function DocsLanguageSwitcher() {
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
 
   function switchLocale(nextLocale: string) {
-    setOpen(false);
     if (nextLocale === locale) return;
 
     const nextPath = pathname.replace(
@@ -36,8 +36,8 @@ export function DocsLanguageSwitcher() {
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
         <Button
           type="button"
           variant="ghost"
@@ -45,31 +45,26 @@ export function DocsLanguageSwitcher() {
           className="gap-1.5 px-2.5"
           aria-label={locale === "zh" ? "切换语言" : "Change language"}
         >
-          <Languages className="size-4" />
+          <Languages />
           <span className="hidden sm:inline">
             {LANGUAGE_LABELS[locale] ?? locale}
           </span>
-          <ChevronDown className="size-3.5 text-muted-foreground" />
+          <ChevronDown className="text-muted-foreground" />
         </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-44 p-1">
-        <div className="grid gap-0.5">
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuLabel>
+          {locale === "zh" ? "语言" : "Language"}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuRadioGroup value={locale} onValueChange={switchLocale}>
           {routing.locales.map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => switchLocale(item)}
-              className={cn(
-                "flex w-full items-center gap-2 px-2.5 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
-                item === locale && "bg-accent text-accent-foreground",
-              )}
-            >
-              <span>{LANGUAGE_LABELS[item] ?? item}</span>
-              {item === locale && <Check className="ml-auto size-4" />}
-            </button>
+            <DropdownMenuRadioItem key={item} value={item}>
+              {LANGUAGE_LABELS[item] ?? item}
+            </DropdownMenuRadioItem>
           ))}
-        </div>
-      </PopoverContent>
-    </Popover>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

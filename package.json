@@ -10,14 +10,11 @@
     "format": "biome format --write"
   },
   "dependencies": {
-    "@hugeicons/core-free-icons": "^4.2.0",
-    "@hugeicons/react": "^1.1.6",
     "@logto/next": "^5.0.2",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
-    "@remixicon/react": "^4.9.0",
     "@types/three": "^0.184.1",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",

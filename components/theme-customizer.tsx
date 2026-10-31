@@ -8,17 +8,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   BASE_COLORS,
+  type BaseColor,
   getBasePreview,
   getPrimaryPreview,
   PRIMARY_COLORS,
+  type PrimaryColor,
   RADIUS_PRESETS,
   type RadiusPreset,
   SHADOW_PRESETS,
   type ShadowPreset,
 } from "@/lib/theme-presets";
-import { cn } from "@/lib/utils";
 import { useThemeCustomizer } from "@/providers/theme-customizer-provider";
 
 const RADIUS_OPTIONS = Object.keys(RADIUS_PRESETS) as RadiusPreset[];
@@ -39,11 +41,11 @@ export function ThemeCustomizer() {
           aria-label={t("open")}
           title={t("open")}
         >
-          <Palette className="size-4" />
+          <Palette data-icon="inline-start" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80">
-        <div className="max-h-[70vh] space-y-5 overflow-y-auto p-1">
+        <div className="flex max-h-[70vh] flex-col gap-5 overflow-y-auto p-1">
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm font-semibold">{t("title")}</span>
             <Button
@@ -52,99 +54,123 @@ export function ThemeCustomizer() {
               size="xs"
               onClick={resetCustomization}
             >
-              <RotateCcw className="size-3" />
+              <RotateCcw data-icon="inline-start" />
               {t("reset")}
             </Button>
           </div>
 
-          <section className="space-y-2">
+          <section className="flex flex-col gap-2">
             <p className="text-xs font-medium text-muted-foreground">
               {t("baseColor")}
             </p>
-            <div className="flex flex-wrap gap-2">
+            <ToggleGroup
+              type="single"
+              value={customization.baseColor}
+              onValueChange={(value) => {
+                if (value) {
+                  updateCustomization({ baseColor: value as BaseColor });
+                }
+              }}
+              spacing={2}
+              className="flex flex-wrap"
+            >
               {BASE_COLORS.map((color) => (
-                <button
+                <ToggleGroupItem
                   key={color}
-                  type="button"
+                  value={color}
                   aria-label={t(`base.${color}`)}
                   title={t(`base.${color}`)}
-                  onClick={() => updateCustomization({ baseColor: color })}
-                  className={cn(
-                    "size-7 rounded-full border border-border/70 transition-transform hover:scale-110",
-                    customization.baseColor === color &&
-                      "ring-2 ring-ring ring-offset-2 ring-offset-popover",
-                  )}
+                  className="size-7 min-w-7 rounded-full border border-border/70 p-0 shadow-none transition-transform hover:scale-110 data-[state=on]:ring-2 data-[state=on]:ring-ring data-[state=on]:ring-offset-2 data-[state=on]:ring-offset-popover"
                   style={{ backgroundColor: getBasePreview(color) }}
                 />
               ))}
-            </div>
+            </ToggleGroup>
           </section>
 
-          <section className="space-y-2">
+          <section className="flex flex-col gap-2">
             <p className="text-xs font-medium text-muted-foreground">
               {t("primaryColor")}
             </p>
-            <div className="flex flex-wrap gap-2">
+            <ToggleGroup
+              type="single"
+              value={customization.primaryColor}
+              onValueChange={(value) => {
+                if (value) {
+                  updateCustomization({ primaryColor: value as PrimaryColor });
+                }
+              }}
+              spacing={2}
+              className="flex flex-wrap"
+            >
               {PRIMARY_COLORS.map((color) => (
-                <button
+                <ToggleGroupItem
                   key={color}
-                  type="button"
+                  value={color}
                   aria-label={t(`primary.${color}`)}
                   title={t(`primary.${color}`)}
-                  onClick={() => updateCustomization({ primaryColor: color })}
-                  className={cn(
-                    "size-7 rounded-full border border-border/70 transition-transform hover:scale-110",
-                    customization.primaryColor === color &&
-                      "ring-2 ring-ring ring-offset-2 ring-offset-popover",
-                  )}
+                  className="size-7 min-w-7 rounded-full border border-border/70 p-0 shadow-none transition-transform hover:scale-110 data-[state=on]:ring-2 data-[state=on]:ring-ring data-[state=on]:ring-offset-2 data-[state=on]:ring-offset-popover"
                   style={{ backgroundColor: getPrimaryPreview(color) }}
                 />
               ))}
-            </div>
+            </ToggleGroup>
           </section>
 
-          <section className="space-y-2">
+          <section className="flex flex-col gap-2">
             <p className="text-xs font-medium text-muted-foreground">
               {t("radius")}
             </p>
-            <div className="grid grid-cols-3 gap-1.5">
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              spacing={0}
+              value={customization.radius}
+              onValueChange={(value) => {
+                if (value) {
+                  updateCustomization({ radius: value as RadiusPreset });
+                }
+              }}
+              className="grid w-full grid-cols-3 gap-1.5"
+            >
               {RADIUS_OPTIONS.map((radius) => (
-                <button
+                <ToggleGroupItem
                   key={radius}
-                  type="button"
-                  onClick={() => updateCustomization({ radius })}
-                  className={cn(
-                    "border border-border px-2 py-1.5 text-xs transition-colors hover:bg-accent hover:text-accent-foreground",
-                    customization.radius === radius &&
-                      "border-primary bg-accent text-accent-foreground",
-                  )}
+                  value={radius}
+                  className="h-auto w-full px-2 py-1.5 text-xs font-normal tracking-normal normal-case data-[state=on]:border-primary data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
                 >
                   {t(`radiusPresets.${radius}`)}
-                </button>
+                </ToggleGroupItem>
               ))}
-            </div>
+            </ToggleGroup>
           </section>
 
-          <section className="space-y-2">
+          <section className="flex flex-col gap-2">
             <p className="text-xs font-medium text-muted-foreground">
               {t("shadow")}
             </p>
-            <div className="grid grid-cols-4 gap-1.5">
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              spacing={0}
+              value={customization.shadow}
+              onValueChange={(value) => {
+                if (value) {
+                  updateCustomization({ shadow: value as ShadowPreset });
+                }
+              }}
+              className="grid w-full grid-cols-4 gap-1.5"
+            >
               {SHADOW_OPTIONS.map((shadow) => (
-                <button
+                <ToggleGroupItem
                   key={shadow}
-                  type="button"
-                  onClick={() => updateCustomization({ shadow })}
-                  className={cn(
-                    "border border-border px-2 py-1.5 text-xs transition-colors hover:bg-accent hover:text-accent-foreground",
-                    customization.shadow === shadow &&
-                      "border-primary bg-accent text-accent-foreground",
-                  )}
+                  value={shadow}
+                  className="h-auto w-full px-2 py-1.5 text-xs font-normal tracking-normal normal-case data-[state=on]:border-primary data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
                 >
                   {t(`shadowPresets.${shadow}`)}
-                </button>
+                </ToggleGroupItem>
               ))}
-            </div>
+            </ToggleGroup>
           </section>
         </div>
       </PopoverContent>
