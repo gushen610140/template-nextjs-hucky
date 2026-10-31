@@ -10,14 +10,20 @@ description: 全局滚动条重置、Lenis 平滑滚动，以及文档页为什�
 `app/[locale]/globals.css` 在 `@layer base` 中重写了浏览器默认滚动条：
 
 ```css
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb-hover) transparent;
+/* 仅 Firefox 生效，避免 Chromium 退回原生滚动条 */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb-hover) transparent;
+  }
 }
 
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
+}
+::-webkit-scrollbar-button {
+  display: none;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -33,12 +39,18 @@ description: 全局滚动条重置、Lenis 平滑滚动，以及文档页为什�
 
 | 规则 | 作用 |
 | --- | --- |
+| `@supports not selector(::-webkit-scrollbar)` | 标准属性只在 Firefox 生效 |
 | `scrollbar-width: thin` | Firefox 下使用细滚动条 |
 | `scrollbar-color` | Firefox 的轨道与滑块配色 |
 | `::-webkit-scrollbar` 4px | Chromium / Safari 下统一为 4px |
+| `::-webkit-scrollbar-button` | 隐藏顶部 / 底部箭头，只保留滑块 |
 | 透明 track | 滚动条不额外占视觉空间 |
 | `border-radius: 9999px` | 滑块为胶囊形 |
 | `transition` | 悬停时颜色平滑过渡 |
+
+<Callout title="为什么要用 @supports 包住标准属性">
+Chromium 121+ 只要检测到 `scrollbar-width` 或 `scrollbar-color`，就会整体忽略 `::-webkit-scrollbar-*`，退回系统原生滚动条；在 Windows 上这条原生滚动条顶部和底部会带上下箭头。因此标准属性只交给 Firefox，Chromium / Safari 继续走 WebKit 伪元素，并用 `::-webkit-scrollbar-button { display: none }` 显式隐藏箭头。
+</Callout>
 
 滑块默认完全透明（浅色主题是 `oklch(0.72 0 0 / 0%)`），只有悬停或拖动时才显示：
 

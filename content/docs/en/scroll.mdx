@@ -10,14 +10,20 @@ Scrolling is handled at two levels: appearance through scrollbar styles, and beh
 `app/[locale]/globals.css` overrides the browser scrollbar inside `@layer base`:
 
 ```css
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb-hover) transparent;
+/* Firefox only, so Chromium keeps the custom scrollbar */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb-hover) transparent;
+  }
 }
 
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
+}
+::-webkit-scrollbar-button {
+  display: none;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -33,12 +39,18 @@ Key points:
 
 | Rule | Effect |
 | --- | --- |
+| `@supports not selector(::-webkit-scrollbar)` | Standard properties only apply in Firefox |
 | `scrollbar-width: thin` | Thin scrollbars in Firefox |
 | `scrollbar-color` | Firefox track and thumb colors |
 | `::-webkit-scrollbar` 4px | Consistent 4px size in Chromium / Safari |
+| `::-webkit-scrollbar-button` | Removes the top / bottom arrows, leaving only the thumb |
 | Transparent track | No extra visual weight |
 | `border-radius: 9999px` | Pill-shaped thumb |
 | `transition` | Smooth color change on hover |
+
+<Callout title="Why the standard properties are wrapped in @supports">
+Chromium 121+ ignores every `::-webkit-scrollbar-*` rule as soon as it detects `scrollbar-width` or `scrollbar-color`, falling back to the OS scrollbar, which on Windows has up / down arrow buttons at both ends. Scoping those standard properties to Firefox keeps the custom scrollbar in Chromium / Safari, where `::-webkit-scrollbar-button { display: none }` explicitly hides the arrows.
+</Callout>
 
 The thumb is fully transparent at rest (light theme uses `oklch(0.72 0 0 / 0%)`) and only appears on hover or drag:
 
