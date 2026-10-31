@@ -106,7 +106,7 @@
     "introSubtitle": "一个用空间组织的作品集。移动、环顾，然后与房间里的东西对话。",
     "enter": "点击进入",
     "hintMove": "WASD 移动 · 鼠标环顾 · E / 点击交互",
-    "hintResume": "点击继续",
+    "resume": "接入",
     "releaseCursor": "释放鼠标",
     "skip": "跳过，直接进入控制台",
     "terminalName": "控制台",

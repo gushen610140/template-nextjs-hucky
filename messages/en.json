@@ -106,7 +106,7 @@
     "introSubtitle": "A portfolio organized as a room. Move, look around, and talk to the objects inside.",
     "enter": "Click to enter",
     "hintMove": "WASD to move · Mouse to look · E / click to interact",
-    "hintResume": "Click to resume",
+    "resume": "Connect",
     "releaseCursor": "Release cursor",
     "skip": "Skip to dashboard",
     "terminalName": "Console",

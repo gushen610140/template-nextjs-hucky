@@ -89,7 +89,13 @@ export function LandingExperience() {
   const handleDialogOpenChange = useCallback(
     (open: boolean) => {
       if (open) return;
-      if (modeRef.current === "panel") setMode("paused");
+      if (modeRef.current !== "panel") return;
+
+      // Closing the panel (X, backdrop, or Esc) goes straight back into the
+      // room. The close interaction usually carries user activation, so the
+      // pointer lock request can be made immediately instead of asking again.
+      setMode("explore");
+      controlsRef.current?.lock();
     },
     [setMode],
   );
@@ -176,6 +182,20 @@ export function LandingExperience() {
     return () => document.removeEventListener("click", swallowClick, true);
   }, []);
 
+  // If a resume attempt is rejected (for example when Esc closed the panel and
+  // the browser withholds user activation), fall back to the resumed overlay.
+  useEffect(() => {
+    const onPointerLockError = () => {
+      if (modeRef.current === "explore" && !document.pointerLockElement) {
+        setMode("paused");
+      }
+    };
+
+    document.addEventListener("pointerlockerror", onPointerLockError);
+    return () =>
+      document.removeEventListener("pointerlockerror", onPointerLockError);
+  }, [setMode]);
+
   useEffect(() => {
     const coarse = window.matchMedia("(hover: none) and (pointer: coarse)");
     const mobile = coarse.matches || window.innerWidth < 768;
@@ -247,9 +267,11 @@ export function LandingExperience() {
             />
           </div>
 
-          <LandingHud mode={mode} hover={hover} onResume={resume} />
+          <LandingHud mode={mode} hover={hover} />
 
-          {mode === "intro" && <LandingIntro onEnter={resume} onSkip={skip} />}
+          {(mode === "intro" || mode === "paused") && (
+            <LandingIntro variant={mode} onEnter={resume} onSkip={skip} />
+          )}
 
           <SettingsDialog
             open={mode === "panel"}

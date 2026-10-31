@@ -10,32 +10,23 @@ import { cn } from "@/lib/utils";
 export function LandingHud({
   mode,
   hover,
-  onResume,
 }: {
   mode: LandingMode;
   hover: HoverInfo;
-  onResume: () => void;
 }) {
   const t = useTranslations("Landing");
 
   return (
     <div className="pointer-events-none absolute inset-0 z-30">
-      {mode !== "intro" && mode !== "leaving" && (
-        <div className="absolute top-6 left-6 flex items-center gap-3">
-          <span className="text-xs font-semibold tracking-[0.35em] uppercase">
-            Hucky
-          </span>
-          <span
-            className={cn(
-              "size-1.5 rounded-full",
-              mode === "explore" ? "bg-foreground/70" : "bg-foreground/20",
-            )}
-          />
-        </div>
-      )}
-
       {mode === "explore" && (
         <>
+          <div className="absolute top-6 left-6 flex items-center gap-3">
+            <span className="text-xs font-semibold tracking-[0.35em] uppercase">
+              Hucky
+            </span>
+            <span className="size-1.5 rounded-full bg-foreground/70" />
+          </div>
+
           <div className="absolute top-6 right-6 text-[10px] tracking-[0.3em] text-muted-foreground uppercase">
             ESC · {t("releaseCursor")}
           </div>
@@ -73,44 +64,32 @@ export function LandingHud({
           )}
         </>
       )}
-
-      {mode === "paused" && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            onClick={onResume}
-            className="pointer-events-auto rounded-full bg-background/80 px-6 tracking-normal normal-case backdrop-blur"
-          >
-            {t("hintResume")}
-            <ArrowRight data-icon="inline-end" />
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
 
 export function LandingIntro({
+  variant,
   onEnter,
   onSkip,
 }: {
+  variant: "intro" | "paused";
   onEnter: () => void;
   onSkip: () => void;
 }) {
   const t = useTranslations("Landing");
+  const isIntro = variant === "intro";
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center bg-gradient-to-b from-background/85 via-background/45 to-background/85 px-6 text-center">
+    <div className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center bg-gradient-to-b from-background/85 via-background/60 to-background/85 px-6 text-center">
       <p className="text-[10px] tracking-[0.6em] text-muted-foreground uppercase">
         Hucky · Space 01
       </p>
       <h1 className="mt-6 max-w-2xl font-heading text-5xl leading-none tracking-tight text-balance md:text-7xl">
-        {t("introTitle")}
+        {isIntro ? t("introTitle") : "Hucky"}
       </h1>
-      <p className="mt-5 max-w-md text-sm leading-relaxed text-muted-foreground">
-        {t("introSubtitle")}
+      <p className="mt-5 max-w-md text-sm leading-relaxed text-foreground/70">
+        {isIntro ? t("introSubtitle") : t("hintMove")}
       </p>
       <Button
         type="button"
@@ -118,16 +97,21 @@ export function LandingIntro({
         onClick={onEnter}
         className="pointer-events-auto mt-9 rounded-full bg-foreground px-7 tracking-normal text-background normal-case hover:bg-foreground/90"
       >
-        {t("enter")}
-        <ArrowRight data-icon="inline-end" />
+        {isIntro ? t("enter") : t("resume")}
+        {isIntro && <ArrowRight data-icon="inline-end" />}
       </Button>
-      <p className="mt-6 text-[11px] tracking-[0.3em] text-muted-foreground uppercase">
-        {t("hintMove")}
-      </p>
+      {isIntro && (
+        <p className="mt-6 text-[11px] tracking-[0.3em] text-muted-foreground uppercase">
+          {t("hintMove")}
+        </p>
+      )}
       <button
         type="button"
         onClick={onSkip}
-        className="pointer-events-auto mt-12 text-xs text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
+        className={cn(
+          "pointer-events-auto text-xs text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground",
+          isIntro ? "mt-12" : "mt-10",
+        )}
       >
         {t("skip")}
       </button>

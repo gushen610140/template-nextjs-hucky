@@ -1,34 +1,7 @@
 "use client";
 
-import { useFrame } from "@react-three/fiber";
-import { useRef } from "react";
-import type * as THREE from "three";
 import { ROOM } from "@/components/landing/scene/layout";
 import type { ScenePalette } from "@/components/landing/scene/palette";
-
-function FloatingSphere({
-  color,
-  position,
-}: {
-  color: string;
-  position: [number, number, number];
-}) {
-  const ref = useRef<THREE.Mesh>(null);
-
-  useFrame((state) => {
-    if (!ref.current) return;
-    ref.current.position.y =
-      position[1] + Math.sin(state.clock.elapsedTime * 0.6) * 0.12;
-    ref.current.rotation.y = state.clock.elapsedTime * 0.15;
-  });
-
-  return (
-    <mesh ref={ref} position={position}>
-      <sphereGeometry args={[0.42, 48, 48]} />
-      <meshStandardMaterial color={color} roughness={0.35} />
-    </mesh>
-  );
-}
 
 export function Room({ palette }: { palette: ScenePalette }) {
   return (
@@ -100,8 +73,6 @@ export function Room({ palette }: { palette: ScenePalette }) {
         <boxGeometry args={[0.08, 3.2, 1.5]} />
         <meshStandardMaterial color={palette.surface} roughness={0.8} />
       </mesh>
-
-      <FloatingSphere color={palette.accent} position={[-4.7, 2.5, -5.4]} />
     </group>
   );
 }
