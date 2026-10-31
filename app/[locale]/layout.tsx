@@ -8,6 +8,7 @@ import { AuthProvider } from "@/providers/auth-provider";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { CurtainProvider } from "@/providers/curtain-provider";
 import { LenisProvider } from "@/providers/lenis-provider";
 import { ThemeCustomizerProvider } from "@/providers/theme-customizer-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
@@ -71,7 +72,9 @@ export default async function RootLayout({
             <LenisProvider>
               <NextIntlClientProvider messages={messages}>
                 <TooltipProvider>
-                  <AuthProvider>{children}</AuthProvider>
+                  <CurtainProvider>
+                    <AuthProvider>{children}</AuthProvider>
+                  </CurtainProvider>
                 </TooltipProvider>
               </NextIntlClientProvider>
             </LenisProvider>

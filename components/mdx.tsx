@@ -10,7 +10,9 @@ export function getMDXComponents(components?: MDXComponents) {
     Callout: DocsCallout,
     Mermaid,
     ...components,
-  } satisfies MDXComponents;
+    // fumadocs 的默认组件表里 `log` 被推断为 Component<never>，与 mdx 的
+    // 索引签名冲突；这里只做类型收敛，不影响运行时。
+  } as MDXComponents;
 }
 
 export const useMDXComponents = getMDXComponents;
