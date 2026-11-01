@@ -13,8 +13,7 @@ The home and dashboard top bars expose a theme configuration button (palette ico
 | Primary color | Emerald, Blue, Violet, Rose, Orange, Red, Yellow, Teal; the second row adds macaron tones: Blush, Peach, Butter, Mint, Sage, Sky, Lilac, Periwinkle |
 | Radius | None, Small, Medium, Large, Default, XL |
 | Shadow | None, Soft, Default, Strong |
-| Sans font | System, Neo Sans Pro, Eras |
-| Chinese body font | System, ZhouFang RiMing |
+| Body font | System, Neo Sans Pro, Eras, ZhouFang RiMing, LXGW WenKai |
 | Heading font | System, DIN 1451 Mittelschrift |
 | Mono font | System, Noto Sans Mono |
 
@@ -52,7 +51,7 @@ The provider selects the light or dark palette from `resolvedTheme`, then applie
 
 Fonts default to the system stack and trigger no webfont request. Selecting a local face makes `FontProvider` load it through `FontFace` from `public/fonts/`, then write `--font-latin-*` (Latin glyphs) or `--font-cjk-sans` (Chinese body glyphs) on `<html>`.
 
-"Chinese body" is a separate slot: it replaces Chinese glyphs only, leaving English, digits, and code untouched. The face bundles Latin glyphs too, but `unicode-range` limits it to CJK code points, so Latin characters skip it entirely. See [Typography](./shadcn/typography).
+The panel merges the Latin sans and Chinese body faces into one Body option; underneath they remain two layers. The Chinese face replaces Chinese glyphs only, leaving English, digits, and code untouched. It bundles Latin glyphs too, but `unicode-range` limits it to CJK code points, so Latin characters skip it entirely. See [Typography](./shadcn/typography).
 
 ## shadcn tokens
 

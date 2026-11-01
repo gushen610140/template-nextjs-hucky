@@ -23,7 +23,7 @@ export const FONT_OPTIONS = {
   sans: ["system", "neosanspro", "erasmd"],
   heading: ["system", "din"],
   mono: ["system", "notosansmono"],
-  cjk: ["system", "zhoufangriming"],
+  cjk: ["system", "zhoufangriming", "lxgwwenkai"],
 } as const;
 
 export type SansFontId = (typeof FONT_OPTIONS.sans)[number];
@@ -143,6 +143,13 @@ export const FONT_LIBRARY: {
       file: "/fonts/ZhouFangRiMing-Regular.otf",
       weight: "400",
       format: "opentype",
+      unicodeRange: CJK_UNICODE_RANGE,
+    },
+    lxgwwenkai: {
+      family: "Hucky LXGW WenKai",
+      file: "/fonts/LXGWWenKai-Regular.ttf",
+      weight: "400",
+      format: "truetype",
       unicodeRange: CJK_UNICODE_RANGE,
     },
   },
