@@ -13,6 +13,8 @@
     "---Backend---",
     "prisma",
     "authentication",
-    "ai"
+    "---AI---",
+    "skills",
+    "opencode"
   ]
 }
