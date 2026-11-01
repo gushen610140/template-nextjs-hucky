@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // 字体文件按内容命名, 更新字体时换文件名, 因此可以长期缓存。
+        // 字体文件更新频率低，这里按文件名长期缓存；更新字体时请换文件名或加版本号。
         source: "/fonts/:path*",
         headers: [
           {
