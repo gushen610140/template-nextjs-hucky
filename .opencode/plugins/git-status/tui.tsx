@@ -75,7 +75,7 @@ export default Plugin.define({
       render: () => (
         <text
           fg={context.theme.text.base}
-        >{`git status -sb\n${state().text}`}</text>
+        >{`git status -sb\n${state.text}`}</text>
       ),
     });
 

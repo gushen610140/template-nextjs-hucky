@@ -46,7 +46,7 @@ The plugin inserts content into the TUI sidebar slot:
 ```tsx
 context.ui.slot({
   append: "sidebar.content",
-  render: () => <text>{`git status -sb\n${state().text}`}</text>,
+  render: () => <text>{`git status -sb\n${state.text}`}</text>,
 })
 ```
 
