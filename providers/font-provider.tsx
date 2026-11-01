@@ -20,7 +20,7 @@ import {
   type FontSettings,
   type FontSpec,
   getFontSpec,
-  isFontSettings,
+  parseFontSettings,
 } from "@/lib/font-presets";
 
 type FontContextValue = {
@@ -56,6 +56,7 @@ async function ensureFont(spec: FontSpec): Promise<FontFace> {
         weight: spec.weight,
         style: "normal",
         display: "swap",
+        unicodeRange: spec.unicodeRange,
       },
     );
 
@@ -88,8 +89,9 @@ export function FontProvider({ children }: { children: ReactNode }) {
       const stored = window.localStorage.getItem(FONT_STORAGE_KEY);
       if (stored) {
         const parsed: unknown = JSON.parse(stored);
-        if (isFontSettings(parsed)) {
-          setSettings(parsed);
+        const next = parseFontSettings(parsed);
+        if (next) {
+          setSettings(next);
         }
       }
     } catch {
@@ -142,6 +144,15 @@ export function FontProvider({ children }: { children: ReactNode }) {
       } else {
         root.style.removeProperty(FONT_CSS_VARIABLES[role]);
       }
+    }
+
+    // 中文 webfont 自带拉丁字形, 靠 unicode-range 限制在中文码位,
+    // 所以可以把它提到字体栈最前面 (见 globals.css 里的 html[data-cjk-font])。
+    const hasCjkFace = resolved.some(([role, spec]) => role === "cjk" && spec);
+    if (hasCjkFace) {
+      root.setAttribute("data-cjk-font", "");
+    } else {
+      root.removeAttribute("data-cjk-font");
     }
 
     setLoadingRoles([]);

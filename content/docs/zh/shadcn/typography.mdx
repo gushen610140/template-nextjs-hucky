@@ -1,6 +1,6 @@
 ---
 title: 字体
-description: 默认系统字体，按需加载本地拉丁字体，中文字形由系统字体栈接管
+description: 默认系统字体，按需加载本地字体，中文正文字体可单独切换且不影响英文
 ---
 
 shadcn 组件不声明字体族。打开 `components/ui/button.tsx` 只会看到 `text-xs font-semibold tracking-widest uppercase` 这类排版参数（字号、字重、字距、大小写），没有一个 `font-family`。字体靠 CSS 继承从根元素传下来，所以整个项目只需要在 `<html>` 上决定一次。
@@ -9,26 +9,28 @@ shadcn 组件不声明字体族。打开 `components/ui/button.tsx` 只会看到
 
 | token | 拉丁字形 | 中文字形 | 用在哪 |
 | --- | --- | --- | --- |
-| `--font-sans` | 系统无衬线，可切换 Neo Sans Pro / Eras | 系统无衬线栈 | 全局默认，所有组件继承 |
+| `--font-sans` | 系统无衬线，可切换 Neo Sans Pro / Eras | 系统无衬线栈，可切换舟方日明体 | 全局默认，所有组件继承 |
 | `--font-heading` | 系统衬线，可切换 DIN 1451 Mittelschrift | 系统衬线栈 | 组件显式写 `font-heading`（`CardTitle`、`SheetTitle` 等），以及 Fumadocs 文档页标题和 MDX 标题 |
 | `--font-mono` | 系统等宽，可切换 Noto Sans Mono | 系统等宽栈 | `font-mono`、代码块 |
 
-默认不加载任何 webfont。用户只有在主题面板里主动切换字体后，对应字体文件才会通过 `FontFace` 加载；中文字形始终使用系统字体栈。
+默认不加载任何 webfont。用户只有在主题面板里主动切换字体后，对应字体文件才会通过 `FontFace` 加载。标题和代码的中文字形固定使用系统字体栈，只有正文字体（`--font-cjk-sans`）可以换成自托管字体。
+
+中文字体是独立的一档：它只替换 `--font-cjk-sans`，拉丁字形仍然由 `--font-latin-*` 决定。所以「英文用 Neo Sans Pro、中文用舟方日明体」这种组合可以直接选出来。
 
 ## 完整链路
 
-1. **CSS 定义默认栈。** `app/[locale]/globals.css` 的 `:root` 提供 `--font-system-*` 和三组 `--app-font-*`：
+1. **CSS 定义默认栈。** `app/[locale]/globals.css` 的 `:root` 提供 `--font-system-*`、`--font-system-cjk-*` 和三组 `--app-font-*`：
 
    ```css
    --app-font-sans:
-     var(--font-latin-sans, var(--font-system-sans)), var(--font-cjk-sans);
+     var(--font-latin-sans, var(--font-system-sans)), var(--font-system-cjk-sans);
    ```
 
-   没有 `--font-latin-*` 时自动回落到系统字体。
+   没有 `--font-latin-*` 时自动回落到系统拉丁栈；中文默认接 `--font-system-cjk-*`。选择中文 webfont 后会切到 `:root[data-cjk-font]` 的版本，详见下面「中文字体为什么排在最前面」一节。
 
 2. **映射成 Tailwind utility。** `@theme inline` 把 `--app-font-*` 映射成 `font-sans` / `font-mono` / `font-heading`。
 3. **写到根元素。** `@layer base` 里的 `html { @apply font-sans }` 是唯一一次真正设置 `font-family` 的地方。
-4. **FontProvider 按需加载。** `providers/font-provider.tsx` 读取用户的字体选择，用 `FontFace` 加载 `public/fonts/` 下的文件，加载完成后再写入 `--font-latin-*`。
+4. **FontProvider 按需加载。** `providers/font-provider.tsx` 读取用户的字体选择，用 `FontFace` 加载 `public/fonts/` 下的文件，加载完成后再写入 `--font-latin-*`（拉丁）或 `--font-cjk-sans`（中文正文）。
 5. **组件继承。** 组件只覆盖字号和字重，字体族继续继承，包括 Portal 到 `body` 的 Dialog、Popover、DropdownMenu。
 
 Fumadocs 正文读 `--font-sans` / `--font-mono`；文档页标题和 MDX 标题则由 `globals.css` 里的 `#nd-page :is(h1, h2, h3, h4, h5, h6)` 统一指向 `--font-heading`，所以切换 heading 字体时文档标题也会同步变化。
@@ -48,6 +50,7 @@ export const FONT_OPTIONS = {
   sans: ["system", "neosanspro", "erasmd"],
   heading: ["system", "din"],
   mono: ["system", "notosansmono"],
+  cjk: ["system", "zhoufangriming"],
 } as const;
 ```
 
@@ -56,18 +59,54 @@ export const FONT_OPTIONS = {
 - 默认所有角色都是 `system`，不发起任何字体请求。
 - 用户 hover / focus 某个字体选项时预加载，但不应用。
 - 用户真正切换时，先 `await face.load()`，再写 CSS 变量，避免 `font-display: swap` 造成重排闪动。
-- 选择保存在 `localStorage`，下次访问自动恢复。
+- 中文字体额外带 `unicodeRange`，并且会给 `<html>` 加上 `data-cjk-font`，把字体栈切到「中文优先」的版本。
+- 选择保存在 `localStorage`，下次访问自动恢复。读取时按角色逐项校验，缺字段用默认值补齐，所以旧版本存的设置不会因为新增了 `cjk` 角色而整份失效。
 
-中文字形不参与切换，始终由 `--font-cjk-*` 接管。
+`sans` / `heading` / `mono` 控制拉丁字形，`cjk` 只控制中文正文字形。两者互不影响。
 
-## 为什么中文用系统字体栈
+## 为什么中文默认还是系统字体
+
+自托管中文字体是可选项，默认仍然走系统字体栈：
 
 - **体积。** 完整的中文字体动辄 2MB 以上，即使只取常用字，子集也有几百 KB，首屏代价明显高于收益。
-- **按需加载也救不了首屏。** 中文正文几乎一定会用到中文字形，无法像标题字体那样“用户不切换就不下载”。
+- **按需加载的收益有限。** 中文字体一旦启用，中文正文几乎处处都会用到，不像标题字体只影响几个字。默认关掉，才能保证首屏零字体请求。
 - **系统字体已经调好。** macOS 的 PingFang SC、Windows 的微软雅黑在字重、字距和 ClearType 渲染上都做过平台适配。
 - **代价是跨平台不一致。** 同一段中文在 macOS 和 Windows 上字形不同。如果设计上必须绝对统一，才值得改成自建子集，用体积换一致性。
 
-字体的选择顺序是「先拉丁，后中文」：拉丁字体没有中文字形，浏览器逐字回落到栈里第一个包含该字形的字体，也就是 `--font-cjk-sans`。中英混排因此不需要额外处理。
+项目里登记的「舟方日明体」正是为了最后这种情况准备的：它只在用户主动选择后才下载，不选就不产生任何请求。文件约 8.6MB，是纯 CFF 轮廓的 OTF，没有做子集，见[字体来源与许可](#字体来源与许可)。
+
+## 中文字体为什么排在最前面，却不会影响英文
+
+直觉上应该「先拉丁，后中文」，但中文 webfont 不能这么做。
+
+原因是中文版 Windows 上 `ui-sans-serif` / `system-ui` 会解析成**微软雅黑**，而微软雅黑同时覆盖中文和拉丁。它排在 `--font-system-sans` 的第一位，任何排在它后面的中文字体都永远轮不到：
+
+```text
+ui-sans-serif (→ 微软雅黑, 中英全覆盖)  ← 中文和英文都在这里被"抢走"
+"Hucky ZhouFangRiMing"                 ← 永远用不到
+```
+
+所以选中中文 webfont 时，`FontProvider` 会给 `<html>` 加 `data-cjk-font`，把 `globals.css` 里的栈改成：
+
+```css
+:root[data-cjk-font] {
+  --app-font-sans:
+    var(--font-cjk-sans),                       /* 中文 webfont，排最前 */
+    var(--font-latin-sans, var(--font-system-sans)),  /* 英文/数字 */
+    var(--font-system-cjk-sans);                /* 中文兜底 */
+}
+```
+
+排在最前却不影响英文，靠的是 **`unicode-range`**：注册字体时把范围限制在中文码位（`CJK_UNICODE_RANGE`，见 `lib/font-presets.ts`），英文、数字、代码这些码位根本不在范围内，浏览器会直接跳到后面的拉丁栈。
+
+实测（Chrome DevTools Protocol 的 `CSS.getPlatformFontsForNode`）：
+
+```text
+中文 "中文正文字体测试"  → Sthginkra (isCustomFont: true)
+英文 "Hamburgefonstiv"   → Microsoft YaHei (isCustomFont: false)
+```
+
+这也是中文字体单独占一个选项，而不是塞进「无衬线」里的原因：它和拉丁字体是两条独立的、可以任意组合的链。
 
 ## 新增字体
 
@@ -76,9 +115,9 @@ export const FONT_OPTIONS = {
 3. 在 `FONT_OPTIONS` 对应角色里追加 id。
 4. 在 `messages/{en,zh}.json` 的 `ThemeCustomizer.fonts` 下补显示名。
 
-不需要改 `layout.tsx`，也不需要改 `globals.css`。
+不需要改 `layout.tsx`，也不需要改 `globals.css`。加中文字体同理：把 id 加到 `FONT_OPTIONS.cjk` 即可，但**必须**在 `FONT_LIBRARY` 里补上 `unicodeRange: CJK_UNICODE_RANGE`，否则该字体自带的拉丁字形会接管英文。
 
-**换中文字体栈**：只改 `:root` 里的 `--font-cjk-*`，其他位置都不用动。
+**换中文系统兜底栈**：只改 `:root` 里的 `--font-system-cjk-*`，其他位置都不用动。
 
 **新增一个字体 token**（例如 `--font-serif`）需要三处同步：
 
@@ -96,6 +135,16 @@ export const FONT_OPTIONS = {
 
 说明该字体之前已经加载过，或者你选择的是 `system`。只有选择本地字体且 `FontFace` 尚未加载时才会请求 `public/fonts/` 下的文件。
 
+**选了中文字体，英文怎么没变？**
+
+这是设计行为。中文字体注册时带了 `unicode-range`，只对中文码位生效，所以即使它排在栈首，英文和数字也会跳过它，落到 `--font-latin-sans`。
+
+舟方日明体里确实带拉丁字形（取自 Iosevka），但当前配置下用不到。如果你确实想让中文字体接管英文，把 `FONT_LIBRARY` 里那一项的 `unicodeRange` 删掉即可，但英文、数字和代码会一起变成 Iosevka，通常不建议。
+
+**切换中文字体为什么明显变慢？**
+
+舟方日明体是约 8.6MB 的完整 OTF，没有做子集。它按需加载，只在第一次选中（或 hover / focus 到该选项）时下载一次，之后由 `document.fonts` 和浏览器缓存接管。如果要优化首屏，可以在构建期用 `fonttools` / `glyphhanger` 做常用字子集并转成 woff2，体积通常能降到 1–2MB。
+
 **为什么 `var()` 要用两个参数？**
 
 `font-family: var(--a), var(--b)` 里任何一个变量未定义，整条声明在计算值阶段就失效。`var(--font-latin-sans, var(--font-system-sans))` 保证没有选择 webfont 时仍然有完整的系统字体栈。
@@ -106,11 +155,28 @@ Portal 渲染到 `body`，继承链是 `body → html`，只要字体写在 `<ht
 
 **中文标题看起来和英文不搭？**
 
-`--font-heading` 的拉丁部分默认是系统衬线体，可切换成 DIN 1451；`--font-cjk-heading` 优先选衬线中文（宋体系）。Windows 上会落到 SimSun，与 macOS 的 Songti 观感差异较大，这是系统字体栈的固有限制。
+`--font-heading` 的拉丁部分默认是系统衬线体，可切换成 DIN 1451；`--font-system-cjk-heading` 优先选衬线中文（宋体系）。Windows 上会落到 SimSun，与 macOS 的 Songti 观感差异较大，这是系统字体栈的固有限制。
+
+**中文字体只影响正文吗？**
+
+是。`--font-cjk-sans` 只有正文字体一档，标题和代码的中文字形固定走 `--font-system-cjk-heading` / `--font-system-cjk-mono`。如果以后要让标题也支持切换，需要在 `FONT_ROLES` 里再加一个 `cjkHeading` 角色，并把它映射到 `--font-cjk-heading`。
 
 **Fumadocs 的标题字体怎么改？**
 
 文档页标题和 MDX 标题由 `globals.css` 末尾的 `#nd-page :is(h1, h2, h3, h4, h5, h6)` 统一使用 `--font-heading`。要改标题字体，只需要切换 heading 字体选项，不需要改 Fumadocs 组件。
+
+## 字体来源与许可
+
+`public/fonts/ZhouFangRiMing-Regular.otf`（舟方日明体）：
+
+| 项目 | 值 |
+| --- | --- |
+| 字体名 | 舟方日明体（name 表里还有「舟方日明 不斜」，英文内部名 `Sthginkra`） |
+| 中文字形 | 基于 Glow Sans SC Condensed Book 0.91（Project Welai） |
+| 拉丁字形 | Iosevka Fixed Curly 4.0.3（Belleve Invis） |
+| 许可 | SIL Open Font License 1.1 |
+
+字体的 `name` 表里保留了原始版权声明和 OFL 条款。OFL 要求分发时保留这些信息，所以不要用 `fonttools` 之类的工具裁剪 name 表；修改或再分发字体文件时按 OFL 条款处理。
 
 ## 接下来
 

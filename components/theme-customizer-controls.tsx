@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   FONT_OPTIONS,
+  type CjkFontId,
   type HeadingFontId,
   type MonoFontId,
   type SansFontId,
@@ -187,6 +188,36 @@ export function ThemeCustomizerControls({ className }: { className?: string }) {
               value={font}
               onPointerEnter={() => preloadFont("sans", font)}
               onFocus={() => preloadFont("sans", font)}
+              className="h-auto w-full px-2 py-1.5 text-xs font-normal tracking-normal normal-case data-[state=on]:border-primary data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
+            >
+              {t(`fonts.${font}`)}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <p className="text-xs font-medium text-muted-foreground">
+          {t("fonts.cjk")}
+        </p>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={settings.cjk}
+          onValueChange={(value) => {
+            if (value) {
+              setFont("cjk", value as CjkFontId);
+            }
+          }}
+          className="grid w-full grid-cols-2 gap-1.5"
+        >
+          {FONT_OPTIONS.cjk.map((font) => (
+            <ToggleGroupItem
+              key={font}
+              value={font}
+              onPointerEnter={() => preloadFont("cjk", font)}
+              onFocus={() => preloadFont("cjk", font)}
               className="h-auto w-full px-2 py-1.5 text-xs font-normal tracking-normal normal-case data-[state=on]:border-primary data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
             >
               {t(`fonts.${font}`)}

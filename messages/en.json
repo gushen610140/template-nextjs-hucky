@@ -103,11 +103,13 @@
       "sans": "Sans",
       "heading": "Heading",
       "mono": "Mono",
+      "cjk": "Chinese body",
       "system": "System",
       "neosanspro": "Neo Sans Pro",
       "erasmd": "Eras",
       "din": "DIN 1451",
-      "notosansmono": "Noto Sans Mono"
+      "notosansmono": "Noto Sans Mono",
+      "zhoufangriming": "ZhouFang RiMing"
     }
   },
   "Landing": {
