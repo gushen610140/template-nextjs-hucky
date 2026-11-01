@@ -6,6 +6,7 @@ import {
   Command,
   Database,
   LifeBuoy,
+  Palette,
   Send,
   Server,
   ShieldCheck,
@@ -29,7 +30,12 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+  /** Logto endpoint，用于拼接账户中心页面地址 */
+  logtoEndpoint: string;
+};
+
+export function AppSidebar({ logtoEndpoint, ...props }: AppSidebarProps) {
   const t = useTranslations("Sidebar");
   const locale = useLocale();
 
@@ -79,6 +85,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         },
       ],
     },
+    {
+      label: t("style"),
+      items: [
+        {
+          title: t("theme"),
+          url: `/${locale}/dashboard/theme`,
+          icon: <Palette />,
+        },
+      ],
+    },
   ];
 
   return (
@@ -124,7 +140,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser />
+        <NavUser logtoEndpoint={logtoEndpoint} />
       </SidebarFooter>
     </Sidebar>
   );

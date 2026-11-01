@@ -1,20 +1,11 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { DashboardOverview } from "@/components/dashboard/overview";
 
 /**
  * Dashboard 概览。
  *
- * 占位块使用固定高度（而不是 aspect-video），这样侧边栏收起、
- * 内容区变宽时只有宽度变化，高度保持不变。
+ * 图表数据目前来自组件内的 mock 常量；接入真实接口时，
+ * 把数据转到服务端读取再作为 props 传入即可。
  */
 export default function Page() {
-  return (
-    <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-      <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-        <Skeleton className="h-40 rounded-xl" />
-        <Skeleton className="h-40 rounded-xl" />
-        <Skeleton className="h-40 rounded-xl" />
-      </div>
-      <Skeleton className="min-h-0 flex-1 rounded-xl" />
-    </div>
-  );
+  return <DashboardOverview />;
 }

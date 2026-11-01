@@ -31,7 +31,7 @@ export function NavSecondary({
         <SidebarMenu>
           {items.map((item) => (
             <SidebarMenuItem key={item.url}>
-              <SidebarMenuButton asChild size="sm" tooltip={item.title}>
+              <SidebarMenuButton asChild tooltip={item.title}>
                 {item.external ? (
                   <a href={item.url} target="_blank" rel="noreferrer">
                     {item.icon}

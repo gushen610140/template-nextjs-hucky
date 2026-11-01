@@ -25,6 +25,7 @@ const MODULE_KEYS = {
   providers: "providers",
   agents: "agents",
   rag: "rag",
+  theme: "theme",
 } as const;
 
 type ModuleSegment = keyof typeof MODULE_KEYS;

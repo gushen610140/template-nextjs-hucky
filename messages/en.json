@@ -7,12 +7,52 @@
   },
   "Dashboard": {
     "overview": "Overview",
-    "comingSoon": "This module is under construction"
+    "comingSoon": "This module is under construction",
+    "overviewTitle": "Overview",
+    "overviewSubtitle": "Key metrics, request volume, and model usage at a glance.",
+    "updatedJustNow": "Live",
+    "last30Days": "Last 30 days",
+    "kpiUsers": "Active users",
+    "kpiRequests": "Requests",
+    "kpiErrorRate": "Error rate",
+    "kpiLatency": "Avg. latency",
+    "requestVolume": "Request volume",
+    "requestVolumeDescription": "Inference requests over the last 24 hours",
+    "live": "Live",
+    "vsLastPeriod": "vs. previous period",
+    "requestStatus": "Request status",
+    "requestStatusDescription": "Split by completion type",
+    "successRate": "Success rate",
+    "status": {
+      "success": "Success",
+      "stream": "Streamed",
+      "cache": "Cache hit",
+      "error": "Errors"
+    },
+    "weeklyUsers": "Weekly active users",
+    "weeklyUsersDescription": "Grouped by calendar day",
+    "weekdays": {
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat",
+      "sun": "Sun"
+    },
+    "topModels": "Top models",
+    "topModelsDescription": "By token consumption",
+    "activityHeatmap": "Activity heatmap",
+    "activityHeatmapDescription": "Request density over 18 weeks",
+    "less": "Less",
+    "more": "More"
   },
   "Sidebar": {
     "brandName": "Hucky",
     "basic": "Basic",
     "ai": "AI",
+    "style": "Styles",
+    "theme": "Theme",
     "users": "Users",
     "permissions": "Permissions",
     "roles": "Roles",
@@ -25,11 +65,20 @@
     "documentation": "Documentation"
   },
   "User": {
-    "upgrade": "Upgrade to Pro",
-    "account": "Account",
-    "billing": "Billing",
-    "notifications": "Notifications",
+    "profile": "Profile",
+    "security": "Security",
+    "sessions": "Sessions",
+    "settings": "Settings",
     "logout": "Log out"
+  },
+  "UserSettings": {
+    "title": "Settings",
+    "description": "Tune the sidebar's basic preferences. Changes apply immediately.",
+    "language": "Language",
+    "appearance": "Appearance",
+    "themeColors": "Theme",
+    "themeColorsDescription": "Pick a base and primary color. Fonts, radius, and shadows live on the theme page.",
+    "moreTheme": "Open full theme settings"
   },
   "Theme": {
     "toggle": "Toggle theme",
@@ -87,10 +136,9 @@
       "strong": "Strong"
     },
     "fonts": {
-      "sans": "Sans",
+      "body": "Body",
       "heading": "Heading",
       "mono": "Mono",
-      "cjk": "Chinese body",
       "system": "System",
       "neosanspro": "Neo Sans Pro",
       "erasmd": "Eras",
@@ -98,6 +146,39 @@
       "notosansmono": "Noto Sans Mono",
       "zhoufangriming": "ZhouFang RiMing"
     }
+  },
+  "ThemePage": {
+    "badge": "Applies instantly",
+    "title": "Styles",
+    "description": "Tune colors, radius, shadows, and typography across the product. Every choice writes to the global theme and updates the live preview.",
+    "mode": {
+      "light": "Light interface",
+      "dark": "Dark interface",
+      "system": "Follow device"
+    },
+    "baseColorDescription": "Controls backgrounds, cards, borders, and neutral shades.",
+    "primaryColorDescription": "Used for primary buttons, charts, and emphasis.",
+    "radiusDescription": "Unifies component corners. The preview updates instantly.",
+    "shadowDescription": "Adjust shadow depth for cards, popovers, and buttons.",
+    "typography": "Typography",
+    "typographyDescription": "Body merges Latin and Chinese fonts; heading and mono remain independent.",
+    "bodyFontHint": "Chinese and Latin share one body setting",
+    "preview": "Live preview",
+    "previewDescription": "Changes apply immediately",
+    "livePreview": "LIVE",
+    "previewEyebrow": "Workspace",
+    "previewHeading": "Make the interface yours",
+    "previewBody": "Adjust colors, radius, shadows, and type to see this preview react.",
+    "previewButton": "Start building",
+    "previewSecondary": "View docs",
+    "previewMetricOne": "Requests this week",
+    "previewMetricTwo": "Availability",
+    "previewUptime": "Stable for the last 30 days",
+    "previewInput": "Search models, agents...",
+    "previewBadgePrimary": "Enabled",
+    "previewBadgeSecondary": "Default",
+    "previewBadgeOutline": "Draft",
+    "previewTypography": "Type sample"
   },
   "Landing": {
     "loading": "Building the space",

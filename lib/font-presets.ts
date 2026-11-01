@@ -31,6 +31,20 @@ export type HeadingFontId = (typeof FONT_OPTIONS.heading)[number];
 export type MonoFontId = (typeof FONT_OPTIONS.mono)[number];
 export type CjkFontId = (typeof FONT_OPTIONS.cjk)[number];
 
+/**
+ * 正文可选字体。
+ *
+ * 无衬线 (sans) 和中文正文 (cjk) 最终都落在同一个 --font-sans 栈里，
+ * 所以面板上合并成一个「正文」选项：选拉丁字体时中文回落系统字体，
+ * 选中文 webfont 时拉丁回落系统字体。
+ */
+export const BODY_FONT_OPTIONS = [
+  ...FONT_OPTIONS.sans,
+  ...FONT_OPTIONS.cjk.filter((id) => id !== "system"),
+] as const;
+
+export type BodyFontId = (typeof BODY_FONT_OPTIONS)[number];
+
 export type FontSettings = {
   sans: SansFontId;
   heading: HeadingFontId;
@@ -139,6 +153,31 @@ export function getFontSpec(role: FontRole, id: string): FontSpec | null {
   if (id === "system") return null;
   const library = FONT_LIBRARY[role] as Record<string, FontSpec | undefined>;
   return library[id] ?? null;
+}
+
+/**
+ * 把 sans / cjk 两个存储字段折叠成面板上的单个「正文」值。
+ * 中文 webfont 优先，因为它是用户最近一次显式选择的中文字体。
+ */
+export function getBodyFontId(settings: FontSettings): BodyFontId {
+  return settings.cjk === "system" ? settings.sans : settings.cjk;
+}
+
+/** 「正文」选项实际对应的字体角色。 */
+export function getBodyFontRole(id: BodyFontId): "sans" | "cjk" {
+  return FONT_OPTIONS.cjk.includes(id as CjkFontId) ? "cjk" : "sans";
+}
+
+/** 把「正文」选择展开回 sans / cjk 两个角色。 */
+export function getBodyFontSettings(
+  id: BodyFontId,
+): Pick<FontSettings, "sans" | "cjk"> {
+  const isCjk = FONT_OPTIONS.cjk.includes(id as CjkFontId);
+
+  return {
+    sans: isCjk ? "system" : (id as SansFontId),
+    cjk: isCjk ? (id as CjkFontId) : "system",
+  };
 }
 
 /** 校验单个角色保存的值, 非法或缺失时回退到该角色的默认值 */

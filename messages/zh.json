@@ -7,12 +7,52 @@
   },
   "Dashboard": {
     "overview": "概览",
-    "comingSoon": "该模块正在建设中"
+    "comingSoon": "该模块正在建设中",
+    "overviewTitle": "概览",
+    "overviewSubtitle": "关键指标、请求量与模型使用情况一览。",
+    "updatedJustNow": "实时更新",
+    "last30Days": "最近 30 天",
+    "kpiUsers": "活跃用户",
+    "kpiRequests": "请求总量",
+    "kpiErrorRate": "错误率",
+    "kpiLatency": "平均延迟",
+    "requestVolume": "请求量",
+    "requestVolumeDescription": "过去 24 小时的推理请求",
+    "live": "实时",
+    "vsLastPeriod": "较上一周期",
+    "requestStatus": "请求状态",
+    "requestStatusDescription": "按结束方式拆分",
+    "successRate": "成功率",
+    "status": {
+      "success": "成功",
+      "stream": "流式传输",
+      "cache": "缓存命中",
+      "error": "错误"
+    },
+    "weeklyUsers": "每周活跃用户",
+    "weeklyUsersDescription": "按自然日统计",
+    "weekdays": {
+      "mon": "一",
+      "tue": "二",
+      "wed": "三",
+      "thu": "四",
+      "fri": "五",
+      "sat": "六",
+      "sun": "日"
+    },
+    "topModels": "模型使用排行",
+    "topModelsDescription": "按 token 消耗",
+    "activityHeatmap": "活动热力图",
+    "activityHeatmapDescription": "过去 18 周的请求密度",
+    "less": "少",
+    "more": "多"
   },
   "Sidebar": {
     "brandName": "Hucky",
     "basic": "基础",
     "ai": "AI",
+    "style": "样式",
+    "theme": "主题",
     "users": "用户",
     "permissions": "权限",
     "roles": "角色",
@@ -25,11 +65,20 @@
     "documentation": "文档"
   },
   "User": {
-    "upgrade": "升级",
-    "account": "账户",
-    "billing": "账单",
-    "notifications": "通知",
+    "profile": "个人资料",
+    "security": "安全",
+    "sessions": "会话",
+    "settings": "设置",
     "logout": "退出"
+  },
+  "UserSettings": {
+    "title": "设置",
+    "description": "调整侧边栏的基础显示偏好，改动会立即生效。",
+    "language": "语言",
+    "appearance": "明暗色",
+    "themeColors": "主题",
+    "themeColorsDescription": "选择基础色和主色；更完整的字体、圆角与阴影设置请前往主题页面。",
+    "moreTheme": "打开完整主题设置"
   },
   "Theme": {
     "toggle": "切换主题",
@@ -87,10 +136,9 @@
       "strong": "强烈"
     },
     "fonts": {
-      "sans": "无衬线",
+      "body": "正文",
       "heading": "标题",
       "mono": "等宽",
-      "cjk": "中文正文",
       "system": "系统默认",
       "neosanspro": "Neo Sans Pro",
       "erasmd": "Eras",
@@ -98,6 +146,39 @@
       "notosansmono": "Noto Sans Mono",
       "zhoufangriming": "舟方日明体"
     }
+  },
+  "ThemePage": {
+    "badge": "实时生效",
+    "title": "样式",
+    "description": "统一调整整个产品的色彩、圆角、阴影与字体。所有选项都会立即写入全局样式，并在右侧预览中同步展示。",
+    "mode": {
+      "light": "明亮界面",
+      "dark": "暗色界面",
+      "system": "跟随设备"
+    },
+    "baseColorDescription": "决定背景、卡片、边框和中性色的色阶。",
+    "primaryColorDescription": "用于主要按钮、图表和强调元素。",
+    "radiusDescription": "统一组件圆角，预览会立即更新。",
+    "shadowDescription": "调整卡片、弹层和按钮的阴影强度。",
+    "typography": "字体",
+    "typographyDescription": "正文合并了拉丁与中文字体，标题和等宽字体仍可单独设置。",
+    "bodyFontHint": "中文与英文共用正文设置",
+    "preview": "实时预览",
+    "previewDescription": "所有改动会立即应用",
+    "livePreview": "LIVE",
+    "previewEyebrow": "工作台",
+    "previewHeading": "让界面更像你的产品",
+    "previewBody": "调整颜色、圆角、阴影和字体，这里的组件会同步变化。",
+    "previewButton": "开始创建",
+    "previewSecondary": "查看文档",
+    "previewMetricOne": "本周请求",
+    "previewMetricTwo": "可用性",
+    "previewUptime": "过去 30 天服务稳定",
+    "previewInput": "搜索模型、智能体...",
+    "previewBadgePrimary": "已启用",
+    "previewBadgeSecondary": "默认",
+    "previewBadgeOutline": "草稿",
+    "previewTypography": "排版示例"
   },
   "Landing": {
     "loading": "正在构建空间",

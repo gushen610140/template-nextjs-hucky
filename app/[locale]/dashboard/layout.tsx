@@ -17,7 +17,7 @@ export default async function DashboardLayout({
 
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <AppSidebar logtoEndpoint={process.env.LOGTO_ENDPOINT ?? ""} />
       <SidebarInset>
         <DashboardHeader />
         {children}
