@@ -1,6 +1,6 @@
 ---
 title: Theme configuration
-description: Adjust base color, primary color, radius, and shadows from a popover
+description: Adjust base color, primary color, radius, shadows, and fonts from a popover
 ---
 
 The home and dashboard top bars expose a theme configuration button (palette icon) next to the light/dark toggle. It updates the shadcn token set immediately.
@@ -13,27 +13,43 @@ The home and dashboard top bars expose a theme configuration button (palette ico
 | Primary color | Emerald, Blue, Violet, Rose, Orange, Red, Yellow, Teal; the second row adds macaron tones: Blush, Peach, Butter, Mint, Sage, Sky, Lilac, Periwinkle |
 | Radius | None, Small, Medium, Large, Default, XL |
 | Shadow | None, Soft, Default, Strong |
+| Sans font | System, Neo Sans Pro, Eras |
+| Heading font | System, DIN 1451 Mittelschrift |
+| Mono font | System, Noto Sans Mono |
 
-Settings are stored in `localStorage` under:
+Theme settings are stored in `localStorage` under:
 
 ```text
 hucky-theme-customization
 ```
 
-They are restored after a reload. The Reset button returns to Neutral + Emerald + Default radius + Default shadow.
+Font selections use a separate key:
+
+```text
+hucky-font-settings
+```
+
+They are restored after a reload. The Reset button returns to Neutral + Emerald + Default radius + Default shadow + system fonts.
 
 ## Implementation
 
 | Path | Purpose |
 | --- | --- |
 | `lib/theme-presets.ts` | Palettes, radius/shadow presets, token generation |
+| `lib/font-presets.ts` | Font registry, available options, and CSS variable names |
 | `providers/theme-customizer-provider.tsx` | Load/save settings and write CSS variables to `<html>` |
+| `providers/font-provider.tsx` | Load local font files on demand and write `--font-latin-*` |
 | `components/theme-customizer.tsx` | Popover UI |
 | `components/ui/popover.tsx` | Shared popover primitive |
-| `components/ui/toggle-group.tsx` | Toggle groups for palette, radius, and shadow options |
+| `components/ui/toggle-group.tsx` | Toggle groups for palette, radius, shadow, and font options |
+| `public/fonts/` | Self-hosted Latin font files |
 | `app/[locale]/globals.css` | Bridge between shadcn tokens and Fumadocs |
 
 The provider selects the light or dark palette from `resolvedTheme`, then applies the generated variables to `document.documentElement.style`.
+
+## Fonts
+
+Fonts default to the system stack and trigger no webfont request. Selecting a local face makes `FontProvider` load it through `FontFace` from `public/fonts/`, then write `--font-latin-*` on `<html>`. Chinese glyphs always use the system stack. See [Typography](./shadcn/typography).
 
 ## shadcn tokens
 
