@@ -1,0 +1,189 @@
+---
+title: AI Collaboration
+description: Recommended AI agent, skills setup, and the OpenCode worktree workflow
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+This project is designed so humans and AI share the same engineering conventions. Documentation, skills, and branch workspaces all live in the repository, so an agent can understand the project without extra setup.
+
+## Recommended agent: OpenCode
+
+[OpenCode](https://opencode.ai/) is the recommended agent for this project. It understands project-level skills natively, discovers `.agents/skills/` automatically, and works with the `skills` CLI to restore skill packs.
+
+Suggested workflow:
+
+- Start `opencode` from the repository root so the session inherits the project context.
+- Use OpenCode worktrees to isolate feature branches and keep parallel tasks from polluting each other's working tree.
+- Put repeatable workflows in a skill instead of repeating them in every prompt.
+
+## Skills included in this project
+
+Skills are reusable instruction packs for agents. Like `node_modules`, they are install artifacts, so **`.agents/` is not committed to Git**:
+
+| Path | Committed | Purpose |
+| --- | --- | --- |
+| `.agents/skills/` | No, ignored by `.gitignore` | Installed skill files |
+| `skills-lock.json` | Yes | Pins each skill's source and hash |
+| `skills` in `package.json` | Yes | Provides the `skills` CLI |
+
+A fresh clone therefore has no `.agents/skills/`; restore it from `skills-lock.json`. The lock file currently pins 11 skills:
+
+| Skill | Source | Purpose |
+| --- | --- | --- |
+| `caveman-commit` | `juliusbrussee/caveman` | Compressed Conventional Commits messages |
+| `prisma-cli` | `prisma/skills` | Prisma CLI commands, migrations, Studio, debugging |
+| `prisma-client-api` | `prisma/skills` | Prisma Client queries, filters, transactions |
+| `prisma-compute` | `prisma/skills` | Prisma Compute deployment (reference only, unused here) |
+| `prisma-database-setup` | `prisma/skills` | Configure PostgreSQL, MySQL, SQLite, MongoDB, and more |
+| `prisma-driver-adapter-implementation` | `prisma/skills` | Implement or modify Prisma driver adapters (this project uses `@prisma/adapter-pg`) |
+| `prisma-mongodb-upgrade` | `prisma/skills` | Prisma upgrade decisions for MongoDB projects (reference only) |
+| `prisma-postgres` | `prisma/skills` | Managed Prisma Postgres operations (reference only) |
+| `prisma-postgres-setup` | `prisma/skills` | Create Prisma Postgres through the Management API (reference only) |
+| `prisma-upgrade-v7` | `prisma/skills` | Migration guide from Prisma v6 to v7 |
+| `shadcn` | `shadcn/ui` | shadcn/ui components, registry, and styling |
+
+Skills marked "reference only" ship with the Prisma skill pack. The project may not use them today, but they help when upgrading or switching databases.
+
+## Installing skills
+
+The skills CLI requires Node.js 22.20 or newer. This project already lists `skills` in `devDependencies`, so install dependencies first, then restore from the lock file:
+
+<Steps>
+
+<Step>
+### Install project dependencies
+
+```bash
+bun ci
+```
+
+</Step>
+
+<Step>
+### Restore skills from the lock file
+
+```bash
+bunx skills experimental_install
+```
+
+This reads `skills-lock.json` and restores skills into `.agents/skills/`. It does not install npm packages, so run it after `bun ci`.
+
+</Step>
+
+<Step>
+### Verify the installation
+
+```bash
+bunx skills list
+```
+
+You should see the 11 skills listed above. OpenCode loads `.agents/skills/` automatically; no extra copying is required.
+
+</Step>
+
+</Steps>
+
+`experimental_install` is still experimental. If the command is renamed or unavailable in the future, install by source instead:
+
+```bash
+bunx skills add prisma/skills --skill '*' -a opencode -y
+bunx skills add shadcn/ui --skill shadcn -a opencode -y
+bunx skills add juliusbrussee/caveman --skill caveman-commit -a opencode -y
+```
+
+Only run `add` / `update` when you intentionally change the skill set. Those commands rewrite `skills-lock.json`; commit the lock file with your changes, but do not commit `.agents/`, which is an install directory that can be rebuilt at any time.
+
+## Using OpenCode worktrees
+
+When a task needs its own branch and should run alongside the current session, ask OpenCode to create a Git worktree and move the session into it. OpenCode V2 provides these built-in capabilities:
+
+| Capability | Description |
+| --- | --- |
+| `worktree_create` | Create a worktree by name and return its directory |
+| `worktree_list` | List the worktrees for the current project |
+| `worktree_remove` | Remove a worktree recorded by OpenCode; `force` discards uncommitted changes |
+| `session_move` | Move the current session to a directory, taking effect at a safe boundary |
+
+Describe it in natural language in the TUI:
+
+```text
+Create a worktree named "feat-ai-docs" and move this session into it.
+```
+
+The location is controlled by `worktree.directory` in `opencode.jsonc`. By default, worktrees live under the OpenCode service data directory. To keep them together, point it at a directory next to the project:
+
+```jsonc title="opencode.jsonc"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "worktree": {
+    "directory": "../worktrees"
+  }
+}
+```
+
+Relative paths resolve against the project's main checkout. `session_move` takes effect at a safe boundary, so run the setup and verification commands after the move completes.
+
+### Three things to do after moving the session
+
+A worktree is a fresh checkout, so local files covered by `gitignore` do not come along. After the move completes, work through these in order:
+
+<Steps>
+
+<Step>
+### Reinstall node_modules
+
+```bash
+bun ci
+```
+
+Do not symlink the main checkout's `node_modules`: dependency versions can differ between branches, and native modules or `.bin` entries may be bound to the original path. Installing per worktree is the reliable option.
+
+</Step>
+
+<Step>
+### Generate Prisma Client
+
+```bash
+bunx prisma generate
+```
+
+`lib/generated/prisma` is ignored by Git and does not exist in a new worktree. The app will not start without it.
+
+</Step>
+
+<Step>
+### Symlink .env.development
+
+`.env.development` contains real secrets and is ignored by Git. Symlink it to the main checkout instead of keeping multiple copies:
+
+Windows PowerShell (run from the worktree root, replacing the target with your main checkout path):
+
+```powershell
+New-Item -ItemType SymbolicLink -Path .env.development -Target C:\repos\template-nextjs-hucky\.env.development
+```
+
+macOS / Linux:
+
+```bash
+ln -s /path/to/template-nextjs-hucky/.env.development .env.development
+```
+
+Creating symlinks on Windows requires Developer Mode or administrator rights. If the environment does not allow it, copy `.env.development` temporarily, but never commit it.
+
+</Step>
+
+</Steps>
+
+The benefit of a symlink is a single source of truth: change an environment variable in the main checkout and every worktree sees it immediately, with no chance of a stale copy that only works on one branch.
+
+### Cleaning up worktrees
+
+After the work is merged, ask OpenCode:
+
+```text
+List the worktrees for this project.
+Remove the "feat-ai-docs" worktree.
+```
+
+OpenCode will not remove a worktree with uncommitted changes. Use `force` only when you are sure those changes are no longer needed. Commit or merge first to avoid losing work.

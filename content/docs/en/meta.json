@@ -12,6 +12,8 @@
     "scroll",
     "---Backend---",
     "prisma",
-    "authentication"
+    "authentication",
+    "---AI---",
+    "ai"
   ]
 }

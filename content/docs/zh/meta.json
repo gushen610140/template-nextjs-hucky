@@ -12,6 +12,8 @@
     "scroll",
     "---后端---",
     "prisma",
-    "authentication"
+    "authentication",
+    "---AI---",
+    "ai"
   ]
 }
