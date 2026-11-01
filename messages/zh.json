@@ -90,11 +90,13 @@
       "sans": "无衬线",
       "heading": "标题",
       "mono": "等宽",
+      "cjk": "中文正文",
       "system": "系统默认",
       "neosanspro": "Neo Sans Pro",
       "erasmd": "Eras",
       "din": "DIN 1451",
-      "notosansmono": "Noto Sans Mono"
+      "notosansmono": "Noto Sans Mono",
+      "zhoufangriming": "舟方日明体"
     }
   },
   "Landing": {

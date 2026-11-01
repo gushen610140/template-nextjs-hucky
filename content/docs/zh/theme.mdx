@@ -14,6 +14,7 @@ description: 用 Popover 调整基础色、主色、圆角、阴影和字体，�
 | 圆角 | None、Small、Medium、Large、Default、XL |
 | 阴影 | None、Soft、Default、Strong |
 | 无衬线字体 | System、Neo Sans Pro、Eras |
+| 中文正文 | System、舟方日明体 |
 | 标题字体 | System、DIN 1451 Mittelschrift |
 | 等宽字体 | System、Noto Sans Mono |
 
@@ -38,18 +39,20 @@ hucky-font-settings
 | `lib/theme-presets.ts` | 色板、圆角、阴影预设，以及 token 生成函数 |
 | `lib/font-presets.ts` | 字体注册表、可选字体和 CSS 变量名 |
 | `providers/theme-customizer-provider.tsx` | 读取/保存配置，把变量写到 `<html>` |
-| `providers/font-provider.tsx` | 按需加载本地字体并把 `--font-latin-*` 写到 `<html>` |
+| `providers/font-provider.tsx` | 按需加载本地字体并把 `--font-latin-*` / `--font-cjk-sans` 写到 `<html>` |
 | `components/theme-customizer.tsx` | Popover 配置面板 |
 | `components/ui/popover.tsx` | 通用 Popover 基础组件 |
 | `components/ui/toggle-group.tsx` | 色板、圆角、阴影和字体选项的 ToggleGroup |
-| `public/fonts/` | 自托管的拉丁字体文件 |
+| `public/fonts/` | 自托管字体文件（拉丁字体和中文正文字体） |
 | `app/[locale]/globals.css` | shadcn token 与 Fumadocs 的桥接 |
 
 配置变化时，Provider 会根据当前 `resolvedTheme` 选择浅色或深色色板，然后把 CSS 变量设置到 `document.documentElement.style`。
 
 ## 字体
 
-字体默认全部使用系统字体，不会请求任何 webfont。用户在面板里选择本地字体后，`FontProvider` 才会通过 `FontFace` 加载 `public/fonts/` 下的文件，并把 `--font-latin-*` 写到 `<html>`。中文字形始终使用系统字体栈。详见[字体](./shadcn/typography)。
+字体默认全部使用系统字体，不会请求任何 webfont。用户在面板里选择本地字体后，`FontProvider` 才会通过 `FontFace` 加载 `public/fonts/` 下的文件，并把 `--font-latin-*`（拉丁字形）或 `--font-cjk-sans`（中文正文字形）写到 `<html>`。
+
+「中文正文」是独立的一档，只替换中文字形，不会影响英文、数字和代码的观感。中文字体自带拉丁字形，但注册时用 `unicode-range` 限定在中文码位，英文码位会直接跳过它。详见[字体](./shadcn/typography)。
 
 ## shadcn token
 

@@ -64,9 +64,12 @@
 :root {
   /* ── Typography ──
     默认完全使用系统字体，不加载任何 webfont。
-    用户选择本地字体后，FontProvider 会通过 inline style 写入 --font-latin-*；
-    没有该变量时回落到 --font-system-*。
-    中文字形始终使用下面的系统字体栈。
+    用户选择本地字体后，FontProvider 会通过 inline style 写入两组变量：
+    - --font-latin-*：拉丁字形（sans / heading / mono）；
+    - --font-cjk-*：中文字形，目前只有正文字体 --font-cjk-sans。
+    没有对应变量时回落到 --font-system-* / --font-system-cjk-*。
+    字体栈顺序固定为「先拉丁，后中文」：中文 webfont 通常自带拉丁字形，
+    放在后面才不会抢走英文的渲染。
     Fumadocs 内部直接读 var(--font-sans) / var(--font-mono)，最后一并覆盖成同一套栈。
   */
   --font-system-sans:
@@ -77,19 +80,21 @@
     ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
   --app-font-sans:
-    var(--font-latin-sans, var(--font-system-sans)), var(--font-cjk-sans);
+    var(--font-latin-sans, var(--font-system-sans)), var(--font-system-cjk-sans);
   --app-font-mono:
-    var(--font-latin-mono, var(--font-system-mono)), var(--font-cjk-mono);
+    var(--font-latin-mono, var(--font-system-mono)),
+    var(--font-cjk-mono, var(--font-system-cjk-mono));
   --app-font-heading:
-    var(--font-latin-heading, var(--font-system-heading)), var(--font-cjk-heading);
+    var(--font-latin-heading, var(--font-system-heading)),
+    var(--font-cjk-heading, var(--font-system-cjk-heading));
 
-  --font-cjk-sans:
+  --font-system-cjk-sans:
     "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
     "Source Han Sans SC", "WenQuanYi Micro Hei", sans-serif;
-  --font-cjk-heading:
+  --font-system-cjk-heading:
     "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", "SimSun",
     "Songti TC", serif;
-  --font-cjk-mono:
+  --font-system-cjk-mono:
     "Sarasa Mono SC", "Noto Sans Mono CJK SC", "Microsoft YaHei", monospace;
 
   --font-sans: var(--app-font-sans);
@@ -148,6 +153,22 @@
   --scrollbar-thumb-active: oklch(0.45 0 0 / 65%);
   /* Fumadocs 的 shadcn 桥接没有覆盖 overlay，这里补一个中性遮罩 */
   --color-fd-overlay: oklch(0 0 0 / 0.5);
+}
+
+/*
+  选中中文正文 webfont 后，FontProvider 会在 <html> 上加 data-cjk-font，
+  并把 --font-cjk-sans 写到 inline style。
+
+  字体必须排在最前面：中文版 Windows 上 ui-sans-serif / system-ui 会映射到
+  微软雅黑，它同时覆盖中文和拉丁，排在后面的中文字体会永远轮不到。
+  这个字体带 unicode-range（见 lib/font-presets.ts 的 CJK_UNICODE_RANGE），
+  只对中文码位生效，所以英文和数字仍然落到后面的拉丁栈，不受影响。
+*/
+:root[data-cjk-font] {
+  --app-font-sans:
+    var(--font-cjk-sans),
+    var(--font-latin-sans, var(--font-system-sans)),
+    var(--font-system-cjk-sans);
 }
 
 .dark {

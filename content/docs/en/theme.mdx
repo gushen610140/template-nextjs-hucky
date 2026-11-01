@@ -14,6 +14,7 @@ The home and dashboard top bars expose a theme configuration button (palette ico
 | Radius | None, Small, Medium, Large, Default, XL |
 | Shadow | None, Soft, Default, Strong |
 | Sans font | System, Neo Sans Pro, Eras |
+| Chinese body font | System, ZhouFang RiMing |
 | Heading font | System, DIN 1451 Mittelschrift |
 | Mono font | System, Noto Sans Mono |
 
@@ -38,18 +39,20 @@ They are restored after a reload. The Reset button returns to Neutral + Emerald 
 | `lib/theme-presets.ts` | Palettes, radius/shadow presets, token generation |
 | `lib/font-presets.ts` | Font registry, available options, and CSS variable names |
 | `providers/theme-customizer-provider.tsx` | Load/save settings and write CSS variables to `<html>` |
-| `providers/font-provider.tsx` | Load local font files on demand and write `--font-latin-*` |
+| `providers/font-provider.tsx` | Load local font files on demand and write `--font-latin-*` / `--font-cjk-sans` |
 | `components/theme-customizer.tsx` | Popover UI |
 | `components/ui/popover.tsx` | Shared popover primitive |
 | `components/ui/toggle-group.tsx` | Toggle groups for palette, radius, shadow, and font options |
-| `public/fonts/` | Self-hosted Latin font files |
+| `public/fonts/` | Self-hosted font files (Latin faces and the Chinese body face) |
 | `app/[locale]/globals.css` | Bridge between shadcn tokens and Fumadocs |
 
 The provider selects the light or dark palette from `resolvedTheme`, then applies the generated variables to `document.documentElement.style`.
 
 ## Fonts
 
-Fonts default to the system stack and trigger no webfont request. Selecting a local face makes `FontProvider` load it through `FontFace` from `public/fonts/`, then write `--font-latin-*` on `<html>`. Chinese glyphs always use the system stack. See [Typography](./shadcn/typography).
+Fonts default to the system stack and trigger no webfont request. Selecting a local face makes `FontProvider` load it through `FontFace` from `public/fonts/`, then write `--font-latin-*` (Latin glyphs) or `--font-cjk-sans` (Chinese body glyphs) on `<html>`.
+
+"Chinese body" is a separate slot: it replaces Chinese glyphs only, leaving English, digits, and code untouched. The face bundles Latin glyphs too, but `unicode-range` limits it to CJK code points, so Latin characters skip it entirely. See [Typography](./shadcn/typography).
 
 ## shadcn tokens
 

@@ -1,6 +1,6 @@
 ---
 title: Typography
-description: System fonts by default, on-demand local Latin faces, and system stacks for Chinese
+description: System fonts by default, on-demand local faces, and an optional Chinese body face that never affects English
 ---
 
 shadcn components never declare a font family. Open `components/ui/button.tsx` and you only find typographic parameters such as `text-xs font-semibold tracking-widest uppercase` — font size, weight, letter spacing, casing — and not a single `font-family`. Fonts arrive by CSS inheritance from the root element, so the whole project only needs to decide once, on `<html>`.
@@ -9,26 +9,28 @@ shadcn components never declare a font family. Open `components/ui/button.tsx` a
 
 | token | Latin glyphs | Chinese glyphs | Used by |
 | --- | --- | --- | --- |
-| `--font-sans` | System sans; can switch to Neo Sans Pro / Eras | System sans stack | Global default, inherited by every component |
+| `--font-sans` | System sans; can switch to Neo Sans Pro / Eras | System sans stack; can switch to ZhouFang RiMing | Global default, inherited by every component |
 | `--font-heading` | System serif; can switch to DIN 1451 Mittelschrift | System serif stack | Components that opt in with `font-heading` (`CardTitle`, `SheetTitle`, ...), plus Fumadocs page titles and MDX headings |
 | `--font-mono` | System mono; can switch to Noto Sans Mono | System mono stack | `font-mono`, code blocks |
 
-No webfont is loaded by default. A font file is fetched through the `FontFace` API only after the user actively switches to it in the theme panel. Chinese glyphs always come from the system stack.
+No webfont is loaded by default. A font file is fetched through the `FontFace` API only after the user actively switches to it in the theme panel. Heading and code Chinese glyphs stay on the system stacks; only the body slot (`--font-cjk-sans`) can be swapped for a self-hosted face.
+
+The Chinese face is a separate slot: it overrides `--font-cjk-sans` only, while Latin glyphs still come from `--font-latin-*`. That makes combinations such as "Neo Sans Pro for English, ZhouFang RiMing for Chinese" directly selectable.
 
 ## The full chain
 
-1. **CSS defines the default stacks.** `:root` in `app/[locale]/globals.css` provides `--font-system-*` and the three `--app-font-*` tokens:
+1. **CSS defines the default stacks.** `:root` in `app/[locale]/globals.css` provides `--font-system-*`, `--font-system-cjk-*`, and the three `--app-font-*` tokens:
 
    ```css
    --app-font-sans:
-     var(--font-latin-sans, var(--font-system-sans)), var(--font-cjk-sans);
+     var(--font-latin-sans, var(--font-system-sans)), var(--font-system-cjk-sans);
    ```
 
-   Without `--font-latin-*`, the stack falls back to system fonts.
+   Without `--font-latin-*`, the Latin slot falls back to its system stack; Chinese defaults to `--font-system-cjk-*`. Selecting a Chinese webfont switches to the `:root[data-cjk-font]` variant described in the next section.
 
 2. **Tailwind utilities are generated.** `@theme inline` maps `--app-font-*` to `font-sans` / `font-mono` / `font-heading`.
 3. **The family is applied once.** `html { @apply font-sans }` inside `@layer base` is the only place that actually sets `font-family`.
-4. **FontProvider loads on demand.** `providers/font-provider.tsx` reads the user's choice, loads files from `public/fonts/` with `FontFace`, and only then writes `--font-latin-*`.
+4. **FontProvider loads on demand.** `providers/font-provider.tsx` reads the user's choice, loads files from `public/fonts/` with `FontFace`, and only then writes `--font-latin-*` (Latin) or `--font-cjk-sans` (Chinese body).
 5. **Components inherit.** They override size and weight only. Inheritance also covers components portalled into `body` — Dialog, Popover, DropdownMenu.
 
 Fumadocs body text reads `--font-sans` / `--font-mono`. Docs page titles and MDX headings are pointed at `--font-heading` by the `#nd-page :is(h1, h2, h3, h4, h5, h6)` rule at the end of `globals.css`, so switching the heading font updates them too.
@@ -48,6 +50,7 @@ export const FONT_OPTIONS = {
   sans: ["system", "neosanspro", "erasmd"],
   heading: ["system", "din"],
   mono: ["system", "notosansmono"],
+  cjk: ["system", "zhoufangriming"],
 } as const;
 ```
 
@@ -56,18 +59,54 @@ Each local font records its family, file path, weight, and format. `FontProvider
 - Every role defaults to `system`, which triggers no font request at all.
 - Hovering or focusing a font option preloads it without applying it.
 - On an actual switch it waits for `face.load()` before writing the CSS variable, avoiding a reflow caused by `font-display: swap`.
-- The choice is stored in `localStorage` and restored on the next visit.
+- The Chinese face additionally carries a `unicodeRange`, and the provider adds `data-cjk-font` to `<html>` to switch to the Chinese-first stack.
+- The choice is stored in `localStorage` and restored on the next visit. Stored values are validated per role and missing roles fall back to their default, so settings saved by an older build keep working when a new role such as `cjk` is added.
 
-Chinese glyphs do not participate in switching; they always fall through to `--font-cjk-*`.
+`sans` / `heading` / `mono` control Latin glyphs; `cjk` controls Chinese body glyphs only. The two layers never interfere.
 
-## Why Chinese uses the system stack
+## Why Chinese still defaults to the system stack
+
+A self-hosted Chinese face is optional; the default is still the system stack:
 
 - **Size.** A complete Chinese font is easily 2MB or more. Even a common-character subset runs into hundreds of KB, a poor trade for the first paint.
-- **On-demand loading does not help here.** Chinese body text almost always needs Chinese glyphs, so it cannot be deferred the way an optional heading face can.
+- **On-demand loading helps less here.** Once enabled, a Chinese face is used everywhere in Chinese body text, unlike a heading face that only affects a few runs. Keeping it off by default is what guarantees a font-request-free first paint.
 - **System faces are already tuned.** PingFang SC on macOS and Microsoft YaHei on Windows are adapted to their platforms for weight, spacing, and rendering.
 - **The cost is cross-platform variance.** The same Chinese text looks different on macOS and Windows. Only if the design demands absolute consistency is a custom subset worth the trade.
 
-Order matters: Latin first, Chinese second. Latin faces contain no Chinese glyphs, so the browser resolves each character to the first family in the stack that has it — `--font-cjk-sans`. Mixed Chinese/English text needs no extra handling.
+The registered ZhouFang RiMing face exists for exactly that last case: it is loaded only when the user picks it, and nothing is requested otherwise. The file is about 8.6MB of full CFF outlines with no subsetting — see [Font source and license](#font-source-and-license).
+
+## Why the Chinese face comes first but never touches English
+
+"Latin first, Chinese second" is the intuitive order, but it does not work for a Chinese webfont.
+
+On Chinese-locale Windows, `ui-sans-serif` / `system-ui` resolve to **Microsoft YaHei**, which covers both Chinese and Latin. It sits at the front of `--font-system-sans`, so any Chinese face placed after it can never be reached:
+
+```text
+ui-sans-serif (→ Microsoft YaHei, covers both)  ← grabs Chinese AND English
+"Hucky ZhouFangRiMing"                          ← never used
+```
+
+So when a Chinese webfont is selected, `FontProvider` adds `data-cjk-font` to `<html>` and `globals.css` switches the stack:
+
+```css
+:root[data-cjk-font] {
+  --app-font-sans:
+    var(--font-cjk-sans),                             /* Chinese webfont, first */
+    var(--font-latin-sans, var(--font-system-sans)),  /* English/digits */
+    var(--font-system-cjk-sans);                      /* Chinese fallback */
+}
+```
+
+It can sit first without touching English because of **`unicode-range`**: the face is registered for CJK code points only (`CJK_UNICODE_RANGE` in `lib/font-presets.ts`). Latin letters, digits, and code are outside that range, so the browser skips the face and moves on to the Latin stack.
+
+Verified with Chrome DevTools Protocol `CSS.getPlatformFontsForNode`:
+
+```text
+Chinese "中文正文字体测试" → Sthginkra (isCustomFont: true)
+English "Hamburgefonstiv"  → Microsoft YaHei (isCustomFont: false)
+```
+
+That is also why the Chinese face gets its own option instead of being folded into "Sans": the two layers are independent chains that can be combined freely.
 
 ## Adding a font
 
@@ -76,9 +115,9 @@ Order matters: Latin first, Chinese second. Latin faces contain no Chinese glyph
 3. Add the id to the matching role in `FONT_OPTIONS`.
 4. Add the display name under `ThemeCustomizer.fonts` in `messages/{en,zh}.json`.
 
-No changes to `layout.tsx` or `globals.css` are needed.
+No changes to `layout.tsx` or `globals.css` are needed. Adding a Chinese face works the same way: append the id to `FONT_OPTIONS.cjk`, but you **must** also set `unicodeRange: CJK_UNICODE_RANGE` in `FONT_LIBRARY`; otherwise the Latin glyphs bundled in the face take over English.
 
-**Swap the Chinese stack:** edit only `--font-cjk-*` under `:root`.
+**Swap the Chinese fallback stack:** edit only `--font-system-cjk-*` under `:root`.
 
 **Add a new font token** (say `--font-serif`) in three places:
 
@@ -96,6 +135,16 @@ Check Computed → `font-family` in DevTools first, then confirm `--font-latin-s
 
 Either the font was already loaded, or you selected `system`. A request to `public/fonts/` only happens when a local face is selected and has not been loaded through `FontFace` yet.
 
+**I picked a Chinese face but English did not change?**
+
+That is by design. The face is registered with a `unicode-range` limited to CJK code points, so English and digits skip it and fall through to `--font-latin-sans` — even though the face sits first in the stack.
+
+ZhouFang RiMing does bundle Latin glyphs (from Iosevka), but they are unused in this configuration. To let the Chinese face take over English, remove `unicodeRange` from its `FONT_LIBRARY` entry — English, digits, and code all become Iosevka, which is usually not what you want.
+
+**Why is switching the Chinese face slow?**
+
+ZhouFang RiMing is a full ~8.6MB OTF with no subsetting. It loads on demand: the first selection (or hover/focus on the option) downloads it once, after which `document.fonts` and the browser cache take over. To improve first load, subset it to common characters with `fonttools` or `glyphhanger` and convert to woff2 at build time; the result is typically 1–2MB.
+
 **Why does `var()` take two arguments?**
 
 In `font-family: var(--a), var(--b)`, a single undefined variable invalidates the entire declaration at computed-value time. `var(--font-latin-sans, var(--font-system-sans))` guarantees a complete system stack when no webfont is selected.
@@ -106,11 +155,28 @@ Portals render into `body`, so the inheritance chain is `body → html`. Fonts o
 
 **Chinese headings look inconsistent with the Latin ones?**
 
-The Latin heading face defaults to a system serif and can switch to DIN 1451; `--font-cjk-heading` prefers serif Chinese faces (Songti family). On Windows it lands on SimSun, which looks noticeably different from Songti on macOS — an inherent limit of system stacks.
+The Latin heading face defaults to a system serif and can switch to DIN 1451; `--font-system-cjk-heading` prefers serif Chinese faces (Songti family). On Windows it lands on SimSun, which looks noticeably different from Songti on macOS — an inherent limit of system stacks.
+
+**Does the Chinese face affect only body text?**
+
+Yes. `--font-cjk-sans` is the only Chinese slot; headings and code keep `--font-system-cjk-heading` / `--font-system-cjk-mono`. To make headings switchable too, add a `cjkHeading` role to `FONT_ROLES` and map it to `--font-cjk-heading`.
 
 **How do I change the Fumadocs heading font?**
 
 Docs page titles and MDX headings use `--font-heading` through the `#nd-page :is(h1, h2, h3, h4, h5, h6)` rule at the end of `globals.css`. Switch the heading font option; no Fumadocs component changes are needed.
+
+## Font source and license
+
+`public/fonts/ZhouFangRiMing-Regular.otf` (ZhouFang RiMing):
+
+| Item | Value |
+| --- | --- |
+| Family | 舟方日明体 (also "舟方日明 不斜"; internal English name `Sthginkra`) |
+| Chinese glyphs | Based on Glow Sans SC Condensed Book 0.91 (Project Welai) |
+| Latin glyphs | Iosevka Fixed Curly 4.0.3 (Belleve Invis) |
+| License | SIL Open Font License 1.1 |
+
+The `name` table keeps the original copyright notices and the OFL text. OFL requires those to survive redistribution, so avoid trimming the `name` table with tools like `fonttools`; follow the OFL terms when modifying or redistributing the file.
 
 ## Next
 
