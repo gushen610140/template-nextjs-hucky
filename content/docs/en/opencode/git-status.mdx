@@ -1,0 +1,71 @@
+---
+title: Git Status Sidebar
+description: Show the current worktree's git status -sb in the OpenCode sidebar
+---
+
+`git-status` is a TUI plugin that puts the current project's `git status -sb` output at the bottom of the OpenCode sidebar. It is useful for checking what the agent changed without switching to a terminal.
+
+## Location
+
+```text
+.opencode/plugins/git-status/
+├── index.ts        # Server placeholder so the plugin directory is recognized
+└── tui.tsx         # Sidebar UI
+```
+
+OpenCode discovers TUI plugins under `.opencode/plugins/` automatically; no `opencode.jsonc` change is required.
+
+## What it shows
+
+Every 2 seconds the plugin runs:
+
+```bash
+git status -sb
+```
+
+The sidebar shows output such as:
+
+```text
+git status -sb
+## feat/git-status...origin/feat/git-status
+ M content/docs/en/opencode/meta.json
+?? .opencode/plugins/git-status/
+```
+
+Output limits:
+
+- At most 12 lines; extra lines are shown as `... +N lines`.
+- Lines longer than 80 characters are truncated.
+- Outside a Git repository, or when `git` fails, the sidebar shows the error.
+- Inside a worktree, it shows that worktree's own status.
+
+## Implementation
+
+The plugin inserts content into the TUI sidebar slot:
+
+```tsx
+context.ui.slot({
+  append: "sidebar.content",
+  render: () => <text>{`git status -sb\n${state().text}`}</text>,
+})
+```
+
+State lives in `context.storage.memory`, and a `setInterval` calls `execFile("git", ["status", "-sb"], { cwd })` every 2 seconds. The project directory comes from `context.location.directory`, so switching to a worktree shows that checkout's status.
+
+## Tuning the display
+
+The constants are at the top of `.opencode/plugins/git-status/tui.tsx`:
+
+```ts
+const REFRESH_MS = 2_000;
+const MAX_LINES = 12;
+const MAX_LINE_LENGTH = 80;
+```
+
+Save the file and OpenCode reloads the TUI plugin automatically.
+
+## Limitations
+
+- TUI only; the desktop app and IDE integrations do not render this sidebar content.
+- It polls every 2 seconds instead of watching Git files, so changes can take up to one refresh cycle to appear.
+- The output is plain text with no click-through or diff expansion.

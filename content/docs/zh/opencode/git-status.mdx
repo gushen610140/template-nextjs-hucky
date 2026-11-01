@@ -1,0 +1,71 @@
+---
+title: Git Status 侧边栏
+description: 在 OpenCode 侧边栏实时显示当前 worktree 的 git status -sb
+---
+
+`git-status` 是一个 TUI 插件，把当前项目的 `git status -sb` 输出放到 OpenCode 侧边栏底部。它适合在 Agent 修改文件时快速确认有哪些改动，而不必切到终端。
+
+## 位置
+
+```text
+.opencode/plugins/git-status/
+├── index.ts        # 服务端占位，让插件目录被识别
+└── tui.tsx         # 侧边栏 UI
+```
+
+OpenCode 会自动发现 `.opencode/plugins/` 下的 TUI 插件，不需要修改 `opencode.jsonc`。
+
+## 显示内容
+
+插件每 2 秒执行一次：
+
+```bash
+git status -sb
+```
+
+侧边栏会显示：
+
+```text
+git status -sb
+## feat/git-status...origin/feat/git-status
+ M content/docs/zh/opencode/meta.json
+?? .opencode/plugins/git-status/
+```
+
+输出限制：
+
+- 最多显示 12 行，超出时追加 `... +N lines`。
+- 单行超过 80 个字符会截断。
+- 不在 Git 仓库中或 `git` 执行失败时显示错误信息。
+- 在 worktree 中运行时，显示该 worktree 自己的状态。
+
+## 实现
+
+插件通过 TUI 的 sidebar slot 插入内容：
+
+```tsx
+context.ui.slot({
+  append: "sidebar.content",
+  render: () => <text>{`git status -sb\n${state().text}`}</text>,
+})
+```
+
+状态保存在 `context.storage.memory` 中，`setInterval` 每 2 秒调用 `execFile("git", ["status", "-sb"], { cwd })` 刷新。项目目录来自 `context.location.directory`，因此切换 worktree 后会显示对应目录的状态。
+
+## 调整显示
+
+参数写在 `.opencode/plugins/git-status/tui.tsx` 顶部：
+
+```ts
+const REFRESH_MS = 2_000;
+const MAX_LINES = 12;
+const MAX_LINE_LENGTH = 80;
+```
+
+修改后保存文件，OpenCode 会自动重载 TUI 插件。
+
+## 限制
+
+- 只支持 OpenCode TUI；桌面端和 IDE 不会显示这个侧边栏内容。
+- 不是 Git 文件监听，而是 2 秒轮询；刚改完文件时最多可能延迟一个刷新周期。
+- 输出是纯文本，不提供点击跳转或 diff 展开。
