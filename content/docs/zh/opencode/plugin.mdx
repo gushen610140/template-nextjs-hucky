@@ -5,8 +5,8 @@ description: 用自动续跑让 Agent 持续校验、测试和修复，直到你
 
 项目级插件位于 `.opencode/plugins/auto-continue/`。OpenCode 会自动加载 `.opencode/plugins/` 下的插件，不需要修改 `opencode.jsonc`。
 
-<Callout type="warn" title="不要和全局副本同时保留">
-如果全局 `~/.config/opencode/plugins/auto-continue/` 仍然存在，建议删除或移走，避免项目级和全局两份同名插件同时生效。
+<Callout type="warn" title="和全局版本共存">
+项目根目录的 `opencode.jsonc` 用 `-auto-continue` 禁用了全局同名插件，项目版插件 id 是 `hucky.auto-continue`。这样全局插件仍可在其他项目使用，本项目只运行项目版。
 </Callout>
 
 ## 它解决什么问题

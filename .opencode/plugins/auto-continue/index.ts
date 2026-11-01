@@ -72,7 +72,7 @@ const loadFileOptions = (): AutoContinueOptions => {
 };
 
 export default Plugin.define({
-  id: "auto-continue",
+  id: "hucky.auto-continue",
   async setup(ctx) {
     const options: AutoContinueOptions = {
       ...loadFileOptions(),

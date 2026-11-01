@@ -4,7 +4,7 @@ OpenCode 插件：在**开启了的会话**里，每当一轮对话正常结束�
 
 项目级插件放在 `.opencode/plugins/auto-continue/`，OpenCode 会自动加载，不需要改 `opencode.jsonc`。
 
-> 如果全局 `~/.config/opencode/plugins/auto-continue/` 仍然存在，建议删除或移走，避免项目级和全局两份同名插件同时生效。
+> 全局 `~/.config/opencode/plugins/auto-continue/` 可以保留。项目根目录的 `opencode.jsonc` 已经用 `-auto-continue` 禁用全局版本；项目版插件 id 是 `hucky.auto-continue`，两者不会冲突。
 
 > 默认**关闭**：新会话不会自动续跑，需要时在当前会话里输入 `/auto-on` 打开。
 

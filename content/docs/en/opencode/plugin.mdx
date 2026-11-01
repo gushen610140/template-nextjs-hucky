@@ -5,8 +5,8 @@ description: Keep the agent validating, testing, and fixing until you interrupt 
 
 The project-level plugin lives in `.opencode/plugins/auto-continue/`. OpenCode automatically loads plugins under `.opencode/plugins/`, so no `opencode.jsonc` change is required.
 
-<Callout type="warn" title="Do not keep the global copy active">
-If `~/.config/opencode/plugins/auto-continue/` still exists, remove or move it so two plugins with the same name do not run at the same time.
+<Callout type="warn" title="Coexisting with the global copy">
+The project root `opencode.jsonc` disables the global plugin with `-auto-continue`, and the project plugin uses the ID `hucky.auto-continue`. The global plugin can keep working in other projects while this project runs only the project version.
 </Callout>
 
 ## What it solves
