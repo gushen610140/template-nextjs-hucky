@@ -15,7 +15,12 @@ export const translations = i18n
 export function baseOptions(locale: string): BaseLayoutProps {
   return {
     nav: {
-      title: locale === "zh" ? "Hucky 文档" : "Hucky Docs",
+      title: (
+        <span className="-mx-2 -my-1 inline-flex items-center rounded-md px-2 py-1 transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground">
+          {locale === "zh" ? "Hucky 文档" : "Hucky Docs"}
+        </span>
+      ),
+      url: `/${locale}/dashboard`,
     },
   };
 }
