@@ -1,8 +1,8 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import createMiddleware from "next-intl/middleware";
 import { routing } from "./i18n/routing";
-import { getSessionUser, SESSION_COOKIE } from "./lib/session";
+import { PATHNAME_HEADER } from "./lib/request-headers";
+import { isSessionTokenShape, SESSION_COOKIE } from "./lib/session-token";
 
 // intl 国际化重定向组件构造
 const intlMiddleware = createMiddleware(routing);
@@ -19,14 +19,19 @@ function isPublicRoute(pathname: string) {
   );
 }
 
-export default async function proxy(request: NextRequest) {
+export default function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+
+  // 把原始路径透传给服务端组件, 供 requireUser() 拼登录回跳地址
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(PATHNAME_HEADER, pathname);
 
   // Logto 回调位于 /api/auth/callback, 已被下方 matcher 的 `api` 排除规则跳过,
   // 因此不会经过 intlMiddleware, 无需额外放行。
-
-  // 国际化路径重写
-  const intlResponse = intlMiddleware(request);
+  // 传入带自定义请求头的副本, next-intl 会在这份 headers 基础上继续追加 locale。
+  const intlResponse = intlMiddleware(
+    new NextRequest(request, { headers: requestHeaders }),
+  );
 
   // 发现重定向状态直接放行
   if (intlResponse.status >= 300 && intlResponse.status < 400) {
@@ -38,11 +43,16 @@ export default async function proxy(request: NextRequest) {
     return intlResponse;
   }
 
-  // 保护非公共路由: 校验 httpOnly session cookie
+  /*
+   * 乐观检查: 只看 cookie 是否存在、格式是否像本应用签发的 token，不查数据库。
+   *
+   * 这里挡不住伪造的 cookie，所以它不是安全边界。权威校验在
+   * lib/auth.ts 的 requireUser() 里完成，由受保护路由的 layout 调用。
+   * 这样做的收益: 每个请求（包括 prefetch 和 RSC 导航）不再先付一次 DB 往返；
+   * 真正的会话校验只在渲染受保护页面时发生，并且同一请求内通过 React cache 去重。
+   */
   const token = request.cookies.get(SESSION_COOKIE)?.value;
-  const user = await getSessionUser(token);
-
-  if (!user) {
+  if (!isSessionTokenShape(token)) {
     const locale =
       routing.locales.find((l) => pathname.startsWith(`/${l}`)) ??
       routing.defaultLocale;
