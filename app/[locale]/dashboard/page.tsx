@@ -1,65 +1,20 @@
-import { useTranslations } from "next-intl";
-import { AppSidebar } from "@/components/app-sidebar";
-import { ThemeCustomizer } from "@/components/theme-customizer";
-import { ThemeToggle } from "@/components/theme-toggle";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 
+/**
+ * Dashboard 概览。
+ *
+ * 占位块使用固定高度（而不是 aspect-video），这样侧边栏收起、
+ * 内容区变宽时只有宽度变化，高度保持不变。
+ */
 export default function Page() {
-  const t = useTranslations("Dashboard");
-
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2">
-          <div className="flex w-full items-center gap-2 px-4">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="-ml-1" />
-              <Separator
-                orientation="vertical"
-                className="mr-2 data-vertical:h-4 data-vertical:self-auto"
-              />
-              <Breadcrumb>
-                <BreadcrumbList>
-                  <BreadcrumbItem className="hidden md:block">
-                    <BreadcrumbLink href="#">{t("buildApp")}</BreadcrumbLink>
-                  </BreadcrumbItem>
-                  <BreadcrumbSeparator className="hidden md:block" />
-                  <BreadcrumbItem>
-                    <BreadcrumbPage>{t("dataFetching")}</BreadcrumbPage>
-                  </BreadcrumbItem>
-                </BreadcrumbList>
-              </Breadcrumb>
-            </div>
-            <div className="ml-auto flex items-center gap-1">
-              <ThemeCustomizer />
-              <ThemeToggle />
-            </div>
-          </div>
-        </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-            <Skeleton className="aspect-video rounded-xl" />
-            <Skeleton className="aspect-video rounded-xl" />
-            <Skeleton className="aspect-video rounded-xl" />
-          </div>
-          <Skeleton className="min-h-screen flex-1 rounded-xl md:min-h-min" />
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+    <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+      <div className="grid auto-rows-min gap-4 md:grid-cols-3">
+        <Skeleton className="h-40 rounded-xl" />
+        <Skeleton className="h-40 rounded-xl" />
+        <Skeleton className="h-40 rounded-xl" />
+      </div>
+      <Skeleton className="min-h-0 flex-1 rounded-xl" />
+    </div>
   );
 }

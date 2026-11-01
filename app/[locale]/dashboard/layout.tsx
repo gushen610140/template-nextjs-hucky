@@ -1,7 +1,10 @@
+import { AppSidebar } from "@/components/app-sidebar";
+import { DashboardHeader } from "@/components/dashboard-header";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { requireUser } from "@/lib/auth";
 
 /**
- * 受保护分段的权威校验。
+ * 受保护分段的权威校验 + dashboard 外壳。
  *
  * `proxy.ts` 只做乐观检查（cookie 是否存在/格式是否合法），不查数据库；
  * 真正判断会话是否有效、用户是否被禁用，在这里由 `requireUser()` 完成。
@@ -11,5 +14,14 @@ export default async function DashboardLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   await requireUser();
-  return children;
+
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <DashboardHeader />
+        {children}
+      </SidebarInset>
+    </SidebarProvider>
+  );
 }

@@ -6,36 +6,23 @@
     "documentation": "Documentation"
   },
   "Dashboard": {
-    "buildApp": "Build Your Application",
-    "dataFetching": "Data Fetching"
+    "overview": "Overview",
+    "comingSoon": "This module is under construction"
   },
   "Sidebar": {
     "brandName": "Hucky",
-    "brandSlogan": "Relieve Your Hands",
-    "playground": "Playground",
-    "history": "History",
-    "starred": "Starred",
-    "settings": "Settings",
+    "basic": "Basic",
+    "ai": "AI",
+    "users": "Users",
+    "permissions": "Permissions",
+    "roles": "Roles",
     "models": "Models",
-    "genesis": "Genesis",
-    "explorer": "Explorer",
-    "quantum": "Quantum",
-    "documentation": "Documentation",
-    "introduction": "Introduction",
-    "getStarted": "Get Started",
-    "tutorials": "Tutorials",
-    "changelog": "Changelog",
-    "general": "General",
-    "team": "Team",
-    "billing": "Billing",
-    "limits": "Limits",
+    "providers": "Providers",
+    "agents": "Agents",
+    "rag": "RAG",
     "support": "Support",
     "feedback": "Feedback",
-    "designEngineering": "Design Engineering",
-    "salesMarketing": "Sales & Marketing",
-    "travel": "Travel",
-    "platform": "Platform",
-    "project": "Project"
+    "documentation": "Documentation"
   },
   "User": {
     "upgrade": "Upgrade to Pro",
