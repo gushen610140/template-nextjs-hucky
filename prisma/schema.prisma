@@ -12,10 +12,14 @@ datasource db {
 
 // ─── 用户 ──────────────────────────────────────────────
 
+// 认证由 Logto 全权负责, 本地 User 只保存业务资料与授权关系。
+// - logtoSub 是 Logto 的稳定用户标识 (id_token.sub), 作为唯一关联键
+// - 邮箱在 Logto 侧允许变更, 因此不参与身份关联
+// - 允许为空仅为了兼容尚未绑定 Logto 的历史数据 (本地密码已移除, 这类账号无法登录)
 model User {
   id           String   @id @default(cuid())
+  logtoSub     String?  @unique
   email        String   @unique
-  passwordHash String
   name         String?
   avatarUrl    String?
   isActive     Boolean  @default(true)

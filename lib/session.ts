@@ -35,10 +35,13 @@ export async function createSession(userId: string): Promise<string> {
   return token;
 }
 
-/** 校验 token 并返回对应用户(不含 passwordHash), 无效/过期/禁用返回 null */
+/** 会话对应的用户; 内部关联字段(logtoSub)不随会话返回 */
+export type SessionUser = Omit<User, "logtoSub">;
+
+/** 校验 token 并返回对应用户, 无效/过期/禁用返回 null */
 export async function getSessionUser(
   token: string | null | undefined,
-): Promise<Omit<User, "passwordHash"> | null> {
+): Promise<SessionUser | null> {
   if (!token) return null;
 
   const session = await prisma.session.findUnique({
@@ -49,6 +52,7 @@ export async function getSessionUser(
       user: {
         select: {
           id: true,
+          logtoSub: true,
           email: true,
           name: true,
           avatarUrl: true,
