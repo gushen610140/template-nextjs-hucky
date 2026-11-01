@@ -15,7 +15,7 @@ Every frontend component in this project comes from **shadcn/ui**. It is not a r
 | Prefer semantic tokens | `bg-primary`, `text-muted-foreground`; never hardcode `bg-blue-500` |
 | Use Lucide icons | `lucide-react` is configured in `components.json` |
 | Theme comes from CSS variables | Colors, radius, and shadows all derive from `app/[locale]/globals.css` and the theme customizer |
-| Fonts are decided once, at the root | Latin glyphs come from next/font, Chinese glyphs from the system stack; components never declare `font-family` |
+| Fonts are decided once, at the root | System fonts by default; local Latin faces load on demand from the theme panel; Chinese uses the system stack; components never declare `font-family` |
 
 <Callout type="warn" title="Do not edit components/ui">
 `components/ui/` mirrors upstream code. Hand edits cause conflicts on the next `shadcn add` or upgrade and blur the line between framework code and business customization. Wrap the component under `components/` instead.
@@ -150,6 +150,6 @@ If the answers are "yes", "yes", and "yes", do not add another library. Headless
 ## Next
 
 - [Tailwind CSS](./tailwindcss): why it is a hard requirement for shadcn, and when to use native CSS.
-- [Typography](./typography): how next/font and the system stack split the work, and why components contain no `font-family`.
+- [Typography](./typography): system fonts by default, on-demand local Latin faces, and why components contain no `font-family`.
 - [Custom components](./custom-components): how to wrap shadcn without touching `components/ui/`.
 - [Theme configuration](../theme): colors, radius, shadows, and unified docs theming.

@@ -15,7 +15,7 @@ description: 项目唯一的 UI 组件来源、目录约定和日常使用方法
 | 样式优先用语义 token | 例如 `bg-primary`、`text-muted-foreground`，不要写死 `bg-blue-500` |
 | 图标统一用 Lucide | `lucide-react` 已在 `components.json` 中配置 |
 | 主题由 CSS 变量驱动 | 所有颜色、圆角、阴影都来自 `app/[locale]/globals.css` 和主题定制器 |
-| 字体只在根元素决定一次 | 拉丁字形用 next/font，中文字形用系统字体栈，组件不声明 `font-family` |
+| 字体只在根元素决定一次 | 默认系统字体，可在主题面板按需加载本地拉丁字体，中文字形用系统字体栈，组件不声明 `font-family` |
 
 <Callout type="warn" title="不要直接改 components/ui">
 `components/ui/` 是上游代码的镜像。直接修改会让后续 `shadcn add` 或升级产生冲突，也会让其他项目成员无法判断哪些是框架代码、哪些是业务定制。需要不同行为时，在 `components/` 下包一层。
@@ -150,6 +150,6 @@ bunx --bun shadcn@latest add button --diff button.tsx
 ## 接下来
 
 - [Tailwind CSS](./tailwindcss)：为什么它是 shadcn 的硬性条件，以及什么时候用原生 CSS。
-- [字体](./typography)：next/font 与系统字体栈如何分工，以及为什么组件里没有 `font-family`。
+- [字体](./typography)：默认系统字体、按需加载本地拉丁字体，以及为什么组件里没有 `font-family`。
 - [自定义组件](./custom-components)：如何包装 shadcn 组件而不修改 `components/ui/`。
 - [主题配置](../theme)：颜色、圆角、阴影和文档页面的统一主题。
