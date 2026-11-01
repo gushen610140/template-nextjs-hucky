@@ -15,6 +15,10 @@ description: Show the current worktree's git status -sb in the OpenCode sidebar
 
 OpenCode discovers TUI plugins under `.opencode/plugins/` automatically; no `opencode.jsonc` change is required.
 
+<Callout type="warn" title="Coexisting with the global copy">
+The project root `opencode.jsonc` disables the global plugin with `-git-status`, and the project plugin uses the ID `hucky.git-status`. The global plugin can keep working in other projects while this project runs only the project version.
+</Callout>
+
 ## What it shows
 
 Every 2 seconds the plugin runs:

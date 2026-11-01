@@ -15,6 +15,10 @@ description: 在 OpenCode 侧边栏实时显示当前 worktree 的 git status -s
 
 OpenCode 会自动发现 `.opencode/plugins/` 下的 TUI 插件，不需要修改 `opencode.jsonc`。
 
+<Callout type="warn" title="和全局版本共存">
+项目根目录的 `opencode.jsonc` 用 `-git-status` 禁用了全局同名插件，项目版插件 id 是 `hucky.git-status`。这样全局插件仍可在其他项目使用，本项目只运行项目版。
+</Callout>
+
 ## 显示内容
 
 插件每 2 秒执行一次：
