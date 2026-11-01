@@ -63,15 +63,25 @@
 
 :root {
   /* ── Typography ──
-    拉丁字形来自 next/font（app/[locale]/layout.tsx 注入 --font-latin-*），
-    中文字形不下载 webfont，直接使用系统字体栈。
-    var() 的第二个参数是兜底值：变量缺失时整条 font-family 会失效，
-    所以这里显式给出 sans-serif / serif / ui-monospace。
+    默认完全使用系统字体，不加载任何 webfont。
+    用户选择本地字体后，FontProvider 会通过 inline style 写入 --font-latin-*；
+    没有该变量时回落到 --font-system-*。
+    中文字形始终使用下面的系统字体栈。
     Fumadocs 内部直接读 var(--font-sans) / var(--font-mono)，最后一并覆盖成同一套栈。
   */
-  --app-font-sans: var(--font-latin-sans, sans-serif), var(--font-cjk-sans);
-  --app-font-mono: var(--font-latin-mono, ui-monospace), var(--font-cjk-mono);
-  --app-font-heading: var(--font-latin-heading, serif), var(--font-cjk-heading);
+  --font-system-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-system-heading: ui-serif, Georgia, "Times New Roman", serif;
+  --font-system-mono:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --app-font-sans:
+    var(--font-latin-sans, var(--font-system-sans)), var(--font-cjk-sans);
+  --app-font-mono:
+    var(--font-latin-mono, var(--font-system-mono)), var(--font-cjk-mono);
+  --app-font-heading:
+    var(--font-latin-heading, var(--font-system-heading)), var(--font-cjk-heading);
 
   --font-cjk-sans:
     "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC",
