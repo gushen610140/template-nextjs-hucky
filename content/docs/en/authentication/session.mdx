@@ -1,0 +1,96 @@
+---
+title: Sessions and route protection
+description: Opaque sessions, httpOnly cookies, proxy route protection, and logout
+---
+
+Logto owns authentication; this app only owns sessions and authorization. After a successful Logto sign-in, the callback route maps the Logto identity to a local `User` and issues a local opaque session.
+
+## Creating a session after sign-in
+
+`app/api/auth/callback/route.ts` performs the OIDC callback, then:
+
+1. Calls `upsertLogtoUser(claims)` to find or create the local user.
+2. Checks `user.isActive`; disabled users are sent back to the login page.
+3. Calls `createSession(user.id)` to generate a random token.
+4. Writes the raw token to the httpOnly `session` cookie and stores only its hash in the database.
+5. Redirects to `logto_next`, or to the default-locale dashboard.
+
+<Mermaid
+  chart={`
+sequenceDiagram
+  participant B as Browser
+  participant C as /api/auth/callback
+  participant DB as PostgreSQL
+
+  B->>C: GET ?code=...&state=...
+  C->>C: handleSignIn exchanges the code
+  C->>DB: upsert User(logtoSub)
+  alt User disabled
+    C-->>B: 302 /login?error=logto
+  else OK
+    C->>DB: create Session(tokenHash)
+    C-->>B: 302 app page + Set-Cookie: session
+  end
+`}
+/>
+
+## Session design
+
+Sessions use an opaque token: the browser holds a random value, and the database stores only its hash.
+
+```ts
+// lib/session.ts
+const token = randomBytes(32).toString("base64url");
+const tokenHash = createHash("sha256").update(token).digest("hex");
+
+await prisma.session.create({
+  data: {
+    tokenHash,
+    userId,
+    expiresAt: new Date(Date.now() + SESSION_DURATION_MS),
+  },
+});
+```
+
+If the database leaks, the attacker only gets `tokenHash` and cannot recover the raw cookie value. Sessions last 7 days by default.
+
+Cookie options:
+
+```ts
+{
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  path: "/",
+  maxAge: 7 * 24 * 60 * 60,
+}
+```
+
+## Route protection
+
+`proxy.ts` runs after next-intl handles the locale prefix:
+
+1. Public routes pass through: `/`, `/login`, `/docs`.
+2. Other pages read the `session` cookie.
+3. `getSessionUser(token)` looks up the database.
+4. Without a valid user, redirect to `/<locale>/login?next=<original path>`.
+5. After sign-in, return to `next` when it is a safe in-site path.
+
+`next` must start with `/` and must not start with `//`, which prevents open redirects.
+
+## Endpoints
+
+| Endpoint | Method | Purpose |
+| --- | --- | --- |
+| `/api/auth/logto` | `GET` | Start Logto sign-in |
+| `/api/auth/callback` | `GET` | Finish the OIDC callback and create a session |
+| `/api/auth/logout` | `POST` | Delete the current session and clear cookies |
+| `/api/auth/me` | `GET` | Read the current user |
+
+## Security notes
+
+- The session token lives only in an httpOnly cookie. Do not read it in the browser or put it in `localStorage`.
+- Production must use HTTPS for the `secure` cookie flag to take effect.
+- Logout deletes the local session but does not revoke the global Logto SSO session. Clicking Logto again may return without a password prompt; that is expected.
+- Disabling a user in Logto does not immediately invalidate existing local sessions; they can live for up to 7 days. For immediate lockout, also set `User.isActive = false`, or shorten the session lifetime.
+- There is no "sign out everywhere" yet. It is a `deleteMany` on `Session` by `userId`; see [Evolution](./evolution).

@@ -1,62 +1,58 @@
 ---
 title: Authentication & users
-description: Local accounts, Logto sign-in, sessions, and RBAC
+description: Logto as the only identity entry, local sessions, and RBAC
 ---
 
-The project supports two identity entry points:
+This project delegates authentication entirely to Logto. Locally it keeps only three things:
 
-- **Email + password**: handled entirely by the local database and sessions.
-- **Logto**: OIDC sign-in, mapped to a local `User`.
+- **`User`**: profile and authorization relations, with no password.
+- **`Session`**: the app's own opaque session that decides whether a request is signed in.
+- **RBAC**: roles and permissions, enforced by business code.
 
-Both entry points end up in the same `User` table and the same local session system. The core rule is: **one email maps to one local user**.
+There is no local email/password login and no local registration endpoint. Every user enters through Logto.
 
 <Mermaid
   chart={`
 flowchart TB
   Browser[Browser]
-  Local["Email + password"]
   Logto["Logto OIDC"]
-  Login["/api/auth/login"]
-  Register["/api/auth/register"]
   LogtoStart["/api/auth/logto"]
   Callback["/api/auth/callback"]
   Session["Local session<br/>httpOnly Cookie"]
   DB[("PostgreSQL<br/>User / Session / RBAC")]
 
-  Browser --> Local --> Login
-  Browser --> Register
   Browser --> Logto --> LogtoStart --> Callback
-  Login --> DB
-  Register --> DB
   Callback --> DB
-  Login --> Session
-  Register --> Session
   Callback --> Session
   Session --> Browser
 `}
 />
 
-## Two sign-in paths
+## The only identity entry
 
-| Path | Entry | Credential | Account source |
-| --- | --- | --- | --- |
-| Email/password | `/login` form | Email + bcrypt hash | Local registration |
-| Logto | `Continue with Logto` | Logto OIDC | Created or merged in callback |
+| Item | Description |
+| --- | --- |
+| Sign-in entry | `Continue with Logto` on the login page |
+| Credentials | Fully managed by Logto (password, social, MFA, ...) |
+| Account source | Created or bound during the Logto callback |
+| Session | Issued by this app after a successful callback |
 
-Both paths call `createSession(user.id)` and write the same httpOnly cookie. Application code does not need to know which provider was used.
+Logto answers "who is this person"; the app answers "what may this person do". Business code does not need to know how the user signed in at Logto.
 
 ## Account linking rules
 
-`lib/logto-user.ts` maps Logto claims to a local user:
+`lib/logto-user.ts` uses Logto's `sub` as the stable link:
 
-1. If Logto returns a **verified email**, use that email to find the local user.
-2. If found, update `name` and `avatarUrl`, keep the local `passwordHash`, and allow email/password login to continue.
-3. If not found, create a new local user.
-4. If there is no verified email, use `<logto-sub>@logto.local` as a placeholder email so an unverified email cannot be merged into an existing account.
+1. A user with the same `logtoSub` already exists: sync `name`, `avatarUrl`, and the verified email.
+2. No binding yet, but a legacy local account has the same email: bind `logtoSub` once and keep its roles and business data.
+3. Neither exists: create a new local user.
+4. No verified email: use `<sub>@logto.local` as a placeholder so it cannot collide with a real email.
 
 <Callout type="warn" title="Only trust verified emails">
-An unverified Logto email must not be used for account merging. Otherwise an attacker could enter someone else's email in Logto and take over the local account. The current code only uses the real email when `email_verified === true`.
+An unverified Logto email must not be used to bind a legacy account, or an attacker could enter someone else's email and take over the local account. The current code only uses the real email for a one-time bind when `email_verified === true`.
 </Callout>
+
+Email is just profile data. Changing it in Logto does not break the local account, because the link is the stable `sub`.
 
 ## Session model
 
@@ -68,39 +64,16 @@ Local sessions use an opaque token:
 - Expired sessions and disabled users are rejected and their sessions are deleted.
 - Logout deletes the local session and clears the Logto SDK cookie.
 
-<Mermaid
-  chart={`
-sequenceDiagram
-  participant B as Browser
-  participant P as proxy.ts
-  participant S as Session service
-  participant DB as PostgreSQL
-
-  B->>P: Protected request + session Cookie
-  P->>S: getSessionUser(token)
-  S->>DB: findUnique(tokenHash)
-  DB-->>S: Session + User
-  alt Valid and active
-    S-->>P: User
-    P-->>B: Allow
-  else Expired or disabled
-    S->>DB: deleteMany(session)
-    S-->>P: null
-    P-->>B: 302 /login?next=...
-  end
-`}
-/>
+See [Sessions and route protection](./session) for details.
 
 ## Key files
 
 | Path | Purpose |
 | --- | --- |
-| `app/api/auth/register/route.ts` | Email/password registration |
-| `app/api/auth/login/route.ts` | Email/password login |
-| `app/api/auth/logout/route.ts` | Delete local session and clear cookies |
-| `app/api/auth/me/route.ts` | Return the current user |
 | `app/api/auth/logto/route.ts` | Start Logto sign-in |
 | `app/api/auth/callback/route.ts` | Logto callback, user mapping, local session |
+| `app/api/auth/logout/route.ts` | Delete local session and clear cookies |
+| `app/api/auth/me/route.ts` | Return the current user |
 | `lib/logto-user.ts` | Logto claims → local User |
 | `lib/session.ts` | Create, validate, delete sessions |
 | `lib/prisma.ts` | Prisma Client singleton |
@@ -109,14 +82,14 @@ sequenceDiagram
 
 ## Current limits
 
-- Local **code login is disabled**. There is no email delivery service, so the placeholder that accepted any six-digit code was removed. Passwordless login should go through Logto or a real OTP implementation.
-- No email verification. The email entered at registration is trusted; production should add verification.
+- There is no local registration, password, code, or password-reset flow; Logto owns all of them.
+- There is no UI to inspect or unlink a Logto identity.
 - RBAC tables exist, but there is no admin UI or authorization API yet; business code must enforce permissions.
-- No login rate limiting, audit log, or MFA. See [Evolution](./evolution).
+- There is no login rate limiting, audit log, or MFA; configure these in Logto first. See [Evolution](./evolution) for incremental upgrades.
 
 ## Next
 
-- [Local accounts and sessions](./local): registration, login, cookies, proxy checks.
-- [Logto](./logto): OIDC flow, claims mapping, account merging.
+- [Sessions and route protection](./session): sessions, cookies, proxy checks, and logout.
+- [Logto](./logto): OIDC flow, claims mapping, and account binding.
 - [RBAC](./rbac): users, roles, permissions, and authorization.
-- [Evolution](./evolution): identity table, OTP, linking, revocation, audit.
+- [Evolution](./evolution): multiple identities, revocation, and audit.

@@ -28,7 +28,7 @@ datasource db {
 
 | 模型 | 作用 |
 | --- | --- |
-| `User` | 本地用户账号、资料、启用状态和时间戳 |
+| `User` | 本地用户资料、Logto 关联、启用状态和时间戳 |
 | `Role` | 角色，例如管理员、编辑者 |
 | `Permission` | 细粒度权限，例如 `user:create`、`post:publish` |
 | `UserRole` | 用户与角色的多对多关联表 |
@@ -40,8 +40,8 @@ datasource db {
 ```prisma
 model User {
   id           String   @id @default(cuid())
+  logtoSub     String?  @unique
   email        String   @unique
-  passwordHash String
   name         String?
   avatarUrl    String?
   isActive     Boolean  @default(true)
@@ -56,10 +56,10 @@ model User {
 设计要点：
 
 - `id` 使用 `cuid()`，不暴露自增 ID。
-- `email` 唯一，注册和登录都按邮箱查找。
-- `passwordHash` 只存 bcrypt 哈希，不存明文密码。
-- `name`、`avatarUrl` 可以为空，兼容只有邮箱的账号。
-- `isActive` 用于禁用账号；登录、会话校验和 Logto 回调都会检查。
+- `logtoSub` 是 Logto 的稳定用户标识，也是唯一的身份关联键。
+- `email` 唯一，来自 Logto claims；用户可以在 Logto 修改邮箱，因此它不参与身份关联。
+- `name`、`avatarUrl` 可以为空，由 Logto claims 同步。
+- `isActive` 用于禁用账号；会话校验和 Logto 回调都会检查。
 - `updatedAt` 由 Prisma 在更新时自动维护。
 
 ### Session

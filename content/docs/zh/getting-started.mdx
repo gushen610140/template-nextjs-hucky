@@ -97,9 +97,9 @@ bun dev
 
 ## 认证与路由保护
 
-`proxy.ts` 做了两件事：先用 next-intl 补全语言前缀，再校验 Logto 会话 Cookie。
+`proxy.ts` 做了两件事：先用 next-intl 补全语言前缀，再校验本地 Session Cookie。
 
-- 公开路由：`/`、`/login`、`/register`、`/docs`
+- 公开路由：`/`、`/login`、`/docs`
 - 其余路由未登录时会跳转到 `/<locale>/login?next=<原路径>`
 
 新增公开页面时，记得同步修改 `proxy.ts` 里的 `publicRoutes`，否则会被拦截到登录页。

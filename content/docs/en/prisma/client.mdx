@@ -63,16 +63,16 @@ const existing = await prisma.user.findUnique({
 });
 ```
 
-Select only what the caller needs. Do not return entire rows by default, especially `passwordHash`.
+Select only what the caller needs. Do not return entire rows by default, especially internal link fields.
 
 ### Create and return safe fields
 
 ```ts
 const user = await prisma.user.create({
   data: {
+    logtoSub: claims.sub,
     email,
-    passwordHash,
-    name: username,
+    name: claims.name ?? claims.username,
   },
   select: {
     id: true,
@@ -126,7 +126,7 @@ await prisma.session.create({
 });
 ```
 
-The query in `lib/session.ts` selects only the session ID, expiry, and safe user fields. It does not load `passwordHash` just to discard it.
+The query in `lib/session.ts` selects only the session ID, expiry, and safe user fields. It does not load internal link fields just to discard them.
 
 ### Transactions
 
@@ -193,13 +193,13 @@ Never use `$queryRawUnsafe` with user input.
 
 ## Error handling
 
-Unique-constraint violations throw `PrismaClientKnownRequestError`, for example a duplicate email:
+Unique-constraint violations throw `PrismaClientKnownRequestError`, for example two concurrent inserts of the same `logtoSub`:
 
 ```ts
 import { Prisma } from "@/lib/generated/prisma/client";
 
 try {
-  await prisma.user.create({ data: { email, passwordHash } });
+  await prisma.user.create({ data: { logtoSub, email } });
 } catch (error) {
   if (
     error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -220,7 +220,7 @@ Common codes:
 | `P2025` | The record to update or delete does not exist |
 | `P1001` | Cannot reach the database |
 
-In Route Handlers, map expected constraint errors to 4xx responses instead of returning 500 for everything. The registration endpoint already catches `P2002` and returns 409; apply the same pattern when adding other unique fields.
+In Route Handlers, map expected constraint errors to 4xx responses instead of returning 500 for everything. The Logto user mapping already catches `P2002` and re-reads the created account; apply the same pattern when adding other unique fields.
 
 ## Performance guidance
 

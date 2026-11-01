@@ -1,0 +1,96 @@
+---
+title: 会话与路由保护
+description: 不透明 Session、httpOnly Cookie、proxy 路由保护和登出
+---
+
+认证由 Logto 负责，本应用只管理会话和授权。用户通过 Logto 登录成功后，回调路由会把 Logto 身份映射到本地 `User`，再签发一个本地不透明 Session。
+
+## 登录后如何建立会话
+
+`app/api/auth/callback/route.ts` 在完成 OIDC 回调后：
+
+1. 调用 `upsertLogtoUser(claims)` 找到或创建本地用户。
+2. 检查 `user.isActive`，被禁用的用户直接回到登录页。
+3. 调用 `createSession(user.id)` 生成随机 token。
+4. 把原始 token 写入 httpOnly `session` Cookie，数据库只保存哈希。
+5. 跳转回 `logto_next` 记录的业务路径，否则回到默认语言 dashboard。
+
+<Mermaid
+  chart={`
+sequenceDiagram
+  participant B as 浏览器
+  participant C as /api/auth/callback
+  participant DB as PostgreSQL
+
+  B->>C: GET ?code=...&state=...
+  C->>C: handleSignIn 换取 token
+  C->>DB: upsert User(logtoSub)
+  alt 用户被禁用
+    C-->>B: 302 /login?error=logto
+  else 正常
+    C->>DB: create Session(tokenHash)
+    C-->>B: 302 业务页面 + Set-Cookie: session
+  end
+`}
+/>
+
+## Session 设计
+
+会话采用“客户端持有不透明 token，数据库只存哈希”的方式：
+
+```ts
+// lib/session.ts
+const token = randomBytes(32).toString("base64url");
+const tokenHash = createHash("sha256").update(token).digest("hex");
+
+await prisma.session.create({
+  data: {
+    tokenHash,
+    userId,
+    expiresAt: new Date(Date.now() + SESSION_DURATION_MS),
+  },
+});
+```
+
+数据库泄露时，攻击者只拿到 `tokenHash`，无法反推出 Cookie 中的原始 token。Session 默认有效期为 7 天。
+
+Cookie 选项：
+
+```ts
+{
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  path: "/",
+  maxAge: 7 * 24 * 60 * 60,
+}
+```
+
+## 路由保护
+
+`proxy.ts` 在 next-intl 处理语言前缀之后执行：
+
+1. 公开路由直接放行：`/`、`/login`、`/docs`。
+2. 其他页面从 Cookie 读取 `session`。
+3. 调用 `getSessionUser(token)` 查询数据库。
+4. 没有有效用户时跳转 `/<locale>/login?next=<原路径>`。
+5. 登录成功后优先回到 `next` 指定的站内路径。
+
+`next` 参数只接受以 `/` 开头且不以 `//` 开头的路径，防止开放重定向。
+
+## 相关接口
+
+| 接口 | 方法 | 说明 |
+| --- | --- | --- |
+| `/api/auth/logto` | `GET` | 发起 Logto 登录 |
+| `/api/auth/callback` | `GET` | 完成 OIDC 回调并创建会话 |
+| `/api/auth/logout` | `POST` | 删除当前 Session 并清理 Cookie |
+| `/api/auth/me` | `GET` | 读取当前用户 |
+
+## 安全注意事项
+
+- Session token 只存在于 httpOnly Cookie，前端无法读取，也不要写入 `localStorage`。
+- 生产环境必须启用 HTTPS，`secure` Cookie 才会生效。
+- 登出会删除本地 Session，但不会撤销 Logto 的全局 SSO 会话；再次点击 Logto 登录可能无需输入密码直接返回，这是正常行为。
+- 在 Logto 中禁用用户不会立刻让已有本地 Session 失效，最长要等到 7 天过期。需要即时封禁时，应在业务侧同步设置 `User.isActive = false`，或缩短会话有效期。
+- 当前没有“登出所有设备”功能，可以按 `userId` 批量删除 `Session` 实现，详见[演进与扩展](./evolution)。

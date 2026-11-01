@@ -1,9 +1,9 @@
 ---
 title: Logto 接入
-description: OIDC 登录流程、claims 映射、邮箱合并和账号安全边界
+description: OIDC 登录流程、claims 映射、账号绑定和回调细节
 ---
 
-Logto 是可选的外部身份中心。它负责登录界面和身份验证，本项目仍然使用自己的 `User` 表和本地 Session。
+Logto 是本项目唯一的身份中心。它负责登录界面和身份验证；本应用仍然使用自己的 `User` 表和本地 Session。
 
 ## 配置
 
@@ -28,13 +28,13 @@ http://localhost:3000/api/auth/callback
 
 ## 登录流程
 
-1. 用户点击登录页的 `继续使用 Logto`。
+1. 用户点击登录页的 `使用 Logto 登录`。
 2. 浏览器访问 `/api/auth/logto?next=...`。
 3. `next` 被写入短期的 `logto_next` httpOnly Cookie。
 4. Logto SDK 的 `signIn` 重定向到 Logto 授权页。
-5. Logto 回调到 `/api/auth/callback`。
-6. `handleSignIn` 用授权码换取 token。
-7. `getLogtoContext` 读取 claims。
+5. Logto 回调到 `/api/auth/callback?code=...&state=...`。
+6. `handleSignIn` 校验 `state`，用授权码换取 token，并把 token 写入 Logto SDK 自己的加密 Cookie。
+7. `getLogtoContext` 读取 ID token 的 claims。
 8. `upsertLogtoUser` 把 claims 映射到本地 `User`。
 9. 创建本地 Session，写入 `session` Cookie。
 10. 根据 `logto_next` 或默认语言跳转回站内页面。
@@ -50,11 +50,11 @@ sequenceDiagram
   B->>App: GET /api/auth/logto?next=/zh/dashboard
   App->>B: 302 Logto 授权页 + logto_next Cookie
   B->>L: 登录
-  L->>B: 302 /api/auth/callback?code=...
+  L->>B: 302 /api/auth/callback?code=...&state=...
   B->>App: GET /api/auth/callback
-  App->>L: 用 code 换 token
-  L-->>App: ID token / claims
-  App->>DB: findUnique(email) / update / create
+  App->>L: 用 code + PKCE 换 token
+  L-->>App: access_token / id_token / refresh_token
+  App->>DB: upsert User(logtoSub)
   App->>DB: create Session
   App->>B: 302 /zh/dashboard + session Cookie
 `}
@@ -64,24 +64,25 @@ sequenceDiagram
 
 `lib/logto-user.ts` 的规则：
 
-| Logto claims | 本地处理 |
+| 情况 | 本地处理 |
 | --- | --- |
-| `email` 且 `email_verified === true` | 使用规范化邮箱作为唯一键 |
+| 已存在相同 `logtoSub` | 同步 `name`、`avatarUrl` 和已验证邮箱 |
+| 没有绑定，但本地有同邮箱的历史账号 | 绑定一次 `logtoSub`，保留角色和业务数据 |
+| 都没有 | 创建新 `User` |
 | 没有已验证邮箱 | 使用 `<sub>@logto.local` 占位邮箱 |
-| 本地已存在同邮箱用户 | 更新 `name`、`avatarUrl`，保留 `passwordHash` |
-| 本地不存在 | 创建新 `User`，写入随机 bcrypt 占位密码 |
-| 并发回调同时创建 | 捕获 `P2002`，改为更新已存在的用户 |
+| 并发回调同时创建 | 捕获 `P2002`，回查已创建的账号 |
+| 邮箱已被其他 Logto 身份占用 | 退回占位邮箱，避免相互覆盖 |
 
-### 为什么保留本地密码
+### 为什么用 sub 而不是邮箱
 
-如果用户先用邮箱密码注册，再用同一个已验证邮箱登录 Logto，系统会把 Logto 资料合并到已有账号，而不是创建第二个账号。`passwordHash` 不会被清空，所以两种登录方式可以同时使用。
+Logto 的 `sub` 在用户生命周期内不变，邮箱却可能被用户修改。如果继续用邮箱做关联键，用户改邮箱后会被识别成新账号，甚至可能并入另一个同邮箱账号。`logtoSub` 唯一列解决了这个问题。
 
 ### 为什么使用占位邮箱
 
-部分 Logto 实例只启用 username 登录，不提供已验证邮箱。此时如果把未验证邮箱直接用于匹配，本地已有账号可能被他人接管。`<sub>@logto.local` 使用 Logto 的稳定 `sub`，既能保证一个 Logto 身份对应一个本地用户，又不会和真实邮箱冲突。
+部分 Logto 实例只启用 username 登录，不提供已验证邮箱。此时如果拿未验证邮箱去匹配，本地已有账号可能被他人接管。`<sub>@logto.local` 使用稳定的 `sub`，既保证一个 Logto 身份对应一个本地用户，又不会和真实邮箱冲突。
 
 <Callout type="warn" title="不要信任未验证邮箱">
-只有 `email_verified === true` 才能参与邮箱合并。修改这段逻辑前，先确认 Logto 是否已经完成邮箱验证。
+只有 `email_verified === true` 才能参与历史账号的一次性邮箱绑定。修改这段逻辑前，先确认 Logto 是否已经完成邮箱验证。
 </Callout>
 
 ## 登出
@@ -96,10 +97,10 @@ sequenceDiagram
 
 ## 当前限制
 
-- 没有单独保存 Logto `sub`，账号关联完全依赖邮箱。用户在 Logto 修改邮箱后，下一次登录可能被识别为新用户。
 - 没有“解绑 Logto”或“查看已绑定身份”的界面。
-- 没有把 Logto 的 `sub` 与本地用户建立不可变映射；如果未来需要多身份绑定，建议增加 `AuthIdentity` 表，详见[演进与扩展](./evolution)。
+- 一个本地用户目前只能绑定一个 Logto 身份。需要多身份绑定时，建议增加 `AuthIdentity` 表，详见[演进与扩展](./evolution)。
 - Logto 回调失败时统一回到 `/login?error=logto`，没有细分错误码。
+- 没有在本地缓存 Logto 的 access token。需要调用 Account API 或 Management API 时，应通过 `getAccessToken` / `getAccessTokenRSC` 显式获取。
 
 ## 调试清单
 
@@ -107,4 +108,4 @@ sequenceDiagram
 - `LOGTO_BASE_URL` 是否与浏览器实际访问地址一致。
 - `LOGTO_COOKIE_SECRET` 是否至少 32 个字符。
 - 用户是否真的拥有已验证邮箱。
-- 本地是否已经存在同邮箱用户，以及该用户是否被禁用。
+- 本地是否已经存在同邮箱或同 `logtoSub` 的用户，以及该用户是否被禁用。

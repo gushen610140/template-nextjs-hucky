@@ -28,7 +28,7 @@ datasource db {
 
 | Model | Purpose |
 | --- | --- |
-| `User` | Local account, profile, active flag, and timestamps |
+| `User` | Local profile, Logto link, active flag, and timestamps |
 | `Role` | Roles such as admin or editor |
 | `Permission` | Fine-grained permissions such as `user:create` or `post:publish` |
 | `UserRole` | Many-to-many join table between users and roles |
@@ -40,8 +40,8 @@ datasource db {
 ```prisma
 model User {
   id           String   @id @default(cuid())
+  logtoSub     String?  @unique
   email        String   @unique
-  passwordHash String
   name         String?
   avatarUrl    String?
   isActive     Boolean  @default(true)
@@ -56,10 +56,10 @@ model User {
 Design notes:
 
 - `id` uses `cuid()` instead of exposing auto-increment IDs.
-- `email` is unique; registration and login both look users up by email.
-- `passwordHash` stores a bcrypt hash, never a plaintext password.
-- `name` and `avatarUrl` are optional so email-only accounts work.
-- `isActive` marks disabled accounts. Login, session validation, and the Logto callback reject inactive users.
+- `logtoSub` is Logto's stable user identifier and the only identity link.
+- `email` is unique and comes from Logto claims. Users can change it in Logto, so it does not participate in identity linking.
+- `name` and `avatarUrl` are optional and synced from Logto claims.
+- `isActive` marks disabled accounts. Session validation and the Logto callback reject inactive users.
 - `updatedAt` is maintained by Prisma on update.
 
 ### Session

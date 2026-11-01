@@ -63,16 +63,16 @@ const existing = await prisma.user.findUnique({
 });
 ```
 
-只取需要的字段，不要默认把整行数据（尤其是 `passwordHash`）返回给调用方。
+只取需要的字段，不要默认把整行数据（尤其是内部的关联字段）返回给调用方。
 
 ### 创建记录并只返回安全字段
 
 ```ts
 const user = await prisma.user.create({
   data: {
+    logtoSub: claims.sub,
     email,
-    passwordHash,
-    name: username,
+    name: claims.name ?? claims.username,
   },
   select: {
     id: true,
@@ -126,7 +126,7 @@ await prisma.session.create({
 });
 ```
 
-`lib/session.ts` 中的查询只选择会话 ID、过期时间和安全的用户字段，不会把 `passwordHash` 读出后再丢弃。
+`lib/session.ts` 中的查询只选择会话 ID、过期时间和安全的用户字段，不会把内部关联字段一并读出。
 
 ### 事务
 
@@ -193,13 +193,13 @@ const rows = await prisma.$queryRaw<{ id: string }[]>`
 
 ## 错误处理
 
-唯一约束冲突会抛出 `PrismaClientKnownRequestError`，例如重复邮箱：
+唯一约束冲突会抛出 `PrismaClientKnownRequestError`，例如同一个 `logtoSub` 被并发写入：
 
 ```ts
 import { Prisma } from "@/lib/generated/prisma/client";
 
 try {
-  await prisma.user.create({ data: { email, passwordHash } });
+  await prisma.user.create({ data: { logtoSub, email } });
 } catch (error) {
   if (
     error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -220,7 +220,7 @@ try {
 | `P2025` | 要更新或删除的记录不存在 |
 | `P1001` | 无法连接数据库 |
 
-在 Route Handler 中，应把可预期的约束错误映射成 4xx，而不是统一返回 500。当前注册接口已经捕获 `P2002` 并返回 409；以后新增其他唯一字段时也要采用同样的处理方式。
+在 Route Handler 中，应把可预期的约束错误映射成 4xx，而不是统一返回 500。当前 Logto 用户映射已经捕获 `P2002` 并回查已创建的账号；以后新增其他唯一字段时也要采用同样的处理方式。
 
 ## 性能建议
 

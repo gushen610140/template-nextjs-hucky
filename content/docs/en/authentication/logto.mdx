@@ -1,9 +1,9 @@
 ---
 title: Logto integration
-description: OIDC flow, claims mapping, email merging, and security boundaries
+description: OIDC flow, claims mapping, account binding, and callback details
 ---
 
-Logto is an optional external identity provider. It handles the sign-in UI and identity verification; the app still owns its `User` table and local session.
+Logto is the only identity provider in this project. It owns the sign-in UI and identity verification; the app still owns its `User` table and local session.
 
 ## Configuration
 
@@ -32,9 +32,9 @@ Use the production domain in production. The callback lives under `/api`, so it 
 2. The browser goes to `/api/auth/logto?next=...`.
 3. `next` is stored in a short-lived `logto_next` httpOnly cookie.
 4. The Logto SDK redirects to the authorization page.
-5. Logto redirects back to `/api/auth/callback`.
-6. `handleSignIn` exchanges the code for tokens.
-7. `getLogtoContext` reads the claims.
+5. Logto redirects back to `/api/auth/callback?code=...&state=...`.
+6. `handleSignIn` verifies `state`, exchanges the code for tokens, and stores them in the Logto SDK's encrypted cookie.
+7. `getLogtoContext` reads the ID token claims.
 8. `upsertLogtoUser` maps claims to a local `User`.
 9. A local session is created and the `session` cookie is written.
 10. The user returns to `logto_next` or the default locale dashboard.
@@ -50,11 +50,11 @@ sequenceDiagram
   B->>App: GET /api/auth/logto?next=/zh/dashboard
   App->>B: 302 Logto + logto_next Cookie
   B->>L: Sign in
-  L->>B: 302 /api/auth/callback?code=...
+  L->>B: 302 /api/auth/callback?code=...&state=...
   B->>App: GET /api/auth/callback
-  App->>L: Exchange code for tokens
-  L-->>App: ID token / claims
-  App->>DB: findUnique(email) / update / create
+  App->>L: Exchange code + PKCE for tokens
+  L-->>App: access_token / id_token / refresh_token
+  App->>DB: upsert User(logtoSub)
   App->>DB: create Session
   App->>B: 302 /zh/dashboard + session Cookie
 `}
@@ -64,24 +64,25 @@ sequenceDiagram
 
 Rules in `lib/logto-user.ts`:
 
-| Logto claims | Local behavior |
+| Case | Local behavior |
 | --- | --- |
-| `email` and `email_verified === true` | Use the normalized email as the unique key |
-| No verified email | Use `<sub>@logto.local` |
-| Local user with the same email exists | Update `name` and `avatarUrl`, keep `passwordHash` |
-| No local user | Create a `User` with a random bcrypt placeholder password |
-| Concurrent callback creates the same email | Catch `P2002` and update the existing user |
+| Same `logtoSub` already exists | Sync `name`, `avatarUrl`, and the verified email |
+| Not bound, but a legacy account has the same email | Bind `logtoSub` once and keep roles and business data |
+| Neither exists | Create a new `User` |
+| No verified email | Use `<sub>@logto.local` as a placeholder |
+| Concurrent callbacks create at once | Catch `P2002` and re-read the created account |
+| Email already used by another Logto identity | Fall back to the placeholder email instead of overwriting |
 
-### Why keep the local password
+### Why `sub` instead of email
 
-A user can register with email/password, then sign in through Logto with the same verified email. The system merges the profile into the existing account instead of creating a second user. The password hash remains, so both methods work.
+Logto's `sub` never changes for a user, while the email can be edited. Keying on email would make an email change look like a new user, or even merge into another account with that email. The unique `logtoSub` column avoids both.
 
 ### Why use a placeholder email
 
 Some Logto instances only enable username sign-in and provide no verified email. Using an unverified email for matching could let someone take over an existing local account. `<sub>@logto.local` is stable for the Logto identity and cannot collide with a real email.
 
 <Callout type="warn" title="Do not trust unverified email">
-Only `email_verified === true` may participate in email merging. Confirm that Logto has completed verification before changing this rule.
+Only `email_verified === true` may participate in the one-time bind to a legacy account. Confirm that Logto has completed verification before changing this rule.
 </Callout>
 
 ## Logout
@@ -96,10 +97,10 @@ If the user still has a Logto SSO session, clicking Logto again may return witho
 
 ## Current limits
 
-- The Logto `sub` is not stored separately; account linking depends entirely on email. If the email changes in Logto, the next login may look like a new user.
 - There is no UI to inspect or unlink a Logto identity.
-- There is no immutable `sub` mapping. If you need multiple identities, add an `AuthIdentity` table; see [Evolution](./evolution).
+- One local user can bind only one Logto identity today. If you need multiple identities, add an `AuthIdentity` table; see [Evolution](./evolution).
 - Callback errors all redirect to `/login?error=logto` without finer error codes.
+- Logto access tokens are not cached locally. When calling the Account or Management API, request one explicitly with `getAccessToken` / `getAccessTokenRSC`.
 
 ## Debug checklist
 
@@ -107,4 +108,4 @@ If the user still has a Logto SSO session, clicking Logto again may return witho
 - Does `LOGTO_BASE_URL` match the browser URL?
 - Is `LOGTO_COOKIE_SECRET` at least 32 characters?
 - Does the user actually have a verified email?
-- Does a local user with that email already exist, and is it active?
+- Does a local user with that email or `logtoSub` already exist, and is it active?

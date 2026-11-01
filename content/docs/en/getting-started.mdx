@@ -97,9 +97,9 @@ Open `http://localhost:3000`; you will be redirected to the default locale `/zh`
 
 ## Auth and route protection
 
-`proxy.ts` does two things: it adds the locale prefix via next-intl, then verifies the Logto session cookie.
+`proxy.ts` does two things: it adds the locale prefix via next-intl, then verifies the local session cookie.
 
-- Public routes: `/`, `/login`, `/register`, `/docs`
+- Public routes: `/`, `/login`, `/docs`
 - Everything else redirects to `/<locale>/login?next=<original path>` when signed out
 
 When you add a public page, update `publicRoutes` in `proxy.ts` too, or it will be treated as protected.

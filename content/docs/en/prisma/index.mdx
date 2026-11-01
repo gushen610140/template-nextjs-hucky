@@ -24,7 +24,7 @@ The database is PostgreSQL, the driver adapter is `@prisma/adapter-pg`, and the 
 | `lib/generated/prisma/` | Generated client; ignored by Git |
 | `lib/session.ts` | Creates, reads, and deletes sessions with Prisma |
 | `lib/logto-user.ts` | Maps a Logto identity to the local `User` table |
-| `app/api/auth/` | Register, login, logout, and current-user endpoints |
+| `app/api/auth/` | Sign-in start, callback, logout, and current-user endpoints |
 | `app/api/auth/callback/route.ts` | Logto callback that writes the local user and session |
 
 `lib/generated/prisma` is not tracked. Regenerate it after a fresh clone, a branch switch, or any schema change.
@@ -79,7 +79,7 @@ Do not run `migrate dev` in production. Use `bunx prisma migrate deploy` there; 
 bun dev
 ```
 
-Registration, login, session checks, and the Logto callback all reach the database through `lib/prisma.ts`.
+Session checks and the Logto callback both reach the database through `lib/prisma.ts`.
 </Step>
 
 </Steps>
