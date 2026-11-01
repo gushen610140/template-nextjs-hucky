@@ -1,0 +1,93 @@
+---
+title: Skills
+description: Agent skills used by this project, the lock file, and installation
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+Skills are reusable instruction packs for agents. This project captures repeatable workflows as skills so an agent can load them on demand instead of repeating the instructions in every prompt. For the recommended OpenCode workflow and worktrees, see [OpenCode](./opencode).
+
+## Why .agents is not committed
+
+Like `node_modules`, skills are install artifacts, so **`.agents/` is not committed to Git**:
+
+| Path | Committed | Purpose |
+| --- | --- | --- |
+| `.agents/skills/` | No, ignored by `.gitignore` | Installed skill files |
+| `skills-lock.json` | Yes | Pins each skill's source and hash |
+| `skills` in `package.json` | Yes | Provides the `skills` CLI |
+
+A fresh clone therefore has no `.agents/skills/`; restore it from `skills-lock.json`.
+
+## Skills included in this project
+
+The lock file currently pins 11 skills:
+
+| Skill | Source | Purpose |
+| --- | --- | --- |
+| `caveman-commit` | `juliusbrussee/caveman` | Compressed Conventional Commits messages |
+| `prisma-cli` | `prisma/skills` | Prisma CLI commands, migrations, Studio, debugging |
+| `prisma-client-api` | `prisma/skills` | Prisma Client queries, filters, transactions |
+| `prisma-compute` | `prisma/skills` | Prisma Compute deployment (reference only, unused here) |
+| `prisma-database-setup` | `prisma/skills` | Configure PostgreSQL, MySQL, SQLite, MongoDB, and more |
+| `prisma-driver-adapter-implementation` | `prisma/skills` | Implement or modify Prisma driver adapters (this project uses `@prisma/adapter-pg`) |
+| `prisma-mongodb-upgrade` | `prisma/skills` | Prisma upgrade decisions for MongoDB projects (reference only) |
+| `prisma-postgres` | `prisma/skills` | Managed Prisma Postgres operations (reference only) |
+| `prisma-postgres-setup` | `prisma/skills` | Create Prisma Postgres through the Management API (reference only) |
+| `prisma-upgrade-v7` | `prisma/skills` | Migration guide from Prisma v6 to v7 |
+| `shadcn` | `shadcn/ui` | shadcn/ui components, registry, and styling |
+
+Skills marked "reference only" ship with the Prisma skill pack. The project may not use them today, but they help when upgrading or switching databases.
+
+## Installing skills
+
+The skills CLI requires Node.js 22.20 or newer. This project already lists `skills` in `devDependencies`, so install dependencies first, then restore from the lock file:
+
+<Steps>
+
+<Step>
+### Install project dependencies
+
+```bash
+bun ci
+```
+
+</Step>
+
+<Step>
+### Restore skills from the lock file
+
+```bash
+bunx skills experimental_install
+```
+
+This reads `skills-lock.json` and restores skills into `.agents/skills/`. It does not install npm packages, so run it after `bun ci`.
+
+</Step>
+
+<Step>
+### Verify the installation
+
+```bash
+bunx skills list
+```
+
+You should see the 11 skills listed above. OpenCode loads `.agents/skills/` automatically; no extra copying is required.
+
+</Step>
+
+</Steps>
+
+`experimental_install` is still experimental. If the command is renamed or unavailable in the future, install by source instead:
+
+```bash
+bunx skills add prisma/skills --skill '*' -a opencode -y
+bunx skills add shadcn/ui --skill shadcn -a opencode -y
+bunx skills add juliusbrussee/caveman --skill caveman-commit -a opencode -y
+```
+
+## Updates and maintenance
+
+Only run `add` / `update` when you intentionally change the skill set. Those commands rewrite `skills-lock.json`; commit the lock file with your changes, but do not commit `.agents/`, which is an install directory that can be rebuilt at any time.
+
+Other agents can reuse these skills too, but OpenCode is the recommended agent for this project. See [OpenCode](./opencode) for the workflow.

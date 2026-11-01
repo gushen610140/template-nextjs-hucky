@@ -1,0 +1,93 @@
+---
+title: Skills
+description: 项目使用的 Agent Skills、锁文件与安装方式
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+Skills 是可复用的 Agent 指令包。项目把可复用的流程沉淀成 Skill，Agent 需要时再按需加载，而不是每次都在提示词里重复说明。OpenCode 的推荐用法和 worktree 工作流见 [OpenCode](./opencode)。
+
+## 为什么 .agents 不提交
+
+Skills 和 `node_modules` 一样属于“安装产物”，因此 **`.agents/` 不提交到 Git**：
+
+| 路径 | 是否提交 | 作用 |
+| --- | --- | --- |
+| `.agents/skills/` | 否，已在 `.gitignore` 中忽略 | 安装后的 Skill 文件 |
+| `skills-lock.json` | 是 | 锁定每个 Skill 的来源与哈希 |
+| `package.json` 中的 `skills` | 是 | 提供 `skills` CLI |
+
+所以刚克隆项目时并没有 `.agents/skills/`，需要从 `skills-lock.json` 恢复。
+
+## 项目内置的 Skills
+
+当前锁定了 11 个 Skill：
+
+| Skill | 来源 | 用途 |
+| --- | --- | --- |
+| `caveman-commit` | `juliusbrussee/caveman` | 生成压缩到意图的 Conventional Commits 提交信息 |
+| `prisma-cli` | `prisma/skills` | Prisma CLI 命令、迁移、Studio、调试 |
+| `prisma-client-api` | `prisma/skills` | Prisma Client 查询、过滤、事务 |
+| `prisma-compute` | `prisma/skills` | Prisma Compute 部署（备查，本项目未使用） |
+| `prisma-database-setup` | `prisma/skills` | 配置 PostgreSQL、MySQL、SQLite、MongoDB 等数据库 |
+| `prisma-driver-adapter-implementation` | `prisma/skills` | 实现或修改 Prisma driver adapter（本项目使用 `@prisma/adapter-pg`） |
+| `prisma-mongodb-upgrade` | `prisma/skills` | MongoDB 项目的 Prisma 升级决策（备查） |
+| `prisma-postgres` | `prisma/skills` | Prisma Postgres 托管数据库操作（备查） |
+| `prisma-postgres-setup` | `prisma/skills` | 通过 Management API 创建 Prisma Postgres（备查） |
+| `prisma-upgrade-v7` | `prisma/skills` | Prisma v6 升级到 v7 的迁移指南 |
+| `shadcn` | `shadcn/ui` | shadcn/ui 组件、registry 与样式规范 |
+
+其中标记“备查”的技能随 Prisma 技能包一起锁定，当前项目不一定直接用到，但升级或切换数据库时会派上用场。
+
+## 安装 Skills
+
+Skills CLI 要求 Node.js 22.20 或更高版本。项目已经把 `skills` 放在 `devDependencies`，所以先安装依赖，再从锁文件恢复：
+
+<Steps>
+
+<Step>
+### 安装项目依赖
+
+```bash
+bun ci
+```
+
+</Step>
+
+<Step>
+### 从锁文件恢复 Skills
+
+```bash
+bunx skills experimental_install
+```
+
+这个命令会读取 `skills-lock.json`，把 Skill 恢复到 `.agents/skills/`。它不会安装 npm 依赖，所以必须在 `bun ci` 之后执行。
+
+</Step>
+
+<Step>
+### 验证安装结果
+
+```bash
+bunx skills list
+```
+
+应该能看到上表中的 11 个 Skill。OpenCode 会自动加载 `.agents/skills/`，不需要再复制到其他目录。
+
+</Step>
+
+</Steps>
+
+`experimental_install` 仍是实验性命令。如果将来命令改名或不可用，可以按来源手动安装：
+
+```bash
+bunx skills add prisma/skills --skill '*' -a opencode -y
+bunx skills add shadcn/ui --skill shadcn -a opencode -y
+bunx skills add juliusbrussee/caveman --skill caveman-commit -a opencode -y
+```
+
+## 更新与维护
+
+只有在新增、删除或更新 Skill 时才需要执行 `add` / `update`。这些操作会改写 `skills-lock.json`，请把锁文件的变更和代码一起提交；不要提交 `.agents/`，它是可以随时重建的安装目录。
+
+其他 Agent 也可以复用这些 Skill，但本项目的推荐 Agent 是 OpenCode，具体工作流见 [OpenCode](./opencode)。

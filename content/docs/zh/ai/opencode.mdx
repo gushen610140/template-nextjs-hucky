@@ -1,0 +1,108 @@
+---
+title: OpenCode
+description: 推荐 Agent、worktree 隔离，以及移动会话后的本地配置
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+项目最推荐使用 [OpenCode](https://opencode.ai/) 作为 AI Agent。它原生支持项目级 Skills，会自动发现 `.agents/skills/`，也可以直接使用 `skills` CLI 恢复技能包。Skill 的安装与项目内置技能见 [Skills](./skills)。
+
+## 推荐的工作方式
+
+- 在项目根目录启动 `opencode`，让会话默认继承仓库上下文。
+- 用 OpenCode 的 worktree 能力隔离功能分支，避免多个任务互相污染工作区。
+- 把可复用的流程写成 Skill，而不是每次在提示词里重复说明。
+
+## 使用 OpenCode 的 worktree
+
+当任务需要独立分支、和当前会话并行开发时，可以让 OpenCode 创建 Git worktree，并把会话移动进去。OpenCode V2 提供了这些内置能力：
+
+| 能力 | 说明 |
+| --- | --- |
+| `worktree_create` | 按名称创建 worktree，返回新目录 |
+| `worktree_list` | 列出当前项目的 worktree |
+| `worktree_remove` | 删除 OpenCode 记录的 worktree；`force` 会丢弃未提交改动 |
+| `session_move` | 把当前会话移动到指定目录，在安全边界生效 |
+
+在 TUI 里直接用自然语言描述即可：
+
+```text
+Create a worktree named "feat-ai-docs" and move this session into it.
+```
+
+worktree 的存放位置由 `opencode.jsonc` 的 `worktree.directory` 决定。默认放在 OpenCode 服务的数据目录下；如果希望集中管理，可以改成项目旁边的目录：
+
+```jsonc title="opencode.jsonc"
+{
+  "$schema": "https://opencode.ai/config.json",
+  "worktree": {
+    "directory": "../worktrees"
+  }
+}
+```
+
+相对路径以项目的主检出目录为基准。`session_move` 的移动会在安全边界生效，因此移动完成后再执行后续的安装和验证命令。
+
+### 移动会话后要做的三件事
+
+worktree 是一个全新的检出目录，`gitignore` 里的本地文件不会跟过去。移动完成后按顺序处理：
+
+<Steps>
+
+<Step>
+### 重新安装 node_modules
+
+```bash
+bun ci
+```
+
+不要直接软链接主仓库的 `node_modules`：不同分支的依赖版本可能不同，原生模块和 `.bin` 也可能绑定到原路径。每个 worktree 单独安装最稳妥。
+
+</Step>
+
+<Step>
+### 生成 Prisma Client
+
+```bash
+bunx prisma generate
+```
+
+`lib/generated/prisma` 被 Git 忽略，新 worktree 里不存在，不生成就无法启动应用。
+
+</Step>
+
+<Step>
+### 软链接 .env.development
+
+`.env.development` 包含真实密钥并且被 Git 忽略，建议软链接到主仓库的文件，而不是复制多份：
+
+Windows PowerShell（在 worktree 根目录执行，目标换成你的主仓库路径）：
+
+```powershell
+New-Item -ItemType SymbolicLink -Path .env.development -Target C:\repos\template-nextjs-hucky\.env.development
+```
+
+macOS / Linux：
+
+```bash
+ln -s /path/to/template-nextjs-hucky/.env.development .env.development
+```
+
+Windows 创建符号链接需要开发者模式或管理员权限；如果环境不允许，可以临时复制 `.env.development`，但不要提交它。
+
+</Step>
+
+</Steps>
+
+软链接的好处是密钥只有一份：修改主仓库的环境变量后，所有 worktree 立即同步，也不会因为忘记更新而出现“只在某个分支能跑”的问题。
+
+### 清理 worktree
+
+任务合并后，在 OpenCode 里说：
+
+```text
+List the worktrees for this project.
+Remove the "feat-ai-docs" worktree.
+```
+
+如果 worktree 里还有未提交的改动，OpenCode 不会直接删除；确认不再需要这些改动时，才使用 `force`。删除前先提交或合并，避免丢失工作。

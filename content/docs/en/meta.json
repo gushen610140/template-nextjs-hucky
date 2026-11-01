@@ -13,7 +13,6 @@
     "---Backend---",
     "prisma",
     "authentication",
-    "---AI---",
     "ai"
   ]
 }
