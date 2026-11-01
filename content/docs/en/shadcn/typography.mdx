@@ -10,7 +10,7 @@ shadcn components never declare a font family. Open `components/ui/button.tsx` a
 | token | Latin glyphs | Chinese glyphs | Used by |
 | --- | --- | --- | --- |
 | `--font-sans` | System sans; can switch to Neo Sans Pro / Eras | System sans stack | Global default, inherited by every component |
-| `--font-heading` | System serif; can switch to DIN 1451 Mittelschrift | System serif stack | Components that opt in with `font-heading`, e.g. `CardTitle`, `SheetTitle` |
+| `--font-heading` | System serif; can switch to DIN 1451 Mittelschrift | System serif stack | Components that opt in with `font-heading` (`CardTitle`, `SheetTitle`, ...), plus Fumadocs page titles and MDX headings |
 | `--font-mono` | System mono; can switch to Noto Sans Mono | System mono stack | `font-mono`, code blocks |
 
 No webfont is loaded by default. A font file is fetched through the `FontFace` API only after the user actively switches to it in the theme panel. Chinese glyphs always come from the system stack.
@@ -30,6 +30,8 @@ No webfont is loaded by default. A font file is fetched through the `FontFace` A
 3. **The family is applied once.** `html { @apply font-sans }` inside `@layer base` is the only place that actually sets `font-family`.
 4. **FontProvider loads on demand.** `providers/font-provider.tsx` reads the user's choice, loads files from `public/fonts/` with `FontFace`, and only then writes `--font-latin-*`.
 5. **Components inherit.** They override size and weight only. Inheritance also covers components portalled into `body` — Dialog, Popover, DropdownMenu.
+
+Fumadocs body text reads `--font-sans` / `--font-mono`. Docs page titles and MDX headings are pointed at `--font-heading` by the `#nd-page :is(h1, h2, h3, h4, h5, h6)` rule at the end of `globals.css`, so switching the heading font updates them too.
 
 <div className="text-xs text-muted-foreground">
 
@@ -105,6 +107,10 @@ Portals render into `body`, so the inheritance chain is `body → html`. Fonts o
 **Chinese headings look inconsistent with the Latin ones?**
 
 The Latin heading face defaults to a system serif and can switch to DIN 1451; `--font-cjk-heading` prefers serif Chinese faces (Songti family). On Windows it lands on SimSun, which looks noticeably different from Songti on macOS — an inherent limit of system stacks.
+
+**How do I change the Fumadocs heading font?**
+
+Docs page titles and MDX headings use `--font-heading` through the `#nd-page :is(h1, h2, h3, h4, h5, h6)` rule at the end of `globals.css`. Switch the heading font option; no Fumadocs component changes are needed.
 
 ## Next
 

@@ -94,6 +94,7 @@
 
   --font-sans: var(--app-font-sans);
   --font-mono: var(--app-font-mono);
+  --font-heading: var(--app-font-heading);
 
   /* ── Shadows ── */
   --app-shadow-2xs: 0 1px rgb(0 0 0 / 0.05);
@@ -289,4 +290,9 @@
 /* ── Fumadocs docs chrome ── */
 #nd-docs-layout [data-sidebar-panel] {
   display: none;
+}
+
+/* Fumadocs 内容标题复用 shadcn 的 heading token, 随 FontProvider 切换 */
+#nd-page :is(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--font-heading);
 }

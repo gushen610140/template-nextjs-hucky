@@ -10,7 +10,7 @@ shadcn 组件不声明字体族。打开 `components/ui/button.tsx` 只会看到
 | token | 拉丁字形 | 中文字形 | 用在哪 |
 | --- | --- | --- | --- |
 | `--font-sans` | 系统无衬线，可切换 Neo Sans Pro / Eras | 系统无衬线栈 | 全局默认，所有组件继承 |
-| `--font-heading` | 系统衬线，可切换 DIN 1451 Mittelschrift | 系统衬线栈 | 组件显式写 `font-heading`，例如 `CardTitle`、`SheetTitle` |
+| `--font-heading` | 系统衬线，可切换 DIN 1451 Mittelschrift | 系统衬线栈 | 组件显式写 `font-heading`（`CardTitle`、`SheetTitle` 等），以及 Fumadocs 文档页标题和 MDX 标题 |
 | `--font-mono` | 系统等宽，可切换 Noto Sans Mono | 系统等宽栈 | `font-mono`、代码块 |
 
 默认不加载任何 webfont。用户只有在主题面板里主动切换字体后，对应字体文件才会通过 `FontFace` 加载；中文字形始终使用系统字体栈。
@@ -30,6 +30,8 @@ shadcn 组件不声明字体族。打开 `components/ui/button.tsx` 只会看到
 3. **写到根元素。** `@layer base` 里的 `html { @apply font-sans }` 是唯一一次真正设置 `font-family` 的地方。
 4. **FontProvider 按需加载。** `providers/font-provider.tsx` 读取用户的字体选择，用 `FontFace` 加载 `public/fonts/` 下的文件，加载完成后再写入 `--font-latin-*`。
 5. **组件继承。** 组件只覆盖字号和字重，字体族继续继承，包括 Portal 到 `body` 的 Dialog、Popover、DropdownMenu。
+
+Fumadocs 正文读 `--font-sans` / `--font-mono`；文档页标题和 MDX 标题则由 `globals.css` 里的 `#nd-page :is(h1, h2, h3, h4, h5, h6)` 统一指向 `--font-heading`，所以切换 heading 字体时文档标题也会同步变化。
 
 <div className="text-xs text-muted-foreground">
 
@@ -105,6 +107,10 @@ Portal 渲染到 `body`，继承链是 `body → html`，只要字体写在 `<ht
 **中文标题看起来和英文不搭？**
 
 `--font-heading` 的拉丁部分默认是系统衬线体，可切换成 DIN 1451；`--font-cjk-heading` 优先选衬线中文（宋体系）。Windows 上会落到 SimSun，与 macOS 的 Songti 观感差异较大，这是系统字体栈的固有限制。
+
+**Fumadocs 的标题字体怎么改？**
+
+文档页标题和 MDX 标题由 `globals.css` 末尾的 `#nd-page :is(h1, h2, h3, h4, h5, h6)` 统一使用 `--font-heading`。要改标题字体，只需要切换 heading 字体选项，不需要改 Fumadocs 组件。
 
 ## 接下来
 
