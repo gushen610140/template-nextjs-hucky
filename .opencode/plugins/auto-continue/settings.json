@@ -1,0 +1,8 @@
+{
+  "enabled": false,
+  "text": "继续。如果目标已经完成，不要结束任务：继续运行 lint、类型检查、测试和构建，主动找出所有小问题并修复，然后重新校验。重复这个过程，直到用户明确要求停止。",
+  "delayMs": 800,
+  "maxRounds": 0,
+  "continueOnError": false,
+  "debug": false
+}
