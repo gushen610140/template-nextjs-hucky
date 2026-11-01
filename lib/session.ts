@@ -52,7 +52,6 @@ export async function getSessionUser(
       user: {
         select: {
           id: true,
-          logtoSub: true,
           email: true,
           name: true,
           avatarUrl: true,
