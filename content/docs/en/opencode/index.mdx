@@ -1,0 +1,22 @@
+---
+title: OpenCode
+description: Recommended agent, worktree isolation, and the auto-continue plugin
+---
+
+[OpenCode](https://opencode.ai/) is the recommended AI agent for this project. It understands project-level skills natively, discovers `.agents/skills/` automatically, and works with the `skills` CLI to restore skill packs.
+
+## Suggested workflow
+
+- Start `opencode` from the repository root so the session inherits the project context.
+- Use worktrees to isolate feature branches and keep parallel tasks from polluting each other's working tree.
+- Use the `auto-continue` plugin to keep validating, testing, and fixing after the agent thinks the task is done.
+- Put repeatable workflows in a skill instead of repeating them in every prompt.
+
+## In this section
+
+| Page | Contents |
+| --- | --- |
+| [Worktree](./worktree) | Create worktrees, move sessions, and restore dependencies and environment files |
+| [Auto Continue plugin](./plugin) | The continuation loop, toggles, interruption, and configuration |
+
+For the project's skills and installation steps, see [Skills](../skills).

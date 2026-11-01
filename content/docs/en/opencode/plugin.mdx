@@ -1,0 +1,112 @@
+---
+title: Auto Continue Plugin
+description: Keep the agent validating, testing, and fixing until you interrupt it
+---
+
+The project-level plugin lives in `.opencode/plugins/auto-continue/`. OpenCode automatically loads plugins under `.opencode/plugins/`, so no `opencode.jsonc` change is required.
+
+<Callout type="warn" title="Do not keep the global copy active">
+If `~/.config/opencode/plugins/auto-continue/` still exists, remove or move it so two plugins with the same name do not run at the same time.
+</Callout>
+
+## What it solves
+
+A normal session stops after one turn. With `auto-continue` enabled, the plugin sends another continuation prompt after every successful turn so the agent keeps:
+
+- Running lint, type checks, tests, and builds.
+- Checking edge cases, omissions, and other small issues.
+- Fixing what it finds, then validating again.
+- Repeating the loop until you interrupt it.
+
+This version **no longer uses a `[[DONE]]` marker**. Even when the agent thinks the task is complete, it continues the verification loop; only an explicit user interruption stops it.
+
+## Enable and disable
+
+The plugin is disabled by default and is controlled per session:
+
+| Command | Purpose |
+| --- | --- |
+| `/auto-on` | Enable auto-continue for the current session |
+| `/auto-off` | Disable auto-continue for the current session |
+
+The state is stored in plugin storage and survives an OpenCode restart. Disabling it immediately cancels any pending continuation.
+
+## Interrupting
+
+Any of these stops auto-continue for the current session:
+
+- Press `Esc` or `Ctrl+C` to interrupt the current execution.
+- Send a clear stop prompt such as `stop`, `pause`, `cancel`, `停止`, `中断`, or `不用继续`.
+- Run `/auto-off`.
+
+After interruption, send any normal message to resume auto-continue.
+
+## Behavior
+
+| Situation | Result |
+| --- | --- |
+| Session not enabled (default) | Nothing happens |
+| Successful turn (enabled) | Send a continuation prompt after `delayMs` |
+| Agent says the task is done | Keep validating, testing, and fixing |
+| `Esc` / `Ctrl+C` | Stop until the next normal message |
+| Stop prompt | Stop until the next normal message |
+| Execution failed | Stop by default to avoid an error loop |
+| Subagent session | Skipped |
+| You send a message during the delay | Cancel the pending continuation and reset the round count |
+
+<Callout type="warn" title="Unlimited by default">
+`maxRounds` defaults to `0`, which means no limit. Stop with `Esc`, a stop prompt, or `/auto-off`. Be extra careful in unattended runs.
+</Callout>
+
+## Configuration
+
+The configuration file is `.opencode/plugins/auto-continue/settings.json`:
+
+```jsonc title=".opencode/plugins/auto-continue/settings.json"
+{
+  "enabled": false,         // Enable by default for new sessions; false = manual /auto-on
+  "text": "继续。如果目标已经完成，不要结束任务：继续运行 lint、类型检查、测试和构建，主动找出所有小问题并修复，然后重新校验。重复这个过程，直到用户明确要求停止。",
+  "delayMs": 800,           // Wait before sending the next prompt (ms)
+  "maxRounds": 0,           // Maximum consecutive rounds; 0 = unlimited
+  "continueOnError": false, // Continue when execution fails
+  "debug": false            // Write debug logs
+}
+```
+
+| Field | Purpose |
+| --- | --- |
+| `enabled` | Default state for sessions without their own setting |
+| `text` | Continuation prompt sent after each turn; customize it for your acceptance checks |
+| `delayMs` | Delay before sending, giving you a window to interrupt |
+| `maxRounds` | Consecutive round limit; `0` means unlimited |
+| `continueOnError` | Continue after execution failure; off by default |
+| `debug` | Write debug output to stderr and a log file |
+
+`maxRounds` resets when you send a new message, so it limits consecutive rounds within one task.
+
+## Debugging
+
+Set `debug` to `true` to write logs to:
+
+```text
+%TEMP%\opencode\auto-continue-debug.log
+```
+
+On Windows this is usually:
+
+```text
+C:\Users\<you>\AppData\Local\Temp\opencode\auto-continue-debug.log
+```
+
+## Implementation notes
+
+The plugin subscribes to OpenCode's public event stream:
+
+- `session.execution.succeeded`: a turn finished successfully; schedule the next continuation.
+- `session.execution.failed`: stop by default.
+- `session.execution.interrupted`: interrupted with `Esc` / `Ctrl+C`; stop.
+- `session.deleted`: clear the session's state.
+
+User prompts are observed through `ctx.session.hook("prompt")`: normal messages resume the loop, while stop prompts mark the session as stopped. `/auto-on` and `/auto-off` are registered with `ctx.command.transform`, and state lives in `ctx.storage`.
+
+Compared with the old version, the plugin no longer injects a `[[DONE]]` system instruction and no longer listens to `session.text.ended`, so the loop does not end just because the model claims the task is complete.

@@ -1,21 +1,15 @@
 ---
-title: OpenCode
-description: 推荐 Agent、worktree 隔离，以及移动会话后的本地配置
+title: Worktree
+description: 用 OpenCode worktree 隔离分支，并在移动会话后恢复本地环境
 ---
 
 import { Step, Steps } from "fumadocs-ui/components/steps";
 
-项目最推荐使用 [OpenCode](https://opencode.ai/) 作为 AI Agent。它原生支持项目级 Skills，会自动发现 `.agents/skills/`，也可以直接使用 `skills` CLI 恢复技能包。Skill 的安装与项目内置技能见 [Skills](./skills)。
-
-## 推荐的工作方式
-
-- 在项目根目录启动 `opencode`，让会话默认继承仓库上下文。
-- 用 OpenCode 的 worktree 能力隔离功能分支，避免多个任务互相污染工作区。
-- 把可复用的流程写成 Skill，而不是每次在提示词里重复说明。
+当任务需要独立分支、和当前会话并行开发时，可以让 OpenCode 创建 Git worktree，并把会话移动进去。worktree 是一个新的检出目录，依赖和环境变量需要单独处理。
 
 ## 使用 OpenCode 的 worktree
 
-当任务需要独立分支、和当前会话并行开发时，可以让 OpenCode 创建 Git worktree，并把会话移动进去。OpenCode V2 提供了这些内置能力：
+OpenCode V2 提供了这些内置能力：
 
 | 能力 | 说明 |
 | --- | --- |

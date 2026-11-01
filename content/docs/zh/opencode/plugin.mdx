@@ -1,0 +1,112 @@
+---
+title: Auto Continue 插件
+description: 用自动续跑让 Agent 持续校验、测试和修复，直到你主动中断
+---
+
+项目级插件位于 `.opencode/plugins/auto-continue/`。OpenCode 会自动加载 `.opencode/plugins/` 下的插件，不需要修改 `opencode.jsonc`。
+
+<Callout type="warn" title="不要和全局副本同时保留">
+如果全局 `~/.config/opencode/plugins/auto-continue/` 仍然存在，建议删除或移走，避免项目级和全局两份同名插件同时生效。
+</Callout>
+
+## 它解决什么问题
+
+普通会话在一轮对话结束后就会停下来。`auto-continue` 开启后，每轮正常结束都会再发送一条续跑提示，让 Agent 继续：
+
+- 运行 lint、类型检查、测试和构建。
+- 检查边界情况、遗漏项和其他小问题。
+- 发现问题后直接修复，然后重新验证。
+- 一直循环，直到你主动中断。
+
+这个版本**不再使用 `[[DONE]]` 标记**。即使 Agent 认为任务已经完成，也会继续进入校验和修复循环；停止条件只有用户中断。
+
+## 启用与关闭
+
+插件默认关闭，按会话控制：
+
+| 命令 | 作用 |
+| --- | --- |
+| `/auto-on` | 开启当前会话的自动续跑 |
+| `/auto-off` | 关闭当前会话的自动续跑 |
+
+开关状态保存在插件存储里，重启 OpenCode 后仍然有效。关闭时会立刻取消还没发出去的续跑提示。
+
+## 如何中断
+
+以下任一方式都会停止当前会话的自动续跑：
+
+- 按 `Esc` 或 `Ctrl+C` 中断当前执行。
+- 发送明确的中断提示词，例如 `停止`、`中断`、`暂停`、`取消`、`不用继续`、`stop`、`pause`。
+- 执行 `/auto-off`。
+
+中断后，再发送一条普通消息即可恢复自动续跑。
+
+## 行为
+
+| 场景 | 结果 |
+| --- | --- |
+| 会话没开启（默认） | 什么都不做 |
+| 一轮正常结束（已开启） | 等待 `delayMs` 后发送续跑提示 |
+| Agent 说任务完成 | 仍然继续校验、测试和修复 |
+| 按 `Esc` / `Ctrl+C` | 停止自动续跑，直到下一条普通消息 |
+| 发送中断提示词 | 停止自动续跑，直到下一条普通消息 |
+| 本轮执行失败 | 默认停止，避免错误循环 |
+| 子会话（subagent） | 跳过，不会被打断 |
+| 等待期内自己发了消息 | 取消本次自动发送，并重置轮次 |
+
+<Callout type="warn" title="默认无限续跑">
+`maxRounds` 默认为 `0`，表示不限制轮次。请使用 `Esc`、中断提示词或 `/auto-off` 停止；长时间无人值守时尤其要注意。
+</Callout>
+
+## 配置
+
+配置位于 `.opencode/plugins/auto-continue/settings.json`：
+
+```jsonc title=".opencode/plugins/auto-continue/settings.json"
+{
+  "enabled": false,         // 新会话是否默认开启；false = 需要手动 /auto-on
+  "text": "继续。如果目标已经完成，不要结束任务：继续运行 lint、类型检查、测试和构建，主动找出所有小问题并修复，然后重新校验。重复这个过程，直到用户明确要求停止。",
+  "delayMs": 800,           // 一轮结束后等待多久再发（毫秒）
+  "maxRounds": 0,           // 最多连续自动续跑几轮，0 = 不限制
+  "continueOnError": false, // 本轮失败时是否也继续
+  "debug": false            // 写调试日志
+}
+```
+
+| 字段 | 作用 |
+| --- | --- |
+| `enabled` | 没有单独设置过的会话是否默认开启 |
+| `text` | 每轮结束后自动发送的续跑提示，可以改成自己的验收指令 |
+| `delayMs` | 发送前的等待时间，给用户留出中断窗口 |
+| `maxRounds` | 连续续跑上限，`0` 表示不限制 |
+| `continueOnError` | 执行失败时是否继续；默认关闭 |
+| `debug` | 向 stderr 和日志文件输出调试信息 |
+
+`maxRounds` 会在你发送新消息时清零，因此它限制的是同一次任务里的连续续跑次数。
+
+## 调试
+
+把 `debug` 设为 `true` 后，日志写到：
+
+```text
+%TEMP%\opencode\auto-continue-debug.log
+```
+
+Windows 下一般是：
+
+```text
+C:\Users\<你>\AppData\Local\Temp\opencode\auto-continue-debug.log
+```
+
+## 实现说明
+
+插件订阅 OpenCode 的公共事件流：
+
+- `session.execution.succeeded`：一轮正常结束，调度下一次续跑。
+- `session.execution.failed`：失败，默认停止。
+- `session.execution.interrupted`：被 `Esc` / `Ctrl+C` 中断，停止。
+- `session.deleted`：清理该会话的状态。
+
+用户提示词通过 `ctx.session.hook("prompt")` 监听：普通消息会恢复续跑，中断提示词会将会话标记为停止。`/auto-on` 和 `/auto-off` 通过 `ctx.command.transform` 注册，状态保存在 `ctx.storage`。
+
+和旧版本相比，现在不再注入 `[[DONE]]` 系统提示，也不再监听 `session.text.ended`，续跑循环不会因为模型声明“完成”而结束。

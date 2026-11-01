@@ -1,0 +1,22 @@
+---
+title: OpenCode
+description: 推荐 Agent、worktree 隔离与 auto-continue 插件
+---
+
+项目最推荐使用 [OpenCode](https://opencode.ai/) 作为 AI Agent。它原生支持项目级 Skills，会自动发现 `.agents/skills/`，也可以直接使用 `skills` CLI 恢复技能包。
+
+## 推荐的工作方式
+
+- 在项目根目录启动 `opencode`，让会话默认继承仓库上下文。
+- 用 worktree 隔离功能分支，避免多个任务互相污染工作区。
+- 用 `auto-continue` 插件让 Agent 在任务完成后继续校验、测试和修复。
+- 把可复用的流程写成 Skill，而不是每次在提示词里重复说明。
+
+## 本目录
+
+| 文档 | 内容 |
+| --- | --- |
+| [Worktree](./worktree) | 创建 worktree、移动会话，以及恢复依赖和环境变量 |
+| [Auto Continue 插件](./plugin) | 自动续跑机制、开关、中断方式和配置 |
+
+Skill 的安装与项目内置技能见 [Skills](../skills)。

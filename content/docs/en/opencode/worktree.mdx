@@ -1,21 +1,15 @@
 ---
-title: OpenCode
-description: Recommended agent, worktree isolation, and local setup after moving a session
+title: Worktree
+description: Isolate branches with OpenCode worktrees and restore the local environment after a move
 ---
 
 import { Step, Steps } from "fumadocs-ui/components/steps";
 
-[OpenCode](https://opencode.ai/) is the recommended AI agent for this project. It understands project-level skills natively, discovers `.agents/skills/` automatically, and works with the `skills` CLI to restore skill packs. For the project's skills and installation steps, see [Skills](./skills).
-
-## Suggested workflow
-
-- Start `opencode` from the repository root so the session inherits the project context.
-- Use OpenCode worktrees to isolate feature branches and keep parallel tasks from polluting each other's working tree.
-- Put repeatable workflows in a skill instead of repeating them in every prompt.
+When a task needs its own branch and should run alongside the current session, ask OpenCode to create a Git worktree and move the session into it. A worktree is a fresh checkout, so dependencies and environment files need separate setup.
 
 ## Using OpenCode worktrees
 
-When a task needs its own branch and should run alongside the current session, ask OpenCode to create a Git worktree and move the session into it. OpenCode V2 provides these built-in capabilities:
+OpenCode V2 provides these built-in capabilities:
 
 | Capability | Description |
 | --- | --- |
