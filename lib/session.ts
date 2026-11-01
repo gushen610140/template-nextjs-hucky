@@ -1,26 +1,24 @@
-import { createHash, randomBytes } from "node:crypto";
 import type { NextResponse } from "next/server";
 import type { User } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
+import {
+  createSessionToken,
+  hashToken,
+  SESSION_COOKIE,
+  SESSION_DURATION_MS,
+} from "./session-token";
 
 /**
  * 不透明 Session 方案:
  * - 客户端只持有随机 token(不透明字符串), 存于 httpOnly cookie
  * - 服务端(DB) 只存 token 的 sha256 哈希, 即使 DB 泄露也无法伪造
- * - 每次请求(proxy / auth/me)用 cookie 中的 token 哈希查表校验
+ * - 权威校验(数据层)用 cookie 中的 token 哈希查表; proxy 只做乐观格式检查
+ *
+ * token 的基础能力在 lib/session-token.ts, 这里只负责需要数据库的部分。
  */
 
-export const SESSION_COOKIE = "session";
-export const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 天
-
-export function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
-
-/** 生成新的不透明 session 随机字符串(客户端持有) */
-export function createSessionToken(): string {
-  return randomBytes(32).toString("base64url");
-}
+// 兼容既有调用点: 常量与 token 工具仍从本模块导出
+export { createSessionToken, hashToken, SESSION_COOKIE, SESSION_DURATION_MS };
 
 /** 为用户创建 session 记录, 返回应写入 cookie 的原始 token */
 export async function createSession(userId: string): Promise<string> {
