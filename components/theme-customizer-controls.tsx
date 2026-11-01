@@ -5,6 +5,12 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
+  FONT_OPTIONS,
+  type HeadingFontId,
+  type MonoFontId,
+  type SansFontId,
+} from "@/lib/font-presets";
+import {
   BASE_COLORS,
   type BaseColor,
   getBasePreview,
@@ -17,6 +23,7 @@ import {
   type ShadowPreset,
 } from "@/lib/theme-presets";
 import { cn } from "@/lib/utils";
+import { useFont } from "@/providers/font-provider";
 import { useThemeCustomizer } from "@/providers/theme-customizer-provider";
 
 const RADIUS_OPTIONS = Object.keys(RADIUS_PRESETS) as RadiusPreset[];
@@ -26,6 +33,7 @@ export function ThemeCustomizerControls({ className }: { className?: string }) {
   const t = useTranslations("ThemeCustomizer");
   const { customization, updateCustomization, resetCustomization } =
     useThemeCustomizer();
+  const { settings, setFont, preloadFont, resetFonts } = useFont();
 
   return (
     <div className={cn("flex flex-col gap-5", className)}>
@@ -35,7 +43,10 @@ export function ThemeCustomizerControls({ className }: { className?: string }) {
           type="button"
           variant="ghost"
           size="xs"
-          onClick={resetCustomization}
+          onClick={() => {
+            resetCustomization();
+            resetFonts();
+          }}
         >
           <RotateCcw data-icon="inline-start" />
           {t("reset")}
@@ -149,6 +160,96 @@ export function ThemeCustomizerControls({ className }: { className?: string }) {
               className="h-auto w-full px-2 py-1.5 text-xs font-normal tracking-normal normal-case data-[state=on]:border-primary data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
             >
               {t(`shadowPresets.${shadow}`)}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <p className="text-xs font-medium text-muted-foreground">
+          {t("fonts.sans")}
+        </p>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={settings.sans}
+          onValueChange={(value) => {
+            if (value) {
+              setFont("sans", value as SansFontId);
+            }
+          }}
+          className="grid w-full grid-cols-3 gap-1.5"
+        >
+          {FONT_OPTIONS.sans.map((font) => (
+            <ToggleGroupItem
+              key={font}
+              value={font}
+              onPointerEnter={() => preloadFont("sans", font)}
+              onFocus={() => preloadFont("sans", font)}
+              className="h-auto w-full px-2 py-1.5 text-xs font-normal tracking-normal normal-case data-[state=on]:border-primary data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
+            >
+              {t(`fonts.${font}`)}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <p className="text-xs font-medium text-muted-foreground">
+          {t("fonts.heading")}
+        </p>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={settings.heading}
+          onValueChange={(value) => {
+            if (value) {
+              setFont("heading", value as HeadingFontId);
+            }
+          }}
+          className="grid w-full grid-cols-2 gap-1.5"
+        >
+          {FONT_OPTIONS.heading.map((font) => (
+            <ToggleGroupItem
+              key={font}
+              value={font}
+              onPointerEnter={() => preloadFont("heading", font)}
+              onFocus={() => preloadFont("heading", font)}
+              className="h-auto w-full px-2 py-1.5 text-xs font-normal tracking-normal normal-case data-[state=on]:border-primary data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
+            >
+              {t(`fonts.${font}`)}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <p className="text-xs font-medium text-muted-foreground">
+          {t("fonts.mono")}
+        </p>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={settings.mono}
+          onValueChange={(value) => {
+            if (value) {
+              setFont("mono", value as MonoFontId);
+            }
+          }}
+          className="grid w-full grid-cols-2 gap-1.5"
+        >
+          {FONT_OPTIONS.mono.map((font) => (
+            <ToggleGroupItem
+              key={font}
+              value={font}
+              onPointerEnter={() => preloadFont("mono", font)}
+              onFocus={() => preloadFont("mono", font)}
+              className="h-auto w-full px-2 py-1.5 text-xs font-normal tracking-normal normal-case data-[state=on]:border-primary data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
+            >
+              {t(`fonts.${font}`)}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>

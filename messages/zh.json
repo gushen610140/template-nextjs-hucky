@@ -98,6 +98,16 @@
       "soft": "柔和",
       "default": "默认",
       "strong": "强烈"
+    },
+    "fonts": {
+      "sans": "无衬线",
+      "heading": "标题",
+      "mono": "等宽",
+      "system": "系统默认",
+      "neosanspro": "Neo Sans Pro",
+      "erasmd": "Eras",
+      "din": "DIN 1451",
+      "notosansmono": "Noto Sans Mono"
     }
   },
   "Landing": {

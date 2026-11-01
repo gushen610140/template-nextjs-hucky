@@ -98,6 +98,16 @@
       "soft": "Soft",
       "default": "Default",
       "strong": "Strong"
+    },
+    "fonts": {
+      "sans": "Sans",
+      "heading": "Heading",
+      "mono": "Mono",
+      "system": "System",
+      "neosanspro": "Neo Sans Pro",
+      "erasmd": "Eras",
+      "din": "DIN 1451",
+      "notosansmono": "Noto Sans Mono"
     }
   },
   "Landing": {
