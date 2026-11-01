@@ -128,7 +128,9 @@ async function hasPermission(userId: string, permission: string) {
 在 Route Handler 或 Server Action 中：
 
 ```ts
-const user = await getSessionUser(token);
+import { getCurrentUser } from "@/lib/auth";
+
+const user = await getCurrentUser();
 if (!user) {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
@@ -147,7 +149,7 @@ if (!(await hasPermission(user.id, "post:publish"))) {
 - 缓存：权限查询可以按用户短时间缓存，但角色变更后必须失效。
 
 <Callout type="warn" title="RBAC 不是登录">
-RBAC 只回答“这个已登录用户能做什么”。它不能替代 Session 校验；受保护路由仍然要先通过 `proxy.ts` 或服务端 `getSessionUser`。
+RBAC 只回答“这个已登录用户能做什么”。它不能替代 Session 校验；受保护页面必须在 layout、Server Action 或 Route Handler 中调用 `requireUser()` / `getCurrentUser()`。
 </Callout>
 
 ## 增量升级

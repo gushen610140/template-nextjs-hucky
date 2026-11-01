@@ -68,15 +68,33 @@ Cookie options:
 
 ## Route protection
 
+Validation has two layers: `proxy.ts` performs an optimistic check without touching the database, and the data layer performs the authoritative one.
+
 `proxy.ts` runs after next-intl handles the locale prefix:
 
 1. Public routes pass through: `/`, `/login`, `/docs`.
-2. Other pages read the `session` cookie.
-3. `getSessionUser(token)` looks up the database.
-4. Without a valid user, redirect to `/<locale>/login?next=<original path>`.
-5. After sign-in, return to `next` when it is a safe in-site path.
+2. Protected routes only check that the `session` cookie exists and looks like a token minted by this app.
+3. A missing or malformed cookie redirects to `/<locale>/login?next=<original path>`.
+4. The original pathname is forwarded in the `x-pathname` request header for the data layer to build the return URL.
 
-`next` must start with `/` and must not start with `//`, which prevents open redirects.
+The real session check runs in the protected segment's layout:
+
+```tsx
+// app/[locale]/dashboard/layout.tsx
+import { requireUser } from "@/lib/auth";
+
+await requireUser();
+```
+
+`requireUser()` reads the token from the cookie, calls `getSessionUser(token)` to look up the database, and validates the expiry and `user.isActive`. It redirects to `/<locale>/login?next=<x-pathname>` when the session is invalid, otherwise it returns the user without `logtoSub`.
+
+`getCurrentUser()` uses React `cache` for per-request deduplication: layout, page, and components that call it during one render only hit the database once.
+
+<Callout type="warn" title="The proxy is not a security boundary">
+A forged cookie with the right shape passes the optimistic check in `proxy.ts`. Every page, Server Action, and Route Handler that needs a user must call `requireUser()` or `getCurrentUser()`.
+</Callout>
+
+`next` must start with `/` and must not start with `//`, which prevents open redirects. After sign-in, the app returns to `next` when it is a safe in-site path.
 
 ## Endpoints
 

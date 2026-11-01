@@ -68,15 +68,33 @@ Cookie 选项：
 
 ## 路由保护
 
+校验分成两层：`proxy.ts` 做乐观检查（不查数据库），数据层做权威校验。
+
 `proxy.ts` 在 next-intl 处理语言前缀之后执行：
 
 1. 公开路由直接放行：`/`、`/login`、`/docs`。
-2. 其他页面从 Cookie 读取 `session`。
-3. 调用 `getSessionUser(token)` 查询数据库。
-4. 没有有效用户时跳转 `/<locale>/login?next=<原路径>`。
-5. 登录成功后优先回到 `next` 指定的站内路径。
+2. 受保护路由只检查 `session` Cookie 是否存在、格式是否像本应用签发的 token。
+3. Cookie 缺失或格式不对时跳转 `/<locale>/login?next=<原路径>`。
+4. 把原始路径写入 `x-pathname` 请求头，供数据层生成回跳地址。
 
-`next` 参数只接受以 `/` 开头且不以 `//` 开头的路径，防止开放重定向。
+真正的会话校验由受保护页面的 layout 触发：
+
+```tsx
+// app/[locale]/dashboard/layout.tsx
+import { requireUser } from "@/lib/auth";
+
+await requireUser();
+```
+
+`requireUser()` 会读取 Cookie 中的 token，调用 `getSessionUser(token)` 查库，校验过期时间和 `user.isActive`；无效时跳转 `/<locale>/login?next=<x-pathname>`，有效时返回不含 `logtoSub` 的用户对象。
+
+`getCurrentUser()` 用 React `cache` 做请求内去重：同一次渲染里 layout、page 和组件多次调用只会查一次数据库。
+
+<Callout type="warn" title="proxy 不是安全边界">
+伪造一个格式正确的 Cookie 就能通过 `proxy.ts` 的乐观检查。所有需要用户身份的页面、Server Action 和 Route Handler 都必须调用 `requireUser()` 或 `getCurrentUser()`。
+</Callout>
+
+`next` 参数只接受以 `/` 开头且不以 `//` 开头的路径，防止开放重定向。登录成功后优先回到 `next` 指定的站内路径。
 
 ## 相关接口
 

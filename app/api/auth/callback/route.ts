@@ -32,7 +32,7 @@ function loginErrorUrl(): URL {
  *
  * 流程: 用 code 换取 token(写入 Logto 自己的 cookie) → 读取 claims →
  * upsert 本地 User → 建立本应用的不透明 session。
- * 这样 proxy.ts 和 /api/auth/me 完全不用改, Logto 只是多了一种登录方式。
+ * 这样受保护路由只需要处理本应用的 session, 不必为 Logto 增加特殊分支。
  */
 export async function GET(request: NextRequest) {
   try {

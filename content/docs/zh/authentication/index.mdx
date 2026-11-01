@@ -60,7 +60,8 @@ Logto 只负责“这个人是谁”，本应用负责“这个人能做什么�
 
 - 客户端只持有随机 token，保存在 httpOnly Cookie。
 - 数据库只保存 `sha256(token)`，即 `Session.tokenHash`。
-- 每次受保护请求由 `proxy.ts` 根据 token 哈希查询会话和用户。
+- `proxy.ts` 只做乐观检查（Cookie 是否存在、格式是否合法），不查数据库。
+- 受保护页面的 layout 通过 `requireUser()` 查库，完成权威校验。
 - 会话过期或用户被禁用时，服务端会删除会话并拒绝访问。
 - 登出会删除本地 Session，并清理 Logto SDK 的 Cookie。
 
@@ -75,9 +76,11 @@ Logto 只负责“这个人是谁”，本应用负责“这个人能做什么�
 | `app/api/auth/logout/route.ts` | 删除本地会话并清理 Cookie |
 | `app/api/auth/me/route.ts` | 返回当前登录用户 |
 | `lib/logto-user.ts` | Logto claims → 本地 User |
+| `lib/auth.ts` | 权威会话校验（`requireUser` / `getCurrentUser`） |
 | `lib/session.ts` | Session 创建、校验、删除 |
+| `lib/session-token.ts` | token 生成、哈希与格式校验（无 Prisma 依赖） |
 | `lib/prisma.ts` | Prisma Client 单例 |
-| `proxy.ts` | 国际化 + 路由保护 |
+| `proxy.ts` | 国际化 + 乐观路由检查 |
 | `prisma/schema.prisma` | User、Session、Role、Permission 模型 |
 
 ## 当前边界
@@ -89,7 +92,7 @@ Logto 只负责“这个人是谁”，本应用负责“这个人能做什么�
 
 ## 接下来
 
-- [会话与路由保护](./session)：Session、Cookie、proxy 校验和登出。
+- [会话与路由保护](./session)：Session、Cookie、proxy 乐观检查、数据层权威校验和登出。
 - [Logto 接入](./logto)：OIDC 流程、claims 映射和账号绑定。
 - [RBAC 权限](./rbac)：用户、角色、权限模型和授权方式。
 - [演进与扩展](./evolution)：多身份、会话撤销和审计。

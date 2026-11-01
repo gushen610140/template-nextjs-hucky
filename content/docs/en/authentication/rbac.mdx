@@ -128,7 +128,9 @@ async function hasPermission(userId: string, permission: string) {
 In a Route Handler or Server Action:
 
 ```ts
-const user = await getSessionUser(token);
+import { getCurrentUser } from "@/lib/auth";
+
+const user = await getCurrentUser();
 if (!user) {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
@@ -147,7 +149,7 @@ if (!(await hasPermission(user.id, "post:publish"))) {
 - Short-lived permission caching with invalidation on role changes.
 
 <Callout type="warn" title="RBAC is not authentication">
-RBAC answers “what can this signed-in user do?” It does not replace session validation. Protected routes must still pass `proxy.ts` or a server-side `getSessionUser` check.
+RBAC answers “what can this signed-in user do?” It does not replace session validation. Protected pages must call `requireUser()` / `getCurrentUser()` in their layout, Server Action, or Route Handler.
 </Callout>
 
 ## Incremental rollout

@@ -60,7 +60,8 @@ Local sessions use an opaque token:
 
 - The browser holds a random token in an httpOnly cookie.
 - The database stores only `sha256(token)` in `Session.tokenHash`.
-- `proxy.ts` looks up the session and user on protected requests.
+- `proxy.ts` only performs an optimistic check (cookie presence and shape); it does not query the database.
+- The protected layout calls `requireUser()` for the authoritative lookup.
 - Expired sessions and disabled users are rejected and their sessions are deleted.
 - Logout deletes the local session and clears the Logto SDK cookie.
 
@@ -75,9 +76,11 @@ See [Sessions and route protection](./session) for details.
 | `app/api/auth/logout/route.ts` | Delete local session and clear cookies |
 | `app/api/auth/me/route.ts` | Return the current user |
 | `lib/logto-user.ts` | Logto claims → local User |
+| `lib/auth.ts` | Authoritative session checks (`requireUser` / `getCurrentUser`) |
 | `lib/session.ts` | Create, validate, delete sessions |
+| `lib/session-token.ts` | Token generation, hashing, and shape validation (no Prisma) |
 | `lib/prisma.ts` | Prisma Client singleton |
-| `proxy.ts` | i18n + route protection |
+| `proxy.ts` | i18n + optimistic route check |
 | `prisma/schema.prisma` | User, Session, Role, Permission models |
 
 ## Current limits
@@ -89,7 +92,7 @@ See [Sessions and route protection](./session) for details.
 
 ## Next
 
-- [Sessions and route protection](./session): sessions, cookies, proxy checks, and logout.
+- [Sessions and route protection](./session): sessions, cookies, optimistic proxy checks, authoritative checks, and logout.
 - [Logto](./logto): OIDC flow, claims mapping, and account binding.
 - [RBAC](./rbac): users, roles, permissions, and authorization.
 - [Evolution](./evolution): multiple identities, revocation, and audit.
