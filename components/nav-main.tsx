@@ -25,12 +25,25 @@ export type NavGroup = {
   items: NavItem[];
 };
 
-function isActivePath(pathname: string, url: string) {
-  return pathname === url || pathname.startsWith(`${url}/`);
+/**
+ * 命中规则取最长前缀: `/dashboard/files` 与 `/dashboard/files/all` 同时存在时,
+ * 停留在子页面只高亮子入口, 父入口不会跟着亮。
+ */
+function isActivePath(pathname: string, url: string, allUrls: string[]) {
+  const matches = (candidate: string) =>
+    pathname === candidate || pathname.startsWith(`${candidate}/`);
+  if (!matches(url)) return false;
+
+  return !allUrls.some(
+    (other) => other !== url && other.startsWith(`${url}/`) && matches(other),
+  );
 }
 
 export function NavMain({ groups }: Readonly<{ groups: NavGroup[] }>) {
   const pathname = usePathname();
+  const allUrls = groups.flatMap((group) =>
+    group.items.map((item) => item.url),
+  );
 
   return (
     <>
@@ -45,7 +58,7 @@ export function NavMain({ groups }: Readonly<{ groups: NavGroup[] }>) {
                   <SidebarMenuButton
                     asChild
                     tooltip={item.title}
-                    isActive={isActivePath(pathname, item.url)}
+                    isActive={isActivePath(pathname, item.url, allUrls)}
                   >
                     <Link href={item.url}>
                       {item.icon}
