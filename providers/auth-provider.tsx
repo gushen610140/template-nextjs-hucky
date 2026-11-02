@@ -56,11 +56,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     setUser(null);
+    let fallbackUrl = "/";
+
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+      const data = (await response.json()) as {
+        redirectUrl?: string | null;
+        fallbackUrl?: string;
+      };
+
+      // 优先走 Logto 的全局登出, 由 Logto 再跳回 LOGTO_BASE_URL
+      if (data.redirectUrl) {
+        window.location.assign(data.redirectUrl);
+        return;
+      }
+
+      fallbackUrl = data.fallbackUrl ?? fallbackUrl;
     } catch {
       // 网络失败时本地态已清除, 服务端 session 按过期时间自然失效
     }
+
+    // Logto 不可用时直接回到站点根地址
+    window.location.assign(fallbackUrl);
   }, []);
 
   const value = useMemo<AuthContextValue>(

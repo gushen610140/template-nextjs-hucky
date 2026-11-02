@@ -135,7 +135,12 @@ export function NavUser({ logtoEndpoint }: { logtoEndpoint: string }) {
 
               {ACCOUNT_LINKS.map(({ path, icon: Icon, labelKey }) => (
                 <DropdownMenuItem key={path} asChild>
-                  <a href={`${accountBase}${path}`} className="cursor-pointer">
+                  <a
+                    href={`${accountBase}${path}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="cursor-pointer"
+                  >
                     <Icon />
                     {t(labelKey)}
                   </a>
