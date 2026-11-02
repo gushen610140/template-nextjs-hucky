@@ -31,8 +31,8 @@ const SYSTEM_ROLES: ReadonlyArray<{
   },
   {
     name: ROLES.user,
-    description: "普通用户，默认无后台权限",
-    permissions: [],
+    description: "普通用户，可管理自己的文件",
+    permissions: [PERMISSIONS.fileOwn],
   },
 ];
 

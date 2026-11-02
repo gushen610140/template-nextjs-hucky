@@ -1,5 +1,6 @@
 import type { IdTokenClaims } from "@logto/next";
 import { Prisma } from "@/lib/generated/prisma/client";
+import { ROLES } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -43,6 +44,7 @@ export async function upsertLogtoUser(claims: IdTokenClaims) {
 
   // 3. 新用户
   const email = verifiedEmail ?? fallbackEmail;
+  const defaultRole = await defaultRoleConnect();
   try {
     return await prisma.user.create({
       data: {
@@ -50,6 +52,7 @@ export async function upsertLogtoUser(claims: IdTokenClaims) {
         email,
         name: claims.name ?? claims.username ?? sub,
         avatarUrl: claims.picture ?? null,
+        ...defaultRole,
       },
     });
   } catch (error) {
@@ -71,12 +74,28 @@ export async function upsertLogtoUser(claims: IdTokenClaims) {
             email: fallbackEmail,
             name: claims.name ?? claims.username ?? sub,
             avatarUrl: claims.picture ?? null,
+            ...defaultRole,
           },
         });
       }
     }
     throw error;
   }
+}
+
+/**
+ * 新用户默认获得 `user` 角色, 否则 file:own 等默认能力拿不到。
+ * 角色由 seed 维护; 尚未 seed 时返回空对象, 不影响登录。
+ */
+async function defaultRoleConnect() {
+  const role = await prisma.role.findUnique({
+    where: { name: ROLES.user },
+    select: { id: true },
+  });
+  if (!role) return {};
+  return {
+    roles: { create: [{ role: { connect: { id: role.id } } }] },
+  };
 }
 
 /** 更新资料; 邮箱被其他账号占用时保留原邮箱, 不让登录失败 */
