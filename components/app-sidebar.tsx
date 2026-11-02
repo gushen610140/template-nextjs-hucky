@@ -5,6 +5,8 @@ import {
   Bot,
   Command,
   Database,
+  FolderOpen,
+  Folders,
   LifeBuoy,
   Palette,
   Send,
@@ -17,7 +19,7 @@ import {
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import type * as React from "react";
-import { type NavGroup, NavMain } from "@/components/nav-main";
+import { type NavGroup, type NavItem, NavMain } from "@/components/nav-main";
 import { NavSecondary } from "@/components/nav-secondary";
 import { NavUser } from "@/components/nav-user";
 import {
@@ -35,11 +37,17 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   logtoEndpoint: string;
   /** 是否拥有用户 / 角色 / 权限管理权限 */
   canManageBasic: boolean;
+  /** 是否拥有文件管理权限 (file:own) */
+  canUseFiles: boolean;
+  /** 是否拥有全站文件管理权限 (file:manage) */
+  canManageFiles: boolean;
 };
 
 export function AppSidebar({
   logtoEndpoint,
   canManageBasic,
+  canUseFiles,
+  canManageFiles,
   ...props
 }: AppSidebarProps) {
   const t = useTranslations("Sidebar");
@@ -68,6 +76,31 @@ export function AppSidebar({
           icon: <UserCog />,
         },
       ],
+    });
+  }
+
+  // 文件入口按权限拆成两个页面: 我的文件 (file:own) 与文件管理 (file:manage)。
+  // 同一用户可能只有其中一个, 所以逐项判断, 而不是整组显示/隐藏。
+  const fileItems: NavItem[] = [];
+  if (canUseFiles) {
+    fileItems.push({
+      title: t("files"),
+      url: `/${locale}/dashboard/files`,
+      icon: <FolderOpen />,
+    });
+  }
+  if (canManageFiles) {
+    fileItems.push({
+      title: t("filesAll"),
+      url: `/${locale}/dashboard/files/all`,
+      icon: <Folders />,
+    });
+  }
+  if (fileItems.length > 0) {
+    navGroups.push({
+      label: t("filesGroup"),
+      separator: true,
+      items: fileItems,
     });
   }
 

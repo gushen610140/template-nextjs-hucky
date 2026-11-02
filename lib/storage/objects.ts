@@ -45,5 +45,9 @@ function isNotFound(error: unknown): boolean {
     name?: string;
     $metadata?: { httpStatusCode?: number };
   };
-  return name === "NotFound" || name === "NoSuchKey" || $metadata?.httpStatusCode === 404;
+  return (
+    name === "NotFound" ||
+    name === "NoSuchKey" ||
+    $metadata?.httpStatusCode === 404
+  );
 }

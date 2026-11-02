@@ -23,6 +23,8 @@ export default async function DashboardLayout({
       <AppSidebar
         logtoEndpoint={process.env.LOGTO_ENDPOINT ?? ""}
         canManageBasic={permissions.has(PERMISSIONS.basicManage)}
+        canUseFiles={permissions.has(PERMISSIONS.fileOwn)}
+        canManageFiles={permissions.has(PERMISSIONS.fileManage)}
       />
       <SidebarInset>
         <DashboardHeader />

@@ -164,7 +164,11 @@ export async function renameFile(
   }
 
   const file = await findFileForAction(id);
-  if (!file || !canAccessFile(guard, file.ownerId) || file.status === "DELETED") {
+  if (
+    !file ||
+    !canAccessFile(guard, file.ownerId) ||
+    file.status === "DELETED"
+  ) {
     return { ok: false, error: "not_found" };
   }
 

@@ -12,9 +12,9 @@ const LIST_LIMIT = 200;
  *
  * 软删除的行 (status = DELETED) 不会出现在列表里。
  */
-export async function listFiles(options: {
-  ownerId?: string;
-} = {}): Promise<FileRow[]> {
+export async function listFiles(
+  options: { ownerId?: string } = {},
+): Promise<FileRow[]> {
   const rows = await prisma.fileObject.findMany({
     where: {
       status: "READY",
