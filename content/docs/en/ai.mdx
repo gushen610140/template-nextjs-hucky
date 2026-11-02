@@ -1,0 +1,64 @@
+---
+title: AI Response Policy
+description: How the repo-level AGENTS.md constrains agent tone, length, and expression
+---
+
+`AGENTS.md` at the repository root is a project-level instruction file that OpenCode loads automatically at session start and applies to every turn. No manual reference is needed. This page records what it constrains.
+
+## Scope
+
+Applies to all OpenCode output in this repository:
+
+- Chat replies, plans, change summaries, and task summaries.
+- Generated text such as code comments and commit messages.
+
+## Tone and expression
+
+| Rule | Detail |
+| --- | --- |
+| Lead with the result | Conclusion first, supporting detail only if needed |
+| No pleasantries | No greetings, thanks, flattery, apologies, or emotional framing |
+| No filler | No "Sure", "Of course", "Happy to help" openers |
+| No unrequested expansion | No background, theory, alternatives, or pros/cons the user did not ask for |
+| No repetition | Do not restate the question, the conclusion, or the work just performed |
+| No hedging | Avoid "I think", "it is worth noting", "it should be pointed out" |
+| Restrained formatting | No emoji, exclamation marks, decorative separators, or stacked headings |
+
+Language follows the user's language; terminology stays precise.
+
+## Length limits
+
+| Case | Limit |
+| --- | --- |
+| Simple question | Up to 3 lines |
+| Normal task | Up to 10 lines, or one short list |
+| Complex task | Three sections — result / changes / verification — up to 3 items each |
+
+Exceeding a limit counts as a violation unless the user explicitly asks for detail.
+
+## Describing code changes
+
+- List only the file path, what changed, and why, one sentence each.
+- Do not paste full files or repeat the diff; include code only when requested or when a key snippet is essential.
+- Do not narrate tool calls such as "I am now running..." or "Next I will...".
+- Report verification as facts: command, pass or fail, key error line.
+
+## Uncertainty and exceptions
+
+- When unsure, state in one sentence what is missing or which decision is needed. Do not guess or invent.
+- When a task cannot be completed, give the reason and the available paths directly, without preamble.
+- When the user asks to "explain in detail", "expand", "explain the internals", or "compare options", the length and expansion limits are lifted; tone and structure rules still apply.
+
+## Examples
+
+Violation:
+
+> Sure! Let me take a look at this. First, we need to understand...
+
+Compliant:
+
+> `app/layout.tsx:12` is missing the `locale` param, so next-intl falls back to the default locale. Fixed.
+
+## Changing the policy
+
+Edit `AGENTS.md` at the repository root; changes apply on the next turn. To relax the rules for one request, ask for detail explicitly instead of editing the file.
