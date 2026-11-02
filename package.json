@@ -4,10 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "biome check",
-    "format": "biome format --write"
+    "format": "biome format --write",
+    "db:generate": "prisma generate",
+    "db:seed": "prisma db seed",
+    "db:setup": "prisma generate && prisma migrate deploy && prisma db seed",
+    "vercel-build": "bun run db:setup && next build"
   },
   "dependencies": {
     "@logto/next": "^5.0.2",

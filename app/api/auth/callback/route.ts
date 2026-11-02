@@ -2,6 +2,7 @@ import { getLogtoContext, handleSignIn } from "@logto/next/server-actions";
 import { cookies } from "next/headers";
 import { type NextRequest, NextResponse } from "next/server";
 import { routing } from "@/i18n/routing";
+import { ensureBootstrapAdmin } from "@/lib/bootstrap-admin";
 import { LOGTO_CALLBACK_PATH, logtoConfig } from "@/lib/logto";
 import { upsertLogtoUser } from "@/lib/logto-user";
 import {
@@ -72,6 +73,14 @@ export async function GET(request: NextRequest) {
 
   if (!user.isActive) {
     return NextResponse.redirect(loginErrorUrl());
+  }
+
+  // 首次部署引导: 白名单邮箱在系统还没有管理员时自动获得 admin 角色。
+  // 引导失败不应阻塞登录, 用户可以下次登录重试。
+  try {
+    await ensureBootstrapAdmin({ id: user.id, email: user.email });
+  } catch (error) {
+    console.error("Failed to bootstrap admin role:", error);
   }
 
   const token = await createSession(user.id);

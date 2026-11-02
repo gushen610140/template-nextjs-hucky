@@ -30,7 +30,7 @@ datasource db {
 | --- | --- |
 | `User` | 本地用户资料、Logto 关联、启用状态和时间戳 |
 | `Role` | 角色，例如管理员、编辑者 |
-| `Permission` | 细粒度权限，例如 `user:create`、`post:publish` |
+| `Permission` | 粗粒度权限，例如 `basic:manage`、`ai:manage` |
 | `UserRole` | 用户与角色的多对多关联表 |
 | `RolePermission` | 角色与权限的多对多关联表 |
 | `Session` | 服务端不透明会话，保存 token 哈希和过期时间 |

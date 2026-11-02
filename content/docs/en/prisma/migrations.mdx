@@ -181,16 +181,18 @@ Run migrations before the new application version starts:
 
 ```bash
 bun ci
-bunx prisma generate
-bunx prisma migrate deploy
+bun run db:setup
 bun run build
 bun start
 ```
 
-In a real pipeline, `migrate deploy` is often a separate step using the production `DATABASE_URL`. Keep these rules:
+`db:setup` is equivalent to `prisma generate && prisma migrate deploy && prisma db seed`. **`migrate deploy` does not run the seed.** If a pipeline only applies migrations, the built-in roles and permissions stay empty, and permission-gated admin pages will lock everyone out.
+
+On Vercel, put `bun run db:setup` in the production Build Command (or a pre-deploy script) so migrations and the seed run before the app starts. Run it for production deployments only, not for every Preview deployment. Keep these rules:
 
 - Back up the production database first.
 - Run only committed, reviewed migrations.
+- After a successful migration, run `bun run db:seed` (or use `db:setup`) to sync the RBAC seed data.
 - If a migration fails, stop the deployment instead of starting the new version against a half-migrated schema.
 - When multiple instances start at once, let only one migration job run `migrate deploy`.
 - After deployment, run `bunx prisma migrate status` to verify the state.

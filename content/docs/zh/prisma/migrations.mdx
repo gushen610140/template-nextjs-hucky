@@ -181,16 +181,18 @@ Prisma 可能把重命名识别为“删除旧列 + 新增新列”，从而丢�
 
 ```bash
 bun ci
-bunx prisma generate
-bunx prisma migrate deploy
+bun run db:setup
 bun run build
 bun start
 ```
 
-实际 CI/CD 中，`migrate deploy` 通常作为独立步骤运行，使用生产环境的 `DATABASE_URL`。要点：
+`db:setup` 等价于 `prisma generate && prisma migrate deploy && prisma db seed`。**`migrate deploy` 本身不会执行 seed**，如果部署流程只跑了迁移，内置角色和权限表会是空的，后台页面接入权限校验后就会被锁死。
+
+如果使用 Vercel，把 `bun run db:setup` 放进生产部署的 Build Command（或部署前脚本），确保迁移和 seed 都在应用启动前完成。只让生产部署执行，不要在每个 Preview 部署上跑迁移。要点：
 
 - 生产数据库先备份。
 - 只运行已提交、已审查的迁移。
+- 迁移成功后必须执行 `bun run db:seed`（或直接使用 `db:setup`），同步 RBAC 种子数据。
 - 迁移失败时停止部署，不要带着半完成的结构启动新版本。
 - 多个应用实例同时启动时，只让一个迁移任务执行 `migrate deploy`，避免并发迁移。
 - 部署后运行 `bunx prisma migrate status` 确认状态。

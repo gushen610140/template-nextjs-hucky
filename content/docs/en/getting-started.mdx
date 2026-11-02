@@ -52,9 +52,12 @@ LOGTO_APP_ID=your-app-id
 LOGTO_APP_SECRET=your-app-secret
 LOGTO_BASE_URL=http://localhost:3000
 LOGTO_COOKIE_SECRET=a-long-random-string
+BOOTSTRAP_ADMIN_EMAILS=you@example.com
 ```
 
 `LOGTO_BASE_URL` is the app's own URL; Logto redirects back here. `LOGTO_COOKIE_SECRET` must be at least 32 characters and should be strongly random in production. `.env.example` is committed to Git; real `.env*` files are not. See [Environment variables](./infrastructure/environment-variables) for details.
+
+`BOOTSTRAP_ADMIN_EMAILS` bootstraps the first deployment: while the system has no administrator, these verified emails receive the `admin` role on sign-in. Once an administrator exists, the variable has no effect and can be kept or removed.
 
 </Step>
 
@@ -63,10 +66,10 @@ LOGTO_COOKIE_SECRET=a-long-random-string
 
 ```bash
 bunx prisma generate
-bunx prisma migrate dev
+bun run db:setup
 ```
 
-`prisma generate` writes the client to `lib/generated/prisma`, and `migrate dev` applies migrations. Use `bunx prisma studio` to browse data. See [Prisma database](./prisma) for the schema, PostgreSQL setup, and migration workflow.
+`prisma generate` writes the client to `lib/generated/prisma`. `db:setup` generates the client, runs `prisma migrate deploy`, and then the idempotent RBAC seed, which creates the built-in roles and permissions. Use `bunx prisma migrate dev` when you are developing new migrations. Use `bunx prisma studio` to browse data. See [Prisma database](./prisma) for the schema, PostgreSQL setup, and migration workflow.
 
 </Step>
 
@@ -94,6 +97,8 @@ Open `http://localhost:3000`; you will be redirected to the default locale `/zh`
 | `bun start` | Run the production build |
 | `bun run lint` | Biome checks |
 | `bun run format` | Format with Biome |
+| `bun run db:setup` | Generate the client, apply migrations, and sync RBAC seed data |
+| `bun run db:seed` | Sync RBAC seed data only (idempotent) |
 
 ## Auth and route protection
 

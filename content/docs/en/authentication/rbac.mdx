@@ -3,7 +3,7 @@ title: RBAC permissions
 description: User, role, and permission models, plus how to enforce authorization
 ---
 
-The RBAC tables exist, but there is no role admin UI or shared authorization middleware yet. Current state: **the data model is ready; business code must enforce permissions**.
+The RBAC tables, seed data, first-admin bootstrap, and authorization helpers are in place, but there is no role admin UI yet. Authorization is intentionally coarse: only `basic:manage` and `ai:manage`, while the theme page and dashboard overview are unrestricted. **New pages and APIs are unrestricted by default; opt in explicitly when you need a check.**
 
 ## Data model
 
@@ -45,7 +45,7 @@ erDiagram
 
 - `UserRole` and `RolePermission` use composite primary keys to prevent duplicates.
 - All relations use `onDelete: Cascade`.
-- `Permission.name` is the stable authorization key, such as `user:create` or `post:publish`.
+- `Permission.name` is the stable authorization key, such as `basic:manage` or `ai:manage`.
 - `Permission.module` groups permissions by area.
 
 ## Assigning roles
@@ -104,47 +104,87 @@ const permissions = new Set(
 );
 ```
 
+## Seed data and the first administrator
+
+The permission catalog and built-in roles are code-owned: permission constants live in `lib/permissions.ts` and are synced to the database by the idempotent `prisma/seed.ts`.
+
+```bash
+bun run db:seed     # sync permissions and built-in roles only
+bun run db:setup    # generate + migrate + sync (recommended for new environments)
+```
+
+Built-in roles:
+
+- `admin`: every permission in `PERMISSIONS`.
+- `user`: a normal user with no admin permissions by default.
+
+The catalog currently has only two permissions:
+
+| Permission | Scope |
+| --- | --- |
+| `basic:manage` | Users, roles, and permissions |
+| `ai:manage` | Models, providers, agents, and RAG |
+
+The theme page and dashboard overview are unrestricted. Add more constants to `PERMISSIONS` when you need finer granularity.
+
+Built-in roles are treated as system data owned by the code: every seed reconciles their permissions to match the code. Custom roles are left untouched. The seed only upserts the current permissions and never deletes permissions created through an admin UI.
+
+When a new environment has no administrator, set:
+
+```ini
+BOOTSTRAP_ADMIN_EMAILS=admin@example.com,ops@example.com
+```
+
+Those verified emails receive the `admin` role on sign-in. Once an administrator exists, the logic stops applying, so no fixed account has to be written into code or the database.
+
 ## Enforcing permissions
 
-Do not rely on hiding a button in the client. Check permissions on the server.
+Do not rely on hiding a button in the client. Check permissions on the server. The shared entry point is `lib/authz.ts`.
+
+### APIs
+
+New APIs require login only by default. Wrap them with `withAuth`:
 
 ```ts
-async function hasPermission(userId: string, permission: string) {
-  const count = await prisma.rolePermission.count({
-    where: {
-      permission: { name: permission },
-      role: {
-        users: {
-          some: { userId },
-        },
-      },
-    },
-  });
+import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/authz";
 
-  return count > 0;
-}
+export const GET = withAuth(async (_request, _context, user) => {
+  return NextResponse.json({ userId: user.id });
+});
 ```
 
-In a Route Handler or Server Action:
+Use `withPermission` when the endpoint also needs a permission:
 
 ```ts
-import { getCurrentUser } from "@/lib/auth";
+import { withPermission } from "@/lib/authz";
+import { PERMISSIONS } from "@/lib/permissions";
 
-const user = await getCurrentUser();
-if (!user) {
-  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-}
-
-if (!(await hasPermission(user.id, "post:publish"))) {
-  return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-}
+export const POST = withPermission(
+  PERMISSIONS.basicManage,
+  async (_request, _context, user) => {
+    // ...
+  },
+);
 ```
+
+### Pages
+
+Pages are unrestricted by default. When you need a check, call this from a Server Component:
+
+```ts
+import { requirePermission } from "@/lib/authz";
+import { PERMISSIONS } from "@/lib/permissions";
+
+await requirePermission(PERMISSIONS.aiManage);
+```
+
+Pages are not wired to permission checks yet, so every signed-in user can open them. Add the call above when a page needs restricting. A new page without the call is unrestricted by design.
 
 ## Suggested additions
 
-- `lib/authz.ts` with `getUserPermissions`, `hasPermission`, and `requirePermission`.
 - Admin APIs for roles, permissions, and user-role assignment.
-- Seed data for `admin`, `user`, and base permissions.
+- Page-level checks: call `requirePermission` on the basic and AI pages when you are ready.
 - Audit records for role changes.
 - Short-lived permission caching with invalidation on role changes.
 
@@ -154,7 +194,7 @@ RBAC answers “what can this signed-in user do?” It does not replace session 
 
 ## Incremental rollout
 
-1. Add permission seeds and a shared `hasPermission`.
+1. Call `requirePermission` on the pages that need restricting (pages are not wired yet).
 2. Add role management screens.
 3. Add permission caching and invalidation if roles change often.
 4. For multi-tenancy, add `tenantId` to `UserRole` or introduce a tenant model and redesign unique constraints.

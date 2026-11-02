@@ -30,7 +30,7 @@ datasource db {
 | --- | --- |
 | `User` | Local profile, Logto link, active flag, and timestamps |
 | `Role` | Roles such as admin or editor |
-| `Permission` | Fine-grained permissions such as `user:create` or `post:publish` |
+| `Permission` | Coarse-grained permissions such as `basic:manage` or `ai:manage` |
 | `UserRole` | Many-to-many join table between users and roles |
 | `RolePermission` | Many-to-many join table between roles and permissions |
 | `Session` | Opaque server-side sessions with token hashes and expiry |
