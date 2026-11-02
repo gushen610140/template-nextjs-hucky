@@ -2,6 +2,8 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { DashboardHeader } from "@/components/dashboard-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { requireUser } from "@/lib/auth";
+import { getUserPermissions } from "@/lib/authz";
+import { PERMISSIONS } from "@/lib/permissions";
 
 /**
  * 受保护分段的权威校验 + dashboard 外壳。
@@ -13,11 +15,15 @@ import { requireUser } from "@/lib/auth";
 export default async function DashboardLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  await requireUser();
+  const user = await requireUser();
+  const permissions = await getUserPermissions(user.id);
 
   return (
     <SidebarProvider>
-      <AppSidebar logtoEndpoint={process.env.LOGTO_ENDPOINT ?? ""} />
+      <AppSidebar
+        logtoEndpoint={process.env.LOGTO_ENDPOINT ?? ""}
+        canManageBasic={permissions.has(PERMISSIONS.basicManage)}
+      />
       <SidebarInset>
         <DashboardHeader />
         {children}

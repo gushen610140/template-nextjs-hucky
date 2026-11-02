@@ -33,14 +33,23 @@ import {
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   /** Logto endpoint，用于拼接账户中心页面地址 */
   logtoEndpoint: string;
+  /** 是否拥有用户 / 角色 / 权限管理权限 */
+  canManageBasic: boolean;
 };
 
-export function AppSidebar({ logtoEndpoint, ...props }: AppSidebarProps) {
+export function AppSidebar({
+  logtoEndpoint,
+  canManageBasic,
+  ...props
+}: AppSidebarProps) {
   const t = useTranslations("Sidebar");
   const locale = useLocale();
 
-  const navGroups: NavGroup[] = [
-    {
+  const navGroups: NavGroup[] = [];
+
+  // 用户 / 角色 / 权限页面本身有服务端权限校验, 这里只是不展示无权限的入口
+  if (canManageBasic) {
+    navGroups.push({
       label: t("basic"),
       items: [
         {
@@ -59,7 +68,10 @@ export function AppSidebar({ logtoEndpoint, ...props }: AppSidebarProps) {
           icon: <UserCog />,
         },
       ],
-    },
+    });
+  }
+
+  navGroups.push(
     {
       label: t("ai"),
       items: [
@@ -95,7 +107,7 @@ export function AppSidebar({ logtoEndpoint, ...props }: AppSidebarProps) {
         },
       ],
     },
-  ];
+  );
 
   return (
     <Sidebar collapsible="icon" variant="inset" {...props}>
