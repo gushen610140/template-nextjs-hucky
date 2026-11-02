@@ -188,6 +188,13 @@ bun start
 
 `db:setup` is equivalent to `prisma generate && prisma migrate deploy && prisma db seed`. **`migrate deploy` does not run the seed.** If a pipeline only applies migrations, the built-in roles and permissions stay empty, and permission-gated admin pages will lock everyone out.
 
+Split the production connection strings:
+
+- `MIGRATE_DATABASE_URL`: direct connection used by `migrate deploy` and the seed; it must not be a PgBouncer transaction pooler.
+- `DATABASE_URL`: pooled connection used by the application runtime.
+
+Both `prisma.config.ts` and `prisma/seed.ts` prefer `MIGRATE_DATABASE_URL` and fall back to `DATABASE_URL`.
+
 On Vercel, put `bun run db:setup` in the production Build Command (or a pre-deploy script) so migrations and the seed run before the app starts. Run it for production deployments only, not for every Preview deployment. Keep these rules:
 
 - Back up the production database first.

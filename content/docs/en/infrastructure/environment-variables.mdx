@@ -35,10 +35,10 @@ dotenv.config({ path: envFile, quiet: true });
 
 `dotenv` is therefore a Prisma CLI dependency and lives in `devDependencies`; the application runtime does not import it, so there is no conflict with Next.js env loading.
 
-`dotenv.config()` does not override variables that already exist. If the deployment platform provides `DATABASE_URL`, the platform value wins and the `.env` file does not replace it.
+`dotenv.config()` does not override variables that already exist. If the deployment platform provides `DATABASE_URL` or `MIGRATE_DATABASE_URL`, the platform value wins and the `.env` file does not replace it.
 
 <Callout type="warn" title="Set the environment explicitly for production migrations">
-Without `NODE_ENV`, `bunx prisma migrate deploy` treats the environment as `development` and loads `.env.development`. Production should set `NODE_ENV=production`, or have CI/CD inject `DATABASE_URL` directly.
+Without `NODE_ENV`, `bunx prisma migrate deploy` treats the environment as `development` and loads `.env.development`. Production should set `NODE_ENV=production`, or have CI/CD inject `MIGRATE_DATABASE_URL` (falling back to `DATABASE_URL` when unset).
 </Callout>
 
 <Callout title="Do not override NODE_ENV">
@@ -49,12 +49,15 @@ Setting `NODE_ENV=production` inside `.env.development` puts the file-loading lo
 
 | Variable | Purpose | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | PostgreSQL connection string | Read by Prisma and `lib/prisma.ts`, e.g. `postgresql://user:password@localhost:5432/hucky` |
+| `DATABASE_URL` | Runtime connection string | Read only by `lib/prisma.ts`; in production use the managed database's pooled connection string, e.g. `postgresql://user:password@localhost:5432/hucky` |
+| `MIGRATE_DATABASE_URL` | Migration / seed / Studio connection string | Read by `prisma.config.ts` and `prisma/seed.ts`; must be a direct connection, not a PgBouncer transaction pooler. In local development it can equal `DATABASE_URL` |
 | `LOGTO_ENDPOINT` | Logto tenant URL | For example `https://your-tenant.logto.app` |
 | `LOGTO_APP_ID` | Logto application ID | Obtained after creating an app in Logto |
 | `LOGTO_APP_SECRET` | Logto application secret | Server-side only; never prefix it with `NEXT_PUBLIC_` |
 | `LOGTO_BASE_URL` | The app's own URL | Usually `http://localhost:3000` in development; use the real domain in production |
 | `LOGTO_COOKIE_SECRET` | Session cookie signing secret | At least 32 characters; use a strong random value and replace it in production |
+
+The Prisma CLI prefers `MIGRATE_DATABASE_URL` and falls back to `DATABASE_URL`; the application runtime only reads `DATABASE_URL`. This lets production use a direct connection for migrations and a pooled connection for runtime.
 
 Apart from the local default for `LOGTO_BASE_URL`, every variable should be set explicitly. A missing database URL prevents Prisma from connecting; missing Logto values break the sign-in flow.
 
@@ -68,6 +71,7 @@ Variables prefixed with `NEXT_PUBLIC_` are bundled into browser code. `LOGTO_APP
 
 ```ini
 DATABASE_URL=
+MIGRATE_DATABASE_URL=
 
 LOGTO_ENDPOINT=
 LOGTO_APP_ID=

@@ -46,6 +46,8 @@ Then fill in the real database and Logto values:
 
 ```ini
 DATABASE_URL=postgresql://user:password@localhost:5432/hucky
+# 本地开发可以填同一个地址
+MIGRATE_DATABASE_URL=postgresql://user:password@localhost:5432/hucky
 
 LOGTO_ENDPOINT=https://your-tenant.logto.app
 LOGTO_APP_ID=your-app-id
@@ -54,6 +56,8 @@ LOGTO_BASE_URL=http://localhost:3000
 LOGTO_COOKIE_SECRET=a-long-random-string
 BOOTSTRAP_ADMIN_EMAILS=you@example.com
 ```
+
+`DATABASE_URL` is used by the application at runtime; in production it should be the managed database's pooled connection string. `MIGRATE_DATABASE_URL` is only for migrations, seeding, and Prisma Studio, and must be a direct connection. In local development both can use the same value.
 
 `LOGTO_BASE_URL` is the app's own URL; Logto redirects back here. `LOGTO_COOKIE_SECRET` must be at least 32 characters and should be strongly random in production. `.env.example` is committed to Git; real `.env*` files are not. See [Environment variables](./infrastructure/environment-variables) for details.
 

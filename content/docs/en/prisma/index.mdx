@@ -19,8 +19,9 @@ The database is PostgreSQL, the driver adapter is `@prisma/adapter-pg`, and the 
 | --- | --- |
 | `prisma/schema.prisma` | Models, relations, indexes, and generator configuration |
 | `prisma/migrations/` | Ordered SQL migrations; must be committed to Git |
-| `prisma.config.ts` | Prisma CLI config that loads the environment file and `DATABASE_URL` |
-| `lib/prisma.ts` | The single Prisma Client instance used at runtime |
+| `prisma.config.ts` | Prisma CLI config that loads the environment file and `MIGRATE_DATABASE_URL` (falling back to `DATABASE_URL`) |
+| `lib/prisma-client.ts` | Shared Prisma Client factory used by runtime and seed |
+| `lib/prisma.ts` | The single runtime Prisma Client instance, reading `DATABASE_URL` |
 | `lib/generated/prisma/` | Generated client; ignored by Git |
 | `lib/session.ts` | Creates, reads, and deletes sessions with Prisma |
 | `lib/logto-user.ts` | Maps a Logto identity to the local `User` table |
@@ -46,7 +47,7 @@ This installs the `prisma` CLI, `@prisma/client`, `@prisma/adapter-pg`, and `pg`
 <Step>
 ### Configure the database connection
 
-Copy the example file and fill in `DATABASE_URL`:
+Copy the example file and fill in the database connection strings. In local development both can use the same value:
 
 ```bash
 cp .env.example .env.development
@@ -54,9 +55,10 @@ cp .env.example .env.development
 
 ```ini
 DATABASE_URL=postgresql://user:password@localhost:5432/hucky
+MIGRATE_DATABASE_URL=postgresql://user:password@localhost:5432/hucky
 ```
 
-See [Environment variables](../infrastructure/environment-variables) for the full environment-file rules. If you do not have a database yet, start with [PostgreSQL](./postgresql).
+`DATABASE_URL` is used by the application runtime; `MIGRATE_DATABASE_URL` is used by migrations and seeding and should point at a direct connection in production. See [Environment variables](../infrastructure/environment-variables) for the full environment-file rules. If you do not have a database yet, start with [PostgreSQL](./postgresql).
 </Step>
 
 <Step>
@@ -91,24 +93,28 @@ A query travels from configuration to SQL roughly like this:
 ```text
 prisma.config.ts
   └─ dotenv reads .env.<NODE_ENV>
-       └─ DATABASE_URL
+       └─ MIGRATE_DATABASE_URL (falls back to DATABASE_URL)
+            └─ prisma migrate / db seed / studio
 
 prisma/schema.prisma
   └─ bunx prisma generate
        └─ lib/generated/prisma (type-safe client code)
 
 lib/prisma.ts
-  └─ new PrismaPg({ connectionString: DATABASE_URL })
-       └─ new PrismaClient({ adapter })
-            └─ pg Pool
-                 └─ PostgreSQL
+  └─ createPrismaClient(DATABASE_URL)
+       └─ new PrismaPg({ connectionString })
+            └─ new PrismaClient({ adapter })
+                 └─ pg Pool
+                      └─ PostgreSQL
 ```
 
 Application code only depends on the `prisma` export from `lib/prisma.ts`. It does three things:
 
-1. Reads `process.env.DATABASE_URL`.
-2. Creates a PostgreSQL driver adapter with `PrismaPg`.
+1. Reads the runtime connection string from `process.env.DATABASE_URL`.
+2. Creates a PostgreSQL driver adapter through the factory in `lib/prisma-client.ts` and `PrismaPg`.
 3. Stores the instance on `globalThis` in development so Next.js hot reload does not create a new pool on every change.
+
+Migrations and seeding bypass this singleton: `prisma.config.ts` and `prisma/seed.ts` use `MIGRATE_DATABASE_URL ?? DATABASE_URL` so they go through a direct connection.
 
 ## Development workflow
 

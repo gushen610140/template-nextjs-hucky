@@ -18,10 +18,11 @@ docker run --name hucky-postgres \
   -d postgres:17
 ```
 
-The matching connection string is:
+The matching connection strings are:
 
 ```ini
 DATABASE_URL=postgresql://hucky:hucky_dev_password@localhost:5432/hucky
+MIGRATE_DATABASE_URL=postgresql://hucky:hucky_dev_password@localhost:5432/hucky
 ```
 
 With a local PostgreSQL installation, create the database directly:
@@ -52,32 +53,58 @@ postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require
 | `DATABASE` | Database name, `hucky` in this project's examples |
 | `sslmode` | Managed databases commonly require `require` or `verify-full` |
 
-Put the final value in `.env.development`:
+Put the final values in `.env.development`. Local development usually has one database, so both variables can use the same value:
 
 ```ini
 DATABASE_URL=postgresql://hucky:hucky_dev_password@localhost:5432/hucky
+MIGRATE_DATABASE_URL=postgresql://hucky:hucky_dev_password@localhost:5432/hucky
 ```
 
-In production, set it in `.env.production` on the deployment platform or in its environment-variable settings. Never commit a real connection string.
+In production, set them in `.env.production` on the deployment platform or in its environment-variable settings. Never commit a real connection string. They have different jobs:
+
+- `DATABASE_URL`: used by the application at runtime; usually the provider's pooled connection string.
+- `MIGRATE_DATABASE_URL`: used by migrations, seeding, and Prisma Studio; must be a direct connection.
 
 <Callout type="warn" title="Never prefix database variables with NEXT_PUBLIC_">
-`DATABASE_URL` must stay server-side. Adding `NEXT_PUBLIC_` bundles the connection string into browser code and exposes the database credentials.
+`DATABASE_URL` and `MIGRATE_DATABASE_URL` must stay server-side. Adding `NEXT_PUBLIC_` bundles the connection string into browser code and exposes the database credentials.
 </Callout>
 
 ## How Prisma connects to PostgreSQL
 
-Prisma 7 uses driver adapters. The project creates the client like this in `lib/prisma.ts`:
+Prisma 7 uses driver adapters. The project keeps the client factory in `lib/prisma-client.ts`:
 
 ```ts
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/lib/generated/prisma/client";
 
-function createPrismaClient(): PrismaClient {
-  const adapter = new PrismaPg({
-    connectionString: process.env.DATABASE_URL,
-  });
+export function createPrismaClient(connectionString: string | undefined) {
+  if (!connectionString) {
+    throw new Error("Database connection string is not configured.");
+  }
+
+  const adapter = new PrismaPg({ connectionString });
   return new PrismaClient({ adapter });
 }
+```
+
+The application runtime only uses `DATABASE_URL`:
+
+```ts
+// lib/prisma.ts
+export const prisma =
+  globalForPrisma.prisma ?? createPrismaClient(process.env.DATABASE_URL);
+```
+
+Migrations and seeding use the direct connection:
+
+```ts
+// prisma.config.ts
+url: process.env.MIGRATE_DATABASE_URL ?? process.env.DATABASE_URL
+
+// prisma/seed.ts
+const connectionString =
+  process.env.MIGRATE_DATABASE_URL ?? process.env.DATABASE_URL;
+const prisma = createPrismaClient(connectionString);
 ```
 
 `PrismaPg` comes from `@prisma/adapter-pg` and uses a `pg` pool underneath. Connections are created only in the Node.js runtime:
@@ -91,7 +118,8 @@ function createPrismaClient(): PrismaClient {
 `PrismaPg` creates a `pg` pool by default. `lib/prisma.ts` already uses a global singleton to avoid creating a new pool on every development hot reload:
 
 ```ts
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+export const prisma =
+  globalForPrisma.prisma ?? createPrismaClient(process.env.DATABASE_URL);
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
@@ -108,8 +136,8 @@ Deployment notes:
 ## Operations
 
 ```bash
-# Open psql
-psql "$DATABASE_URL"
+# Open psql (operations use the direct connection)
+psql "$MIGRATE_DATABASE_URL"
 
 # Check migration state
 bunx prisma migrate status
@@ -118,21 +146,22 @@ bunx prisma migrate status
 bunx prisma studio
 
 # Logical backup in custom format
-pg_dump "$DATABASE_URL" --format=custom --file=hucky.dump
+pg_dump "$MIGRATE_DATABASE_URL" --format=custom --file=hucky.dump
 
 # Restore a backup
-pg_restore --clean --if-exists --dbname="$DATABASE_URL" hucky.dump
+pg_restore --clean --if-exists --dbname="$MIGRATE_DATABASE_URL" hucky.dump
 ```
 
 Confirm the target database before restoring or running `migrate reset`. Back up production before any destructive operation.
 
 ## Managed PostgreSQL
 
-Neon, Supabase, Amazon RDS, Google Cloud SQL, and similar services work directly: put the provider's connection string in `DATABASE_URL`. Keep in mind:
+Neon, Supabase, Amazon RDS, Google Cloud SQL, and similar services work directly: put the provider's connection strings in the matching variables. Keep in mind:
 
+- Use `DATABASE_URL` for the pooled connection string consumed by the application runtime.
+- Use `MIGRATE_DATABASE_URL` for the direct connection string used by migrations and seeding.
 - Add `?sslmode=require` or the stricter mode required by the provider.
 - URL-encode special characters in the password.
-- Prefer a pooled connection string, especially for serverless deployments.
 - Some providers require an IP allowlist or VPN; test connectivity with `psql` first.
 
 ## Common errors
@@ -146,4 +175,4 @@ Neon, Supabase, Amazon RDS, Google Cloud SQL, and similar services work directly
 | SSL errors | Missing `sslmode`, or the mode does not match the provider's certificate setup |
 | `database "hucky" does not exist` | The database was not created, or the name in the URL is wrong |
 
-Verify the connection string with `psql "$DATABASE_URL"` first. That separates database problems from Prisma configuration problems.
+Verify the direct connection with `psql "$MIGRATE_DATABASE_URL"` first. That separates database problems from Prisma configuration problems.

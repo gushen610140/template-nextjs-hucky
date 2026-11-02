@@ -35,10 +35,10 @@ dotenv.config({ path: envFile, quiet: true });
 
 因此 `dotenv` 是 Prisma CLI 的依赖，放在 `devDependencies` 中；应用运行时不会导入它，也不会和 Next.js 的 env 读取冲突。
 
-`dotenv.config()` 默认不会覆盖已经存在的环境变量。如果部署平台已经提供 `DATABASE_URL`，平台值优先，`.env` 文件不会覆盖它。
+`dotenv.config()` 默认不会覆盖已经存在的环境变量。如果部署平台已经提供 `DATABASE_URL` 或 `MIGRATE_DATABASE_URL`，平台值优先，`.env` 文件不会覆盖它。
 
 <Callout type="warn" title="生产迁移要显式指定环境">
-`bunx prisma migrate deploy` 在未设置 `NODE_ENV` 时会按 `development` 读取 `.env.development`。生产环境应设置 `NODE_ENV=production`，或者直接由 CI/CD 注入 `DATABASE_URL`。
+`bunx prisma migrate deploy` 在未设置 `NODE_ENV` 时会按 `development` 读取 `.env.development`。生产环境应设置 `NODE_ENV=production`，或者直接由 CI/CD 注入 `MIGRATE_DATABASE_URL`（未设置时会回退到 `DATABASE_URL`）。
 </Callout>
 
 <Callout title="不要手动覆盖 NODE_ENV">
@@ -49,12 +49,15 @@ dotenv.config({ path: envFile, quiet: true });
 
 | 变量 | 用途 | 说明 |
 | --- | --- | --- |
-| `DATABASE_URL` | PostgreSQL 连接串 | Prisma 和 `lib/prisma.ts` 都从这里读取，例如 `postgresql://user:password@localhost:5432/hucky` |
+| `DATABASE_URL` | 应用运行时连接串 | 只由 `lib/prisma.ts` 读取；生产环境使用托管数据库的 pooled / 连接池地址，例如 `postgresql://user:password@localhost:5432/hucky` |
+| `MIGRATE_DATABASE_URL` | 迁移 / seed / Studio 连接串 | 由 `prisma.config.ts` 和 `prisma/seed.ts` 读取；必须是直连地址，不能是 PgBouncer transaction 池。本地开发可以填与 `DATABASE_URL` 相同的值 |
 | `LOGTO_ENDPOINT` | Logto 租户地址 | 例如 `https://your-tenant.logto.app` |
 | `LOGTO_APP_ID` | Logto 应用 ID | 在 Logto 控制台创建应用后获得 |
 | `LOGTO_APP_SECRET` | Logto 应用密钥 | 仅服务端使用，不能加 `NEXT_PUBLIC_` 前缀 |
 | `LOGTO_BASE_URL` | 应用自身地址 | 开发环境通常是 `http://localhost:3000`，生产环境填写实际域名 |
 | `LOGTO_COOKIE_SECRET` | 会话 Cookie 签名密钥 | 至少 32 个字符，使用足够随机的值；生产环境必须更换 |
+
+Prisma CLI 优先使用 `MIGRATE_DATABASE_URL`，未设置时回退到 `DATABASE_URL`；应用运行时只读 `DATABASE_URL`。这样生产可以同时使用「直连迁移」和「连接池运行」。
 
 除 `LOGTO_BASE_URL` 有本地默认值外，其余变量都应显式配置。缺少数据库连接串会导致 Prisma 无法连接，缺少 Logto 配置会导致登录流程失败。
 
@@ -68,6 +71,7 @@ dotenv.config({ path: envFile, quiet: true });
 
 ```ini
 DATABASE_URL=
+MIGRATE_DATABASE_URL=
 
 LOGTO_ENDPOINT=
 LOGTO_APP_ID=

@@ -6,9 +6,10 @@ import {
   ROLES,
   type RoleName,
 } from "@/lib/permissions";
+import { createPrismaClient } from "@/lib/prisma-client";
 
 // 与 prisma.config.ts 保持一致: 按 NODE_ENV 读取 .env.<NODE_ENV>
-// 这样直接运行 `bun prisma/seed.ts` 也能拿到 DATABASE_URL。
+// 这样直接运行 `bun prisma/seed.ts` 也能拿到数据库连接串。
 const envFile = `.env.${process.env.NODE_ENV || "development"}`;
 dotenv.config({ path: envFile, quiet: true });
 
@@ -36,8 +37,16 @@ const SYSTEM_ROLES: ReadonlyArray<{
 ];
 
 async function main() {
-  // 必须在 dotenv 之后加载: lib/prisma.ts 在模块初始化时读取 DATABASE_URL
-  const { prisma } = await import("@/lib/prisma");
+  // seed 属于迁移/部署步骤, 使用直连地址; 本地只有一个连接串时回退到 DATABASE_URL。
+  // 不要复用 lib/prisma.ts 的运行时单例, 否则会走 pooled 连接。
+  const connectionString =
+    process.env.MIGRATE_DATABASE_URL ?? process.env.DATABASE_URL;
+
+  if (!connectionString) {
+    throw new Error("MIGRATE_DATABASE_URL or DATABASE_URL must be set.");
+  }
+
+  const prisma = createPrismaClient(connectionString);
 
   try {
     await prisma.$transaction(async (tx) => {

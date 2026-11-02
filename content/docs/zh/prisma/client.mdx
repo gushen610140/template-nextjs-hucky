@@ -9,26 +9,22 @@ description: 在服务端安全、高效地使用 Prisma Client
 
 ```ts
 // lib/prisma.ts
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/lib/generated/prisma/client";
+import type { PrismaClient } from "@/lib/generated/prisma/client";
+import { createPrismaClient } from "@/lib/prisma-client";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-function createPrismaClient(): PrismaClient {
-  const adapter = new PrismaPg({
-    connectionString: process.env.DATABASE_URL,
-  });
-  return new PrismaClient({ adapter });
-}
-
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+export const prisma =
+  globalForPrisma.prisma ?? createPrismaClient(process.env.DATABASE_URL);
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
 ```
+
+`createPrismaClient` 定义在 `lib/prisma-client.ts`。应用运行时传入 `DATABASE_URL`；`prisma/seed.ts` 也使用同一个工厂，但传入 `MIGRATE_DATABASE_URL ?? DATABASE_URL`，避免 seed 走连接池。
 
 为什么不能在每个文件里 `new PrismaClient()`：
 

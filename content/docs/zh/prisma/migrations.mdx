@@ -188,6 +188,13 @@ bun start
 
 `db:setup` 等价于 `prisma generate && prisma migrate deploy && prisma db seed`。**`migrate deploy` 本身不会执行 seed**，如果部署流程只跑了迁移，内置角色和权限表会是空的，后台页面接入权限校验后就会被锁死。
 
+生产环境的连接串要分开：
+
+- `MIGRATE_DATABASE_URL`：直连地址，`migrate deploy` 和 seed 使用，不能是 PgBouncer transaction 池。
+- `DATABASE_URL`：pooled 地址，应用运行时使用。
+
+`prisma.config.ts` 和 `prisma/seed.ts` 都会优先读取 `MIGRATE_DATABASE_URL`，未设置时回退到 `DATABASE_URL`。
+
 如果使用 Vercel，把 `bun run db:setup` 放进生产部署的 Build Command（或部署前脚本），确保迁移和 seed 都在应用启动前完成。只让生产部署执行，不要在每个 Preview 部署上跑迁移。要点：
 
 - 生产数据库先备份。

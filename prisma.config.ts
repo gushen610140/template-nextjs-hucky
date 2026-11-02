@@ -13,6 +13,8 @@ export default defineConfig({
     seed: "bun prisma/seed.ts",
   },
   datasource: {
-    url: process.env.DATABASE_URL,
+    // 迁移、studio 等 CLI 操作优先使用直连地址; 运行时连接串在 lib/prisma.ts。
+    // 本地只有一个地址时可以只填 DATABASE_URL。
+    url: process.env.MIGRATE_DATABASE_URL ?? process.env.DATABASE_URL,
   },
 });

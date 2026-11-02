@@ -22,6 +22,7 @@ docker run --name hucky-postgres \
 
 ```ini
 DATABASE_URL=postgresql://hucky:hucky_dev_password@localhost:5432/hucky
+MIGRATE_DATABASE_URL=postgresql://hucky:hucky_dev_password@localhost:5432/hucky
 ```
 
 如果使用本机安装的 PostgreSQL，可以直接创建数据库：
@@ -52,32 +53,58 @@ postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require
 | `DATABASE` | 数据库名，本项目示例为 `hucky` |
 | `sslmode` | 托管数据库通常要求 `require` 或 `verify-full` |
 
-把最终的 `DATABASE_URL` 写入 `.env.development`：
+把最终的连接串写入 `.env.development`。本地开发通常只有一个数据库，两个变量可以填同一个值：
 
 ```ini
 DATABASE_URL=postgresql://hucky:hucky_dev_password@localhost:5432/hucky
+MIGRATE_DATABASE_URL=postgresql://hucky:hucky_dev_password@localhost:5432/hucky
 ```
 
-生产环境写入部署平台的 `.env.production` 或环境变量面板，不要提交真实连接串。
+生产环境写入部署平台的 `.env.production` 或环境变量面板，不要提交真实连接串。两者职责不同：
+
+- `DATABASE_URL`：应用运行时使用，通常是托管数据库的 pooled / 连接池地址。
+- `MIGRATE_DATABASE_URL`：迁移、seed 和 Prisma Studio 使用，必须是直连地址。
 
 <Callout type="warn" title="不要给数据库变量加 NEXT_PUBLIC_">
-`DATABASE_URL` 只能被服务端读取。加 `NEXT_PUBLIC_` 会把连接串打包进浏览器代码，等同于公开数据库凭据。
+`DATABASE_URL` 和 `MIGRATE_DATABASE_URL` 只能被服务端读取。加 `NEXT_PUBLIC_` 会把连接串打包进浏览器代码，等同于公开数据库凭据。
 </Callout>
 
 ## Prisma 如何连接 PostgreSQL
 
-Prisma 7 使用驱动适配器。项目在 `lib/prisma.ts` 中这样创建客户端：
+Prisma 7 使用驱动适配器。项目把创建逻辑放在 `lib/prisma-client.ts`：
 
 ```ts
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/lib/generated/prisma/client";
 
-function createPrismaClient(): PrismaClient {
-  const adapter = new PrismaPg({
-    connectionString: process.env.DATABASE_URL,
-  });
+export function createPrismaClient(connectionString: string | undefined) {
+  if (!connectionString) {
+    throw new Error("Database connection string is not configured.");
+  }
+
+  const adapter = new PrismaPg({ connectionString });
   return new PrismaClient({ adapter });
 }
+```
+
+应用运行时只使用 `DATABASE_URL`：
+
+```ts
+// lib/prisma.ts
+export const prisma =
+  globalForPrisma.prisma ?? createPrismaClient(process.env.DATABASE_URL);
+```
+
+迁移和 seed 则使用直连地址：
+
+```ts
+// prisma.config.ts
+url: process.env.MIGRATE_DATABASE_URL ?? process.env.DATABASE_URL
+
+// prisma/seed.ts
+const connectionString =
+  process.env.MIGRATE_DATABASE_URL ?? process.env.DATABASE_URL;
+const prisma = createPrismaClient(connectionString);
 ```
 
 `PrismaPg` 来自 `@prisma/adapter-pg`，底层使用 `pg` 连接池。数据库连接只在 Node.js 运行时建立：
@@ -91,7 +118,8 @@ function createPrismaClient(): PrismaClient {
 `PrismaPg` 默认会创建 `pg` 连接池。`lib/prisma.ts` 已经用全局单例避免开发环境热更新重复建池：
 
 ```ts
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+export const prisma =
+  globalForPrisma.prisma ?? createPrismaClient(process.env.DATABASE_URL);
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
@@ -108,8 +136,8 @@ if (process.env.NODE_ENV !== "production") {
 ## 常用运维命令
 
 ```bash
-# 进入数据库
-psql "$DATABASE_URL"
+# 进入数据库（运维命令使用直连地址）
+psql "$MIGRATE_DATABASE_URL"
 
 # 查看迁移状态
 bunx prisma migrate status
@@ -118,21 +146,22 @@ bunx prisma migrate status
 bunx prisma studio
 
 # 逻辑备份（custom 格式）
-pg_dump "$DATABASE_URL" --format=custom --file=hucky.dump
+pg_dump "$MIGRATE_DATABASE_URL" --format=custom --file=hucky.dump
 
 # 恢复备份
-pg_restore --clean --if-exists --dbname="$DATABASE_URL" hucky.dump
+pg_restore --clean --if-exists --dbname="$MIGRATE_DATABASE_URL" hucky.dump
 ```
 
 执行恢复和 `migrate reset` 前先确认目标数据库，生产环境务必先备份。
 
 ## 托管 PostgreSQL
 
-Neon、Supabase、Amazon RDS、Google Cloud SQL 等都可以直接使用，只要把提供商给出的连接串填入 `DATABASE_URL`。注意：
+Neon、Supabase、Amazon RDS、Google Cloud SQL 等都可以直接使用，只要把提供商给出的连接串填入对应变量。注意：
 
+- `DATABASE_URL` 填 pooled 地址，供应用运行时使用。
+- `MIGRATE_DATABASE_URL` 填直连地址，供迁移和 seed 使用。
 - 需要 SSL 时加上 `?sslmode=require` 或提供商要求的更严格模式。
 - 密码中的特殊字符要 URL 编码。
-- 优先使用连接池地址，尤其是 Serverless 部署。
 - 有些提供商要求 IP 白名单或 VPN，先在本地用 `psql` 测试连通性。
 
 ## 常见错误
@@ -146,4 +175,4 @@ Neon、Supabase、Amazon RDS、Google Cloud SQL 等都可以直接使用，只�
 | SSL 相关错误 | 缺少 `sslmode`，或证书模式与提供商要求不一致 |
 | `database "hucky" does not exist` | 数据库尚未创建，或连接串里的数据库名拼错 |
 
-先用 `psql "$DATABASE_URL"` 验证连接串，再排查 Prisma 配置。这样可以把数据库问题和 ORM 配置问题分开。
+先用 `psql "$MIGRATE_DATABASE_URL"` 验证直连地址，再排查 Prisma 配置。这样可以把数据库问题和 ORM 配置问题分开。

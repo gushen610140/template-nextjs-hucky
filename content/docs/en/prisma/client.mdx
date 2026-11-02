@@ -9,26 +9,22 @@ Application code does not create database connections. It imports the single `pr
 
 ```ts
 // lib/prisma.ts
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/lib/generated/prisma/client";
+import type { PrismaClient } from "@/lib/generated/prisma/client";
+import { createPrismaClient } from "@/lib/prisma-client";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-function createPrismaClient(): PrismaClient {
-  const adapter = new PrismaPg({
-    connectionString: process.env.DATABASE_URL,
-  });
-  return new PrismaClient({ adapter });
-}
-
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+export const prisma =
+  globalForPrisma.prisma ?? createPrismaClient(process.env.DATABASE_URL);
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
 ```
+
+`createPrismaClient` lives in `lib/prisma-client.ts`. The application runtime passes `DATABASE_URL`; `prisma/seed.ts` uses the same factory with `MIGRATE_DATABASE_URL ?? DATABASE_URL` so seeding does not go through the pooler.
 
 Why not call `new PrismaClient()` in each file:
 
