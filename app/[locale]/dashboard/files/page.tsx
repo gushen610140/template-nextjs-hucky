@@ -1,12 +1,18 @@
-import { FilesClient } from "@/components/files/files-client";
+import { FilesExplorer } from "@/components/files/files-explorer";
 import { requirePermission } from "@/lib/authz";
-import { listFiles } from "@/lib/files/queries";
+import { listFilePage } from "@/lib/files/queries";
+import { parseFileListState } from "@/lib/files/query-params";
 import { PERMISSIONS } from "@/lib/permissions";
 
-/** 我的文件: 需要 file:own, 只列当前用户自己的记录 */
-export default async function FilesPage() {
-  const user = await requirePermission(PERMISSIONS.fileOwn);
-  const files = await listFiles({ ownerId: user.id });
+type FilesPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
-  return <FilesClient files={files} scope="own" showOwner={false} />;
+/** 我的文件: 需要 file:own, 支持文件夹、搜索、排序、分页 */
+export default async function FilesPage({ searchParams }: FilesPageProps) {
+  const user = await requirePermission(PERMISSIONS.fileOwn);
+  const state = parseFileListState(await searchParams);
+  const result = await listFilePage({ ownerId: user.id, state });
+
+  return <FilesExplorer scope="own" {...result} />;
 }

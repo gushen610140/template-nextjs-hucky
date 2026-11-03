@@ -1,12 +1,20 @@
-import { FilesClient } from "@/components/files/files-client";
+import { FilesExplorer } from "@/components/files/files-explorer";
 import { requirePermission } from "@/lib/authz";
-import { listFiles } from "@/lib/files/queries";
+import { listFilePage } from "@/lib/files/queries";
+import { parseFileListState } from "@/lib/files/query-params";
 import { PERMISSIONS } from "@/lib/permissions";
 
-/** 文件管理: 需要 file:manage, 列出全站文件 */
-export default async function AllFilesPage() {
-  await requirePermission(PERMISSIONS.fileManage);
-  const files = await listFiles();
+type AllFilesPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
-  return <FilesClient files={files} scope="all" showOwner />;
+/** 文件管理: 需要 file:manage, 平铺展示全站文件, 支持搜索、排序、分页 */
+export default async function AllFilesPage({
+  searchParams,
+}: AllFilesPageProps) {
+  await requirePermission(PERMISSIONS.fileManage);
+  const state = parseFileListState(await searchParams);
+  const result = await listFilePage({ state });
+
+  return <FilesExplorer scope="all" {...result} />;
 }
