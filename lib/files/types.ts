@@ -52,6 +52,8 @@ export type FileListResult = {
   pageCount: number;
   state: FileListState;
   breadcrumb: FolderCrumb[];
+  /** 当前属主下尚未确认的上传数; 平铺管理员视图为 0 */
+  pendingCount: number;
 };
 
 /** 预览页需要的单文件详情 (含存储键, 只在服务端使用) */
@@ -96,4 +98,9 @@ export type FileEditTarget =
 /** 编辑保存第二步: 回查对象并刷新元数据 */
 export type FileEditResult =
   | { ok: true; size: number; updatedAt: string }
+  | { ok: false; error: string };
+
+/** 修复未完成上传: 回查对象并补成 READY, 缺失对象则清理记录 */
+export type FileRecoveryResult =
+  | { ok: true; recovered: number; removed: number; failed: number }
   | { ok: false; error: string };

@@ -10,6 +10,7 @@ import { findFileForAction, findFolderForAction } from "@/lib/files/queries";
 import type {
   FileActionResult,
   FileDownloadTarget,
+  FileRecoveryResult,
   FileUploadTarget,
 } from "@/lib/files/types";
 import { prisma } from "@/lib/prisma";
@@ -22,6 +23,7 @@ import {
 } from "@/lib/storage/limits";
 import { deleteObject, headObject } from "@/lib/storage/objects";
 import { createDownloadUrl, createUploadUrl } from "@/lib/storage/presign";
+import { isTransientStorageError } from "@/lib/storage/retry";
 
 /**
  * 文件相关 Server Action。
@@ -161,7 +163,10 @@ export async function completeUpload(id: string): Promise<FileActionResult> {
     object = await headObject(file.key);
   } catch (error) {
     console.error("completeUpload: head object failed:", error);
-    return { ok: false, error: "unknown" };
+    return {
+      ok: false,
+      error: isTransientStorageError(error) ? "storage_unavailable" : "unknown",
+    };
   }
 
   if (!object) {
@@ -193,6 +198,76 @@ export async function completeUpload(id: string): Promise<FileActionResult> {
 
   revalidateFilePages();
   return { ok: true };
+}
+
+/**
+ * 修复卡在 PENDING 的上传。
+ *
+ * 典型场景: 浏览器 PUT 成功, 但服务端 HeadObject 遇到瞬时 DNS 故障。
+ * 这里重新回查对象: 存在就补成 READY, 不存在或超限则清理记录。
+ * 每次最多处理 20 条, 前端可以再次触发。
+ */
+export async function recoverPendingUploads(input?: {
+  ownerId?: string | null;
+}): Promise<FileRecoveryResult> {
+  const guard = await guardFileAction();
+  if (!guard.ok) return guard;
+
+  const owner = await resolveOwner(guard, input?.ownerId);
+  if (!owner.ok) return owner;
+
+  const pending = await prisma.fileObject.findMany({
+    where: { ownerId: owner.ownerId, status: "PENDING" },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    select: {
+      id: true,
+      key: true,
+      mimeType: true,
+    },
+  });
+
+  let recovered = 0;
+  let removed = 0;
+  let failed = 0;
+
+  for (const file of pending) {
+    try {
+      const object = await headObject(file.key);
+
+      if (!object) {
+        await softDelete(file.id);
+        removed += 1;
+        continue;
+      }
+
+      if (object.size > MAX_UPLOAD_BYTES) {
+        await deleteObject(file.key).catch(() => undefined);
+        await softDelete(file.id);
+        removed += 1;
+        continue;
+      }
+
+      await prisma.fileObject.update({
+        where: { id: file.id },
+        data: {
+          status: "READY",
+          size: BigInt(object.size),
+          etag: object.etag,
+          mimeType: object.contentType ?? file.mimeType,
+        },
+      });
+      recovered += 1;
+    } catch (error) {
+      console.error("recoverPendingUploads: failed for", file.id, error);
+      failed += 1;
+      // 存储整体不可达时继续遍历只会拖长请求, 直接交给用户稍后重试
+      if (isTransientStorageError(error)) break;
+    }
+  }
+
+  revalidateFilePages();
+  return { ok: true, recovered, removed, failed };
 }
 
 export async function renameFile(

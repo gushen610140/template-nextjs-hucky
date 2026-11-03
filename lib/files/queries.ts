@@ -52,7 +52,7 @@ export async function listFilePage(options: {
   const pageCount = Math.max(1, Math.ceil(total / FILE_PAGE_SIZE));
   const page = Math.min(Math.max(1, state.page), pageCount);
 
-  const [rows, folders] = await Promise.all([
+  const [rows, folders, pendingCount] = await Promise.all([
     prisma.fileObject.findMany({
       where,
       orderBy: buildOrderBy(state),
@@ -75,6 +75,9 @@ export async function listFilePage(options: {
           q: state.q,
         })
       : Promise.resolve<FolderRow[]>([]),
+    ownerId
+      ? prisma.fileObject.count({ where: { ownerId, status: "PENDING" } })
+      : Promise.resolve(0),
   ]);
 
   return {
@@ -94,6 +97,7 @@ export async function listFilePage(options: {
     pageCount,
     state: { ...normalizedState, page },
     breadcrumb,
+    pendingCount,
   };
 }
 

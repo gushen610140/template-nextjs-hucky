@@ -30,6 +30,7 @@ import {
   deleteFolder,
   getDownloadUrl,
   moveFile,
+  recoverPendingUploads,
   renameFolder,
 } from "@/app/[locale]/dashboard/files/actions";
 import { RenameFileDialog } from "@/components/files/rename-file-dialog";
@@ -105,6 +106,7 @@ export function FilesExplorer({
   pageCount,
   state,
   breadcrumb,
+  pendingCount: initialPendingCount,
 }: FilesExplorerProps) {
   const t = useTranslations("Files");
   const locale = useLocale();
@@ -126,6 +128,12 @@ export function FilesExplorer({
   const [searchValue, setSearchValue] = useState(state.q);
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
   const [fileDragActive, setFileDragActive] = useState(false);
+  const [pendingCount, setPendingCount] = useState(initialPendingCount);
+  const [recovering, setRecovering] = useState(false);
+
+  useEffect(() => {
+    setPendingCount(initialPendingCount);
+  }, [initialPendingCount]);
 
   const own = scope === "own";
   /** 有属主上下文 (自己的文件 / 管理员选中的某个用户) 才有文件夹 */
@@ -174,6 +182,40 @@ export function FilesExplorer({
     router.push(`/${locale}/dashboard/files/${file.id}${suffix}`);
   }
 
+  /** 服务端 DNS/网络抖动时, 客户端再补两次确认; completeUpload 是幂等的 */
+  async function completeUploadWithRetry(id: string) {
+    let result = await completeUpload(id);
+    for (
+      let attempt = 0;
+      !result.ok &&
+      (result.error === "storage_unavailable" || result.error === "unknown") &&
+      attempt < 2;
+      attempt += 1
+    ) {
+      await sleep(500 * (attempt + 1));
+      result = await completeUpload(id);
+    }
+    return result;
+  }
+
+  async function recoverPending() {
+    setRecovering(true);
+    setBanner(null);
+
+    const result = await recoverPendingUploads({ ownerId: targetOwnerId });
+    setRecovering(false);
+
+    if (!result.ok) {
+      setBanner(errorText(result.error));
+      return;
+    }
+
+    setPendingCount((current) =>
+      Math.max(0, current - result.recovered - result.removed),
+    );
+    router.refresh();
+  }
+
   async function uploadOne(file: File, folderId: string | null) {
     const taskKey = crypto.randomUUID();
     setUploads((current) => [
@@ -207,8 +249,11 @@ export function FilesExplorer({
         },
       );
 
-      const completed = await completeUpload(target.id);
-      if (!completed.ok) setBanner(errorText(completed.error));
+      const completed = await completeUploadWithRetry(target.id);
+      if (!completed.ok) {
+        setBanner(errorText(completed.error));
+        router.refresh();
+      }
     } catch (error) {
       console.error("upload failed:", error);
       setBanner(t("errors.upload_failed"));
@@ -471,6 +516,22 @@ export function FilesExplorer({
       {banner && (
         <Alert variant="destructive">
           <AlertDescription>{banner}</AlertDescription>
+        </Alert>
+      )}
+
+      {pendingCount > 0 && (
+        <Alert>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>{t("pendingUploads", { count: pendingCount })}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void recoverPending()}
+              disabled={recovering}
+            >
+              {recovering ? t("recovering") : t("recoverPending")}
+            </Button>
+          </AlertDescription>
         </Alert>
       )}
 
@@ -1301,4 +1362,8 @@ function UserPickerDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

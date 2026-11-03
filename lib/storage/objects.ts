@@ -5,6 +5,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getS3Client } from "./client";
 import { getStorageBucket } from "./config";
+import { withStorageRetry } from "./retry";
 
 export type StoredObject = {
   size: number;
@@ -14,20 +15,22 @@ export type StoredObject = {
 
 /** 对象元信息; 不存在时返回 null (而不是抛错) */
 export async function headObject(key: string): Promise<StoredObject | null> {
-  try {
-    const result = await getS3Client().send(
-      new HeadObjectCommand({ Bucket: getStorageBucket(), Key: key }),
-    );
+  return withStorageRetry(async () => {
+    try {
+      const result = await getS3Client().send(
+        new HeadObjectCommand({ Bucket: getStorageBucket(), Key: key }),
+      );
 
-    return {
-      size: Number(result.ContentLength ?? 0),
-      contentType: result.ContentType ?? null,
-      etag: result.ETag?.replace(/"/g, "") ?? null,
-    };
-  } catch (error) {
-    if (isNotFound(error)) return null;
-    throw error;
-  }
+      return {
+        size: Number(result.ContentLength ?? 0),
+        contentType: result.ContentType ?? null,
+        etag: result.ETag?.replace(/"/g, "") ?? null,
+      };
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw error;
+    }
+  });
 }
 
 /**
@@ -40,40 +43,47 @@ export async function readObjectPrefix(
   key: string,
   maxBytes: number,
 ): Promise<{ bytes: Uint8Array; truncated: boolean }> {
-  try {
-    const result = await getS3Client().send(
-      new GetObjectCommand({
-        Bucket: getStorageBucket(),
-        Key: key,
-        Range: `bytes=0-${Math.max(0, maxBytes - 1)}`,
-      }),
-    );
+  return withStorageRetry(async () => {
+    try {
+      const result = await getS3Client().send(
+        new GetObjectCommand({
+          Bucket: getStorageBucket(),
+          Key: key,
+          Range: `bytes=0-${Math.max(0, maxBytes - 1)}`,
+        }),
+      );
 
-    const bytes =
-      (await result.Body?.transformToByteArray()) ?? new Uint8Array();
-    const total = Number(result.ContentRange?.split("/")[1] ?? bytes.length);
+      const bytes =
+        (await result.Body?.transformToByteArray()) ?? new Uint8Array();
+      const total = Number(result.ContentRange?.split("/")[1] ?? bytes.length);
 
-    return { bytes, truncated: Number.isFinite(total) && total > bytes.length };
-  } catch (error) {
-    // 空文件时 Range 请求可能返回 416; 按空内容处理
-    if (isRangeNotSatisfiable(error)) {
-      return { bytes: new Uint8Array(), truncated: false };
+      return {
+        bytes,
+        truncated: Number.isFinite(total) && total > bytes.length,
+      };
+    } catch (error) {
+      // 空文件时 Range 请求可能返回 416; 按空内容处理
+      if (isRangeNotSatisfiable(error)) {
+        return { bytes: new Uint8Array(), truncated: false };
+      }
+      throw error;
     }
-    throw error;
-  }
+  });
 }
 
 /** 删除对象本体; 数据库侧是软删除, 这里只清存储 */
 export async function deleteObject(key: string): Promise<void> {
-  try {
-    await getS3Client().send(
-      new DeleteObjectCommand({ Bucket: getStorageBucket(), Key: key }),
-    );
-  } catch (error) {
-    // 已经不存在时忽略, 保证软删除可以重试
-    if (isNotFound(error)) return;
-    throw error;
-  }
+  await withStorageRetry(async () => {
+    try {
+      await getS3Client().send(
+        new DeleteObjectCommand({ Bucket: getStorageBucket(), Key: key }),
+      );
+    } catch (error) {
+      // 已经不存在时忽略, 保证软删除可以重试
+      if (isNotFound(error)) return;
+      throw error;
+    }
+  });
 }
 
 function isNotFound(error: unknown): boolean {
