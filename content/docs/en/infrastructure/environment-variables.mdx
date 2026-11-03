@@ -61,6 +61,9 @@ Setting `NODE_ENV=production` inside `.env.development` puts the file-loading lo
 | `RUSTFS_ACCESS_KEY` | RustFS access key | Server-side only; never prefix with `NEXT_PUBLIC_` |
 | `RUSTFS_SECRET_KEY` | RustFS secret key | Server-side only; leaking it grants bucket write access |
 | `RUSTFS_BUCKET` | Private bucket name | Create it beforehand and configure CORS for `PUT`, `GET`, `HEAD` on the frontend origin |
+| `ONLYOFFICE_DS_URL` | Document Server URL | Reachable by both the browser and DS, e.g. `https://office.example.com` |
+| `ONLYOFFICE_JWT_SECRET` | OnlyOffice JWT secret | Must match the DS `JWT_SECRET` exactly |
+| `ONLYOFFICE_SAVE_CALLBACK_URL` | Save callback URL (optional) | In production use a publicly reachable deployment address; empty or loopback still opens the editor but disables saving |
 
 The region is fixed to `us-east-1` and presign expiry to 15 minutes, both in `lib/storage/client.ts` rather than environment variables. The app still boots without `RUSTFS_*`; only upload, confirm, and download fail. See [File storage](/en/docs/files) for the full module guide.
 
@@ -92,6 +95,10 @@ RUSTFS_ENDPOINT=
 RUSTFS_ACCESS_KEY=
 RUSTFS_SECRET_KEY=
 RUSTFS_BUCKET=
+
+ONLYOFFICE_DS_URL=
+ONLYOFFICE_JWT_SECRET=
+ONLYOFFICE_SAVE_CALLBACK_URL=
 ```
 
 The app never loads it. Its job is to tell a new contributor which variables are needed. To start developing, copy it and fill in real values:

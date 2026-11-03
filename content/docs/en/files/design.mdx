@@ -96,7 +96,7 @@ Acting on behalf of a user in the admin view passes an extra `ownerId`:
 
 Key rules:
 
-- 20 files per page; count first, then clamp `page` into `[1, pageCount]`.
+- 10 files per page by default, switchable to 20 / 50 / 100; count first, then clamp `page` into `[1, pageCount]`.
 - Every sort has `id` as a tie-breaker so page boundaries stay stable.
 - A search term widens the scope to the owner's whole tree (files and folders by name); otherwise only the current folder is listed.
 - `q`, `sort`, `dir`, `page`, `folder`, and `owner` are validated in `parseFileListState()`, so raw input never reaches Prisma.
@@ -118,5 +118,5 @@ Key rules:
 - Multipart upload (files over 5 GB) is not implemented.
 - A presigned PUT cannot enforce `Content-Length`; size is verified after the fact.
 - No virus scanning, versioning, or recycle bin; soft-deleted rows are only recoverable from the database.
-- If a client abandons an upload, the `PENDING` row stays until a cleanup job exists.
+- If a client abandons an upload, the `PENDING` row stays. The list offers a one-click retry (up to 20 rows per click), but there is still no scheduled cleanup job.
 - Only files are paginated; folders are always fully listed.

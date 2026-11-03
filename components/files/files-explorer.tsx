@@ -8,11 +8,13 @@ import {
   ChevronRight,
   ChevronUp,
   Download,
+  Eye,
+  FilePenLine,
   FileUp,
   Folder,
   FolderPlus,
-  Pencil,
   Search,
+  TextCursorInput,
   Trash2,
   Upload,
   UserRound,
@@ -29,9 +31,10 @@ import {
   deleteFolder,
   getDownloadUrl,
   moveFile,
-  renameFile,
+  recoverPendingUploads,
   renameFolder,
 } from "@/app/[locale]/dashboard/files/actions";
+import { RenameFileDialog } from "@/components/files/rename-file-dialog";
 import { ConfirmDeleteDialog } from "@/components/rbac/confirm-delete-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -44,6 +47,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -54,12 +63,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatBytes } from "@/lib/files/format";
 import type {
   FileListResult,
   FileRow,
   FileSort,
   FolderRow,
 } from "@/lib/files/types";
+import { FILE_PAGE_SIZES } from "@/lib/files/types";
+import { putToStorage } from "@/lib/files/upload-client";
+import { getOfficeDocumentInfo } from "@/lib/onlyoffice/documents";
 import { cn } from "@/lib/utils";
 
 /** 行拖拽用的自定义 MIME; 与系统文件拖拽 (Files) 区分开 */
@@ -102,6 +115,7 @@ export function FilesExplorer({
   pageCount,
   state,
   breadcrumb,
+  pendingCount: initialPendingCount,
 }: FilesExplorerProps) {
   const t = useTranslations("Files");
   const locale = useLocale();
@@ -123,6 +137,12 @@ export function FilesExplorer({
   const [searchValue, setSearchValue] = useState(state.q);
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
   const [fileDragActive, setFileDragActive] = useState(false);
+  const [pendingCount, setPendingCount] = useState(initialPendingCount);
+  const [recovering, setRecovering] = useState(false);
+
+  useEffect(() => {
+    setPendingCount(initialPendingCount);
+  }, [initialPendingCount]);
 
   const own = scope === "own";
   /** 有属主上下文 (自己的文件 / 管理员选中的某个用户) 才有文件夹 */
@@ -138,6 +158,7 @@ export function FilesExplorer({
     sort?: FileSort;
     dir?: "asc" | "desc";
     page?: number;
+    perPage?: number;
     folder?: string | null;
     owner?: string | null;
   }) {
@@ -145,6 +166,7 @@ export function FilesExplorer({
     const sort = next.sort ?? state.sort;
     const dir = next.dir ?? state.dir;
     const page = next.page ?? 1;
+    const perPage = next.perPage ?? state.pageSize;
     const folder = next.folder === undefined ? state.folderId : next.folder;
     const owner = next.owner === undefined ? selectedOwnerId : next.owner;
 
@@ -153,6 +175,9 @@ export function FilesExplorer({
     if (sort !== "createdAt") params.set("sort", sort);
     if (dir !== "desc") params.set("dir", dir);
     if (page > 1) params.set("page", String(page));
+    if (perPage !== FILE_PAGE_SIZES[0]) {
+      params.set("perPage", String(perPage));
+    }
     if (folder) params.set("folder", folder);
     if (owner) params.set("owner", owner);
 
@@ -163,6 +188,49 @@ export function FilesExplorer({
   function errorText(code: string) {
     const key = `errors.${code}`;
     return t.has(key) ? t(key) : t("errors.unknown");
+  }
+
+  /** 单击文件进入预览页 */
+  function openPreview(file: FileRow) {
+    router.push(`/${locale}/dashboard/files/${file.id}`);
+  }
+
+  function openOfficeEditor(file: FileRow) {
+    router.push(`/${locale}/dashboard/files/${file.id}/edit`);
+  }
+
+  /** 服务端 DNS/网络抖动时, 客户端再补两次确认; completeUpload 是幂等的 */
+  async function completeUploadWithRetry(id: string) {
+    let result = await completeUpload(id);
+    for (
+      let attempt = 0;
+      !result.ok &&
+      (result.error === "storage_unavailable" || result.error === "unknown") &&
+      attempt < 2;
+      attempt += 1
+    ) {
+      await sleep(500 * (attempt + 1));
+      result = await completeUpload(id);
+    }
+    return result;
+  }
+
+  async function recoverPending() {
+    setRecovering(true);
+    setBanner(null);
+
+    const result = await recoverPendingUploads({ ownerId: targetOwnerId });
+    setRecovering(false);
+
+    if (!result.ok) {
+      setBanner(errorText(result.error));
+      return;
+    }
+
+    setPendingCount((current) =>
+      Math.max(0, current - result.recovered - result.removed),
+    );
+    router.refresh();
   }
 
   async function uploadOne(file: File, folderId: string | null) {
@@ -198,8 +266,11 @@ export function FilesExplorer({
         },
       );
 
-      const completed = await completeUpload(target.id);
-      if (!completed.ok) setBanner(errorText(completed.error));
+      const completed = await completeUploadWithRetry(target.id);
+      if (!completed.ok) {
+        setBanner(errorText(completed.error));
+        router.refresh();
+      }
     } catch (error) {
       console.error("upload failed:", error);
       setBanner(t("errors.upload_failed"));
@@ -465,6 +536,22 @@ export function FilesExplorer({
         </Alert>
       )}
 
+      {pendingCount > 0 && (
+        <Alert>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+            <span>{t("pendingUploads", { count: pendingCount })}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void recoverPending()}
+              disabled={recovering}
+            >
+              {recovering ? t("recovering") : t("recoverPending")}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {uploads.length > 0 && (
         <div className="space-y-2 rounded-xl border bg-card p-3">
           {uploads.map((task) => (
@@ -575,7 +662,7 @@ export function FilesExplorer({
                       aria-label={t("renameFolder")}
                       title={t("renameFolder")}
                     >
-                      <Pencil />
+                      <TextCursorInput />
                     </Button>
                     <Button
                       variant="ghost"
@@ -596,13 +683,22 @@ export function FilesExplorer({
               <TableRow
                 key={file.id}
                 draggable={folderMode}
+                onClick={(event) => {
+                  if (
+                    (event.target as HTMLElement).closest("button, a, input")
+                  ) {
+                    return;
+                  }
+                  openPreview(file);
+                }}
                 onDragStart={(event) => {
                   event.dataTransfer.setData(FILE_DRAG_TYPE, file.id);
                   event.dataTransfer.effectAllowed = "move";
                 }}
                 onContextMenu={(event) => openFileMenu(event, file)}
                 className={cn(
-                  folderMode && "cursor-grab active:cursor-grabbing",
+                  "cursor-pointer",
+                  folderMode && "active:cursor-grabbing",
                 )}
               >
                 <TableCell>
@@ -632,6 +728,15 @@ export function FilesExplorer({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => openPreview(file)}
+                      aria-label={t("preview")}
+                      title={t("preview")}
+                    >
+                      <Eye />
+                    </Button>
                     <DownloadButton file={file} />
                     <Button
                       variant="ghost"
@@ -640,7 +745,7 @@ export function FilesExplorer({
                       aria-label={t("rename")}
                       title={t("rename")}
                     >
-                      <Pencil />
+                      <TextCursorInput />
                     </Button>
                     <Button
                       variant="ghost"
@@ -678,6 +783,25 @@ export function FilesExplorer({
           {t("totalCount", { count: total })}
         </span>
         <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                {t("perPage", { count: state.pageSize })}
+                <ChevronDown />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {FILE_PAGE_SIZES.map((size) => (
+                <DropdownMenuItem
+                  key={size}
+                  onSelect={() => navigate({ perPage: size, page: 1 })}
+                >
+                  {t("perPage", { count: size })}
+                  {state.pageSize === size && <Check className="ml-auto" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             variant="outline"
             size="sm"
@@ -714,6 +838,8 @@ export function FilesExplorer({
           onClose={() => setMenu(null)}
           canCreateFolder={folderMode}
           onRenameFile={(file) => setRenameTarget(file)}
+          onPreviewFile={openPreview}
+          onEditOfficeFile={openOfficeEditor}
           onDownloadFile={(file) => downloadFile(file, setBanner, errorText)}
           onDeleteFile={(file) => setDeleteTarget(file)}
           onRenameFolder={(folder) => setRenameFolderTarget(folder)}
@@ -723,11 +849,10 @@ export function FilesExplorer({
       )}
 
       {renameTarget && (
-        <RenameDialog
+        <RenameFileDialog
           key={renameTarget.id}
           file={renameTarget}
           onClose={() => setRenameTarget(null)}
-          errorText={errorText}
         />
       )}
 
@@ -840,6 +965,8 @@ type ContextMenuProps = {
   onClose: () => void;
   canCreateFolder: boolean;
   onRenameFile: (file: FileRow) => void;
+  onPreviewFile: (file: FileRow) => void;
+  onEditOfficeFile: (file: FileRow) => void;
   onDownloadFile: (file: FileRow) => void;
   onDeleteFile: (file: FileRow) => void;
   onRenameFolder: (folder: FolderRow) => void;
@@ -852,6 +979,8 @@ function ContextMenu({
   onClose,
   canCreateFolder,
   onRenameFile,
+  onPreviewFile,
+  onEditOfficeFile,
   onDownloadFile,
   onDeleteFile,
   onRenameFolder,
@@ -897,7 +1026,25 @@ function ContextMenu({
       {file && (
         <>
           <MenuItem
-            icon={<Pencil />}
+            icon={<Eye />}
+            label={t("preview")}
+            onClick={() => {
+              onPreviewFile(file);
+              onClose();
+            }}
+          />
+          {getOfficeDocumentInfo(file.name, file.mimeType) && (
+            <MenuItem
+              icon={<FilePenLine />}
+              label={t("editOffice")}
+              onClick={() => {
+                onEditOfficeFile(file);
+                onClose();
+              }}
+            />
+          )}
+          <MenuItem
+            icon={<TextCursorInput />}
             label={t("rename")}
             onClick={() => {
               onRenameFile(file);
@@ -927,7 +1074,7 @@ function ContextMenu({
       {folder && (
         <>
           <MenuItem
-            icon={<Pencil />}
+            icon={<TextCursorInput />}
             label={t("renameFolder")}
             onClick={() => {
               onRenameFolder(folder);
@@ -1023,81 +1170,6 @@ function downloadFile(
     }
     window.location.assign(result.url);
   });
-}
-
-type RenameDialogProps = {
-  file: FileRow;
-  onClose: () => void;
-  errorText: (code: string) => string;
-};
-
-function RenameDialog({ file, onClose, errorText }: RenameDialogProps) {
-  const t = useTranslations("Files");
-  const [name, setName] = useState(file.name);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-
-    startTransition(async () => {
-      const result = await renameFile(file.id, name);
-      if (!result.ok) {
-        setError(errorText(result.error));
-        return;
-      }
-      onClose();
-    });
-  }
-
-  return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      <DialogContent className="sm:max-w-md">
-        <form onSubmit={handleSubmit} className="grid gap-4">
-          <DialogHeader>
-            <DialogTitle>{t("renameTitle")}</DialogTitle>
-            <DialogDescription>{t("renameDescription")}</DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-2">
-            <Label htmlFor="file-name">{t("name")}</Label>
-            <Input
-              id="file-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              autoComplete="off"
-            />
-          </div>
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={pending}
-            >
-              {t("cancel")}
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending ? t("saving") : t("save")}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 type RenameFolderDialogProps = {
@@ -1341,41 +1413,6 @@ function UserPickerDialog({
   );
 }
 
-/** 直接 PUT 到 RustFS, 用 XHR 拿上传进度 (fetch 没有上传进度事件) */
-function putToStorage(
-  url: string,
-  contentType: string,
-  file: File,
-  onProgress: (ratio: number) => void,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    xhr.setRequestHeader("Content-Type", contentType);
-    xhr.upload.addEventListener("progress", (event) => {
-      if (event.lengthComputable && event.total > 0) {
-        onProgress(event.loaded / event.total);
-      }
-    });
-    xhr.addEventListener("load", () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new Error(`Upload failed with status ${xhr.status}`));
-    });
-    xhr.addEventListener("error", () => reject(new Error("Upload failed")));
-    xhr.send(file);
-  });
-}
-
-function formatBytes(bytes: number, locale: string): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1024;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  return `${new Intl.NumberFormat(locale, {
-    maximumFractionDigits: 1,
-  }).format(value)} ${units[unitIndex]}`;
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

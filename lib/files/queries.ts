@@ -1,7 +1,7 @@
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { FILE_PAGE_SIZE } from "./query-params";
 import type {
+  FileDetail,
   FileListResult,
   FileListState,
   FileRow,
@@ -48,15 +48,15 @@ export async function listFilePage(options: {
   };
 
   const total = await prisma.fileObject.count({ where });
-  const pageCount = Math.max(1, Math.ceil(total / FILE_PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(total / state.pageSize));
   const page = Math.min(Math.max(1, state.page), pageCount);
 
-  const [rows, folders] = await Promise.all([
+  const [rows, folders, pendingCount] = await Promise.all([
     prisma.fileObject.findMany({
       where,
       orderBy: buildOrderBy(state),
-      skip: (page - 1) * FILE_PAGE_SIZE,
-      take: FILE_PAGE_SIZE,
+      skip: (page - 1) * state.pageSize,
+      take: state.pageSize,
       select: {
         id: true,
         name: true,
@@ -74,6 +74,9 @@ export async function listFilePage(options: {
           q: state.q,
         })
       : Promise.resolve<FolderRow[]>([]),
+    ownerId
+      ? prisma.fileObject.count({ where: { ownerId, status: "PENDING" } })
+      : Promise.resolve(0),
   ]);
 
   return {
@@ -93,6 +96,7 @@ export async function listFilePage(options: {
     pageCount,
     state: { ...normalizedState, page },
     breadcrumb,
+    pendingCount,
   };
 }
 
@@ -176,8 +180,40 @@ export async function findFileForAction(id: string) {
       mimeType: true,
       size: true,
       status: true,
+      updatedAt: true,
     },
   });
+}
+
+/** 预览页详情: 在操作视图之外补上展示信息与乐观锁时间戳 */
+export async function getFileDetail(id: string): Promise<FileDetail | null> {
+  const row = await prisma.fileObject.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      ownerId: true,
+      folderId: true,
+      key: true,
+      name: true,
+      mimeType: true,
+      size: true,
+      etag: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      owner: { select: { id: true, name: true, email: true } },
+      folder: { select: { id: true, name: true } },
+    },
+  });
+
+  if (!row) return null;
+
+  return {
+    ...row,
+    size: Number(row.size),
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
 /** 文件夹的操作视图, 用于移动文件前校验归属 */

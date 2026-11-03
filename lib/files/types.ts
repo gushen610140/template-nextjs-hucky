@@ -33,6 +33,10 @@ export type FolderCrumb = {
 export const FILE_SORTS = ["name", "size", "createdAt"] as const;
 export type FileSort = (typeof FILE_SORTS)[number];
 
+/** 每页条数选项; 默认取第一个 */
+export const FILE_PAGE_SIZES = [10, 20, 50, 100] as const;
+export type FilePageSize = (typeof FILE_PAGE_SIZES)[number];
+
 export type SortDirection = "asc" | "desc";
 
 /** 由 URL 查询参数解析出的列表状态 */
@@ -41,6 +45,7 @@ export type FileListState = {
   sort: FileSort;
   dir: SortDirection;
   page: number;
+  pageSize: FilePageSize;
   folderId: string | null;
 };
 
@@ -52,6 +57,29 @@ export type FileListResult = {
   pageCount: number;
   state: FileListState;
   breadcrumb: FolderCrumb[];
+  /** 当前属主下尚未确认的上传数; 平铺管理员视图为 0 */
+  pendingCount: number;
+};
+
+/** 预览页需要的单文件详情 (含存储键, 只在服务端使用) */
+export type FileDetail = {
+  id: string;
+  ownerId: string;
+  folderId: string | null;
+  key: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  etag: string | null;
+  status: "PENDING" | "READY" | "DELETED";
+  createdAt: string;
+  updatedAt: string;
+  owner: {
+    id: string;
+    name: string | null;
+    email: string;
+  };
+  folder: { id: string; name: string } | null;
 };
 
 /** Server Action 的统一返回值; 失败时返回错误码, 由客户端翻译成文案。 */
@@ -65,4 +93,19 @@ export type FileUploadTarget =
 /** 下载地址; 客户端用它做跳转, 不经过 Next.js 转发文件流。 */
 export type FileDownloadTarget =
   | { ok: true; url: string }
+  | { ok: false; error: string };
+
+/** 编辑保存第一步: 拿到同对象键的预签名 PUT */
+export type FileEditTarget =
+  | { ok: true; uploadUrl: string; contentType: string }
+  | { ok: false; error: string };
+
+/** 编辑保存第二步: 回查对象并刷新元数据 */
+export type FileEditResult =
+  | { ok: true; size: number; updatedAt: string }
+  | { ok: false; error: string };
+
+/** 修复未完成上传: 回查对象并补成 READY, 缺失对象则清理记录 */
+export type FileRecoveryResult =
+  | { ok: true; recovered: number; removed: number; failed: number }
   | { ok: false; error: string };

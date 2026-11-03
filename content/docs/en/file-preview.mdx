@@ -1,0 +1,105 @@
+---
+title: File preview
+description: Preview routes, supported types, edit write-back, storage boundaries, and how to add renderers
+---
+
+The preview page is a second-level page for the file list. It renders an existing file based on its type and allows editing text-like files. Uploads, folders, and permissions still come from the file module; no new tables are involved.
+
+## Route and entry points
+
+| Item | Value |
+| --- | --- |
+| Route | `/[locale]/dashboard/files/[id]` |
+| Page permission | `file:own` or `file:manage` |
+| Row permission | `file:manage` can open any file; everyone else only their own |
+| Entry points | Clicking a file row, the eye button, or "Preview" in the context menu |
+
+Back prefers browser history, so the list's search, sort, folder, and owner filter survive. Without history it falls back to the list for the current scope. Admin-scoped views append `?from=all`.
+
+## Supported types
+
+| Type | Preview | Editable |
+| --- | --- | --- |
+| Images jpg/png/gif/webp/avif/svg | `img` with zoom and pan | No |
+| PDF | Custom pdf.js viewer (lazy pages, zoom) | No |
+| Video / audio | Native `video` / `audio` | No |
+| Plain text / code / logs | Read-only CodeMirror | Yes |
+| Markdown | `react-markdown` + GFM, raw HTML disabled | Yes (source mode) |
+| JSON | CodeMirror JSON highlighting | Yes |
+| CSV / TSV | Table with a source tab | Yes (source mode) |
+| DOCX | Approximate rendering with `docx-preview` | No |
+| XLSX | Read-only sheets via `read-excel-file` | No |
+| PPTX | Single-slide canvas preview via `pptxviewjs` | No |
+| Archives / other binaries | Metadata and download only | No |
+
+CSV treats the first row as a header and shows at most 200 rows by 30 columns. Each XLSX sheet is capped at 200 rows.
+
+DOCX / XLSX / PPTX can enter [OnlyOffice online editing](/en/docs/onlyoffice) from the preview header. Saving replaces the current object and keeps no version history.
+
+## Editing and write-back
+
+Editing only covers text-like files and uses "overwrite the same object key, then HEAD to refresh metadata":
+
+```text
+page load ──▶ updatedAt token
+   │
+   ├─ createEditTarget(id, { size, expectedUpdatedAt })
+   │      └─ permission / type / 1 MB cap / token checks, presign PUT for the same key
+   ├─ browser PUTs the new content
+   └─ commitEdit(id, { expectedUpdatedAt })
+          └─ HeadObject for the real size and ETag, update the record, revalidate
+```
+
+Behaviour:
+
+- Text read and save are capped at **1 MB**; larger files can only be downloaded.
+- The server reads a byte prefix with `Range`, so text never depends on browser CORS.
+- `updatedAt` is not a row lock. It detects concurrent edits and returns `conflict`; the last write still wins.
+- A failed PUT leaves the old object intact. A successful PUT with a failed commit can be retried.
+- `Ctrl/Cmd + S` saves. Leaving the page with unsaved changes prompts first.
+- A successful save does not refresh the page, so editor state is kept. Renaming refreshes server data.
+
+## Storage and security
+
+| Item | Handling |
+| --- | --- |
+| Images / PDF / media | 15-minute inline presigned GET; the browser talks to RustFS directly |
+| Text | Server-side `GetObject` with `Range`, decoded as UTF-8 / UTF-16 BOM |
+| HTML | Highlighted as source only; never rendered inline |
+| SVG | Loaded with `img`, never through an iframe or `object` |
+| DOCX | Rendered inside a `sandbox="allow-same-origin"` iframe, so document scripts cannot run |
+| Markdown | Sanitized with `rehype-sanitize`; links open in a new tab |
+| Permissions | Both page and Server Actions enforce feature-level and row-level checks |
+
+<Callout type="warn" title="CORS must allow GET">
+Previews read RustFS directly from the browser. Besides `PUT`, bucket CORS must allow `GET`, `HEAD`, and `Range`, otherwise PDFs, images, DOCX, and XLSX fail to load.
+</Callout>
+
+## Code map
+
+| Path | Role |
+| --- | --- |
+| `app/[locale]/dashboard/files/[id]/page.tsx` | Permissions, detail lookup, text read, preview URL |
+| `app/[locale]/dashboard/files/[id]/actions.ts` | `createEditTarget` / `commitEdit` |
+| `lib/files/preview.ts` | MIME / extension to preview kind, language, limits |
+| `lib/files/text.ts` | BOM detection and NUL-byte check |
+| `lib/files/format.ts` | File size formatting |
+| `lib/files/upload-client.ts` | Browser upload with progress, shared by list and editor |
+| `components/files/viewer/` | Viewer shell, editor, and per-type renderers |
+| `lib/storage/presign.ts` | `createPreviewUrl` (inline presign) |
+| `lib/storage/objects.ts` | `readObjectPrefix` (Range read) |
+
+## Adding a new type
+
+1. Add a `PreviewKind` in `lib/files/preview.ts` and a matching detection branch.
+2. Add a renderer under `components/files/viewer/`; lazy-load heavy libraries with `next/dynamic`.
+3. Mount it by `kind` in `renderContent()` inside `file-viewer.tsx`.
+4. For browser-direct rendering, make sure `inline` and `previewContentType()` return the right values.
+5. For editing, add the kind to `EDITABLE_KINDS` and verify the saved content is still text.
+
+## Known limits
+
+- PPTX uses `pptxviewjs` for single-slide preview; complex animations, media, and some advanced effects may not render exactly.
+- Images are preview-only: no crop, rotate, or replace.
+- No version history; overwrite saves cannot be rolled back.
+- Only UTF-8 and UTF-16 BOM are recognized; other encodings show garbled text.

@@ -44,13 +44,19 @@ Deleting a folder differs from deleting a file:
 
 - The search box matches **file names and folder names**. Inside a folder, a keyword searches the owner's whole tree rather than only the current level.
 - Click "Name", "Size", or "Uploaded" to sort; click again to flip direction. Folders always stay above files, sorted by name.
-- The list shows 20 files per page, and paging keeps the search term, sort, and folder.
+- 10 files per page by default; switch between 10 / 20 / 50 / 100 at the bottom. Paging keeps the search term, sort, and folder.
+
+## Previewing files
+
+- Click a file row, the eye button, or "Preview" in its context menu to open the preview page.
+- The back button returns through browser history, preserving the list's search, sort, and folder state.
+- "Edit" is only available for text-like files; see [File preview](/en/docs/file-preview).
 
 ## Context menu
 
 | Target | Items |
 | --- | --- |
-| File row | Rename, download, delete |
+| File row | Preview, rename, download, delete |
 | Folder row | Rename folder, delete folder |
 | Empty space | New folder |
 
@@ -72,4 +78,5 @@ Right-clicking inputs, buttons, or breadcrumbs keeps the browser's default menu.
 | Upload fails with `SignatureDoesNotMatch` | `RUSTFS_ENDPOINT` differs from the host the browser calls |
 | Download returns 403 | The presigned URL expired (15 minutes); click download again |
 | No file entry in the sidebar | The current role lacks `file:own` |
+| The object exists but no list entry | Storage was unreachable during confirmation, so the row is `PENDING`; use "Retry confirmation" at the top of the list |
 | Dragging does nothing | Only file rows are draggable; folder rows are drop targets |

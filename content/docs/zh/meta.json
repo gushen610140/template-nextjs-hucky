@@ -11,6 +11,8 @@
     "shadcn",
     "theme",
     "scroll",
+    "file-preview",
+    "onlyoffice",
     "---后端---",
     "prisma",
     "authentication",

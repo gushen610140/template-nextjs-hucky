@@ -1,0 +1,105 @@
+---
+title: 文件预览
+description: 预览页的路由、支持类型、编辑回写、存储边界与扩展方式
+---
+
+预览页是文件列表的二级页面，负责把已有文件按类型渲染成可读视图，并允许编辑文本类文件。文件存储、上传、目录和权限仍然复用文件模块，没有新增数据表。
+
+## 路由与入口
+
+| 项 | 值 |
+| --- | --- |
+| 路由 | `/[locale]/dashboard/files/[id]` |
+| 页面权限 | `file:own` 或 `file:manage` |
+| 行级权限 | `file:manage` 可打开任意文件，其他用户只能打开自己的 |
+| 入口 | 文件行单击、行尾眼睛按钮、右键菜单「预览」 |
+
+返回按钮优先走浏览器历史，因此列表的搜索词、排序、目录和用户筛选都会保留；没有历史记录时回到当前 scope 的列表页。管理员视图进入时带 `?from=all`。
+
+## 支持类型
+
+| 类型 | 预览方式 | 编辑 |
+| --- | --- | --- |
+| 图片 jpg/png/gif/webp/avif/svg | `img` + 缩放拖拽 | 否 |
+| PDF | pdf.js 自绘查看器（按页懒加载、可缩放） | 否 |
+| 视频 / 音频 | 原生 `video` / `audio` | 否 |
+| 纯文本 / 代码 / 日志 | CodeMirror 只读 | 是 |
+| Markdown | `react-markdown` + GFM，禁用原始 HTML | 是（源码模式） |
+| JSON | CodeMirror JSON 高亮 | 是 |
+| CSV / TSV | 表格 + 源码切换 | 是（源码模式） |
+| DOCX | `docx-preview` 近似还原 | 否 |
+| XLSX | `read-excel-file` 只读表格，支持多 sheet | 否 |
+| PPTX | `pptxviewjs` 单页 Canvas 预览，可翻页 | 否 |
+| 压缩包 / 其他二进制 | 只显示元数据与下载按钮 | 否 |
+
+CSV 表格默认把第一行当表头，最多显示 200 行、30 列。XLSX 每个 sheet 同样最多 200 行。
+
+DOCX / XLSX / PPTX 可从预览页右上角进入 [OnlyOffice 在线编辑](/zh/docs/onlyoffice)；在线编辑保存后会替换当前对象，不保留历史版本。
+
+## 编辑与回写
+
+编辑只覆盖文本类文件，流程是「同对象键覆盖 + HEAD 回填」：
+
+```text
+页面加载 ──▶ updatedAt 令牌
+   │
+   ├─ createEditTarget(id, { size, expectedUpdatedAt })
+   │      └─ 校验权限 / 类型 / 1 MB 上限 / 令牌, 签发同 key 的 PUT
+   ├─ 浏览器 PUT 新内容
+   └─ commitEdit(id, { expectedUpdatedAt })
+          └─ HeadObject 回查真实大小与 ETag, 更新记录并 revalidate
+```
+
+约束与行为：
+
+- 文本读取和保存上限都是 **1 MB**，超过只提供下载。
+- 服务端用 Range 读取对象前缀，文本内容不经过浏览器直连，避免依赖 CORS。
+- `updatedAt` 不是行锁，只能发现并发修改并返回 `conflict`；真正的覆盖顺序仍是最后写入者获胜。
+- PUT 失败时旧对象不受影响；PUT 成功但提交失败时可以重试提交。
+- 编辑器支持 `Ctrl/Cmd + S` 保存；有未保存修改时离开页面会提示。
+- 保存成功后不会刷新整页，避免丢失编辑器状态；重命名会刷新服务端数据。
+
+## 存储与安全边界
+
+| 项 | 处理 |
+| --- | --- |
+| 图片 / PDF / 音视频 | 签发 15 分钟的 inline 预签名 GET，浏览器直连 RustFS |
+| 文本 | 服务端 `GetObject` + `Range`，按 UTF-8 / UTF-16 BOM 解码 |
+| HTML | 只作为源码高亮，永远不内联渲染 |
+| SVG | 只用 `img` 加载，不放进 iframe 或 `object` |
+| DOCX | 渲染进 `sandbox="allow-same-origin"` 的 iframe，文档脚本不会执行 |
+| Markdown | `rehype-sanitize` 清洗，链接统一 `target="_blank"` |
+| 权限 | 页面和 Server Action 都做功能级 + 行级校验 |
+
+<Callout type="warn" title="CORS 需要 GET">
+预览依赖浏览器直接读取 RustFS。bucket CORS 除 `PUT` 外还要允许 `GET`、`HEAD` 和 `Range`，否则 PDF、图片、DOCX、XLSX 都会加载失败。
+</Callout>
+
+## 代码位置
+
+| 路径 | 作用 |
+| --- | --- |
+| `app/[locale]/dashboard/files/[id]/page.tsx` | 权限校验、详情查询、文本读取、预览 URL 签发 |
+| `app/[locale]/dashboard/files/[id]/actions.ts` | `createEditTarget` / `commitEdit` |
+| `lib/files/preview.ts` | MIME / 扩展名 → 预览类型、语言、上限 |
+| `lib/files/text.ts` | BOM 识别与 NUL 字节判定 |
+| `lib/files/format.ts` | 文件大小格式化 |
+| `lib/files/upload-client.ts` | 浏览器直传（带进度），列表与编辑器共用 |
+| `components/files/viewer/` | 预览壳、编辑器与各类型渲染器 |
+| `lib/storage/presign.ts` | `createPreviewUrl`（inline 预签名） |
+| `lib/storage/objects.ts` | `readObjectPrefix`（Range 读取） |
+
+## 扩展新类型
+
+1. 在 `lib/files/preview.ts` 的 `PreviewKind` 里加类型，并补判定分支。
+2. 在 `components/files/viewer/` 新增渲染器；体积大的库用 `next/dynamic` 懒加载。
+3. 在 `file-viewer.tsx` 的 `renderContent()` 里按 `kind` 挂载。
+4. 需要浏览器直读时，确认 `inline` 与 `previewContentType()` 的返回值正确。
+5. 需要编辑时，把 `kind` 加进 `EDITABLE_KINDS`，并确认写入后仍是文本。
+
+## 已知限制
+
+- PPTX 使用 `pptxviewjs` 单页预览，复杂动画、媒体和部分高级效果可能无法完整还原。
+- 图片只预览不编辑；没有裁剪、旋转或替换内容。
+- 没有版本历史，覆盖保存不可回滚。
+- 文本编码只认 UTF-8 / UTF-16 BOM，其他编码会显示乱码。
