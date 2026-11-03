@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ChevronUp,
   Download,
+  Eye,
   FileUp,
   Folder,
   FolderPlus,
@@ -29,9 +30,9 @@ import {
   deleteFolder,
   getDownloadUrl,
   moveFile,
-  renameFile,
   renameFolder,
 } from "@/app/[locale]/dashboard/files/actions";
+import { RenameFileDialog } from "@/components/files/rename-file-dialog";
 import { ConfirmDeleteDialog } from "@/components/rbac/confirm-delete-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -54,12 +55,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatBytes } from "@/lib/files/format";
 import type {
   FileListResult,
   FileRow,
   FileSort,
   FolderRow,
 } from "@/lib/files/types";
+import { putToStorage } from "@/lib/files/upload-client";
 import { cn } from "@/lib/utils";
 
 /** 行拖拽用的自定义 MIME; 与系统文件拖拽 (Files) 区分开 */
@@ -163,6 +166,12 @@ export function FilesExplorer({
   function errorText(code: string) {
     const key = `errors.${code}`;
     return t.has(key) ? t(key) : t("errors.unknown");
+  }
+
+  /** 单击文件进入预览页; `from=all` 让返回按钮回到管理员视图 */
+  function openPreview(file: FileRow) {
+    const suffix = own ? "" : "?from=all";
+    router.push(`/${locale}/dashboard/files/${file.id}${suffix}`);
   }
 
   async function uploadOne(file: File, folderId: string | null) {
@@ -596,13 +605,22 @@ export function FilesExplorer({
               <TableRow
                 key={file.id}
                 draggable={folderMode}
+                onClick={(event) => {
+                  if (
+                    (event.target as HTMLElement).closest("button, a, input")
+                  ) {
+                    return;
+                  }
+                  openPreview(file);
+                }}
                 onDragStart={(event) => {
                   event.dataTransfer.setData(FILE_DRAG_TYPE, file.id);
                   event.dataTransfer.effectAllowed = "move";
                 }}
                 onContextMenu={(event) => openFileMenu(event, file)}
                 className={cn(
-                  folderMode && "cursor-grab active:cursor-grabbing",
+                  "cursor-pointer",
+                  folderMode && "active:cursor-grabbing",
                 )}
               >
                 <TableCell>
@@ -632,6 +650,15 @@ export function FilesExplorer({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => openPreview(file)}
+                      aria-label={t("preview")}
+                      title={t("preview")}
+                    >
+                      <Eye />
+                    </Button>
                     <DownloadButton file={file} />
                     <Button
                       variant="ghost"
@@ -714,6 +741,7 @@ export function FilesExplorer({
           onClose={() => setMenu(null)}
           canCreateFolder={folderMode}
           onRenameFile={(file) => setRenameTarget(file)}
+          onPreviewFile={openPreview}
           onDownloadFile={(file) => downloadFile(file, setBanner, errorText)}
           onDeleteFile={(file) => setDeleteTarget(file)}
           onRenameFolder={(folder) => setRenameFolderTarget(folder)}
@@ -723,11 +751,10 @@ export function FilesExplorer({
       )}
 
       {renameTarget && (
-        <RenameDialog
+        <RenameFileDialog
           key={renameTarget.id}
           file={renameTarget}
           onClose={() => setRenameTarget(null)}
-          errorText={errorText}
         />
       )}
 
@@ -840,6 +867,7 @@ type ContextMenuProps = {
   onClose: () => void;
   canCreateFolder: boolean;
   onRenameFile: (file: FileRow) => void;
+  onPreviewFile: (file: FileRow) => void;
   onDownloadFile: (file: FileRow) => void;
   onDeleteFile: (file: FileRow) => void;
   onRenameFolder: (folder: FolderRow) => void;
@@ -852,6 +880,7 @@ function ContextMenu({
   onClose,
   canCreateFolder,
   onRenameFile,
+  onPreviewFile,
   onDownloadFile,
   onDeleteFile,
   onRenameFolder,
@@ -896,6 +925,14 @@ function ContextMenu({
     >
       {file && (
         <>
+          <MenuItem
+            icon={<Eye />}
+            label={t("preview")}
+            onClick={() => {
+              onPreviewFile(file);
+              onClose();
+            }}
+          />
           <MenuItem
             icon={<Pencil />}
             label={t("rename")}
@@ -1023,81 +1060,6 @@ function downloadFile(
     }
     window.location.assign(result.url);
   });
-}
-
-type RenameDialogProps = {
-  file: FileRow;
-  onClose: () => void;
-  errorText: (code: string) => string;
-};
-
-function RenameDialog({ file, onClose, errorText }: RenameDialogProps) {
-  const t = useTranslations("Files");
-  const [name, setName] = useState(file.name);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-
-    startTransition(async () => {
-      const result = await renameFile(file.id, name);
-      if (!result.ok) {
-        setError(errorText(result.error));
-        return;
-      }
-      onClose();
-    });
-  }
-
-  return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-    >
-      <DialogContent className="sm:max-w-md">
-        <form onSubmit={handleSubmit} className="grid gap-4">
-          <DialogHeader>
-            <DialogTitle>{t("renameTitle")}</DialogTitle>
-            <DialogDescription>{t("renameDescription")}</DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-2">
-            <Label htmlFor="file-name">{t("name")}</Label>
-            <Input
-              id="file-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              autoComplete="off"
-            />
-          </div>
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={pending}
-            >
-              {t("cancel")}
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending ? t("saving") : t("save")}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 type RenameFolderDialogProps = {
@@ -1339,43 +1301,4 @@ function UserPickerDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-/** 直接 PUT 到 RustFS, 用 XHR 拿上传进度 (fetch 没有上传进度事件) */
-function putToStorage(
-  url: string,
-  contentType: string,
-  file: File,
-  onProgress: (ratio: number) => void,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    xhr.setRequestHeader("Content-Type", contentType);
-    xhr.upload.addEventListener("progress", (event) => {
-      if (event.lengthComputable && event.total > 0) {
-        onProgress(event.loaded / event.total);
-      }
-    });
-    xhr.addEventListener("load", () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new Error(`Upload failed with status ${xhr.status}`));
-    });
-    xhr.addEventListener("error", () => reject(new Error("Upload failed")));
-    xhr.send(file);
-  });
-}
-
-function formatBytes(bytes: number, locale: string): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1024;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  return `${new Intl.NumberFormat(locale, {
-    maximumFractionDigits: 1,
-  }).format(value)} ${units[unitIndex]}`;
 }
