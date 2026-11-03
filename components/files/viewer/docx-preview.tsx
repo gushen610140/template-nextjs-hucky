@@ -1,12 +1,30 @@
 "use client";
 
+import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
 type RenderState = "loading" | "ready" | "error";
+
+const DOCX_STYLE = `
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+  .docx-wrapper {
+    background: transparent !important;
+    padding: 0 !important;
+  }
+  .docx-wrapper > section.docx {
+    width: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+`;
 
 /**
  * DOCX 近似还原。
@@ -17,14 +35,13 @@ type RenderState = "loading" | "ready" | "error";
  */
 export function DocxPreview({ url, name }: { url: string; name: string }) {
   const t = useTranslations("FileViewer");
-  const { resolvedTheme } = useTheme();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [state, setState] = useState<RenderState>("loading");
   const [frameHeight, setFrameHeight] = useState(0);
+  const [zoom, setZoom] = useState(1);
   const [attempt, setAttempt] = useState(0);
-  const dark = resolvedTheme === "dark";
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt 是重试计数器, dark 变化时需重绘背景
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt 是重试计数器
   useEffect(() => {
     let cancelled = false;
     let resizeObserver: ResizeObserver | null = null;
@@ -48,9 +65,10 @@ export function DocxPreview({ url, name }: { url: string; name: string }) {
         doc.head.innerHTML = '<meta charset="utf-8">';
         doc.body.replaceChildren();
         doc.body.style.margin = "0";
-        doc.body.style.padding = "24px";
-        doc.body.style.background = dark ? "#18181b" : "#e5e7eb";
+        doc.body.style.padding = "0";
+        doc.body.style.background = "transparent";
         doc.body.style.overflow = "hidden";
+        doc.documentElement.style.overflow = "hidden";
 
         await renderAsync(blob, doc.body, doc.head, {
           className: "docx",
@@ -61,6 +79,11 @@ export function DocxPreview({ url, name }: { url: string; name: string }) {
           useBase64URL: true,
           experimental: true,
         });
+
+        // 覆盖 docx-preview 注入的灰色 wrapper 背景和留白
+        const style = doc.createElement("style");
+        style.textContent = DOCX_STYLE;
+        doc.head.appendChild(style);
 
         if (cancelled) return;
 
@@ -90,19 +113,59 @@ export function DocxPreview({ url, name }: { url: string; name: string }) {
       resizeObserver?.disconnect();
       controller.abort();
     };
-  }, [url, attempt, dark]);
+  }, [url, attempt]);
 
   return (
-    <div className="relative h-full min-h-0 overflow-hidden rounded-xl border bg-muted/30">
+    <div className="relative h-full min-h-0 overflow-hidden rounded-xl border bg-background">
       <div className="absolute inset-0 overflow-auto" data-lenis-prevent>
-        <iframe
-          ref={iframeRef}
-          title={name}
-          sandbox="allow-same-origin"
-          scrolling="no"
-          className="block w-full border-0 bg-transparent"
-          style={{ height: frameHeight > 0 ? `${frameHeight}px` : "100%" }}
-        />
+        <div
+          className="mx-auto"
+          style={{
+            width: `${zoom * 100}%`,
+            height: frameHeight > 0 ? `${frameHeight * zoom}px` : "100%",
+          }}
+        >
+          <iframe
+            ref={iframeRef}
+            title={name}
+            sandbox="allow-same-origin"
+            scrolling="no"
+            className="block border-0 bg-transparent"
+            style={{
+              width: `${100 / zoom}%`,
+              height: frameHeight > 0 ? `${frameHeight}px` : "100%",
+              transform: `scale(${zoom})`,
+              transformOrigin: "top left",
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-lg border bg-background/90 p-1 shadow-sm">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => setZoom((value) => Math.max(0.5, value - 0.2))}
+          aria-label={t("zoomOut")}
+        >
+          <ZoomOut />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => setZoom((value) => Math.min(3, value + 0.2))}
+          aria-label={t("zoomIn")}
+        >
+          <ZoomIn />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => setZoom(1)}
+          aria-label={t("resetZoom")}
+        >
+          <RotateCcw />
+        </Button>
       </div>
 
       {state === "loading" && (

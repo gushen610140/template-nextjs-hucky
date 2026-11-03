@@ -6,6 +6,7 @@ import {
   FileAudio,
   FileCode,
   FileImage,
+  FilePenLine,
   FileQuestion,
   FileSpreadsheet,
   FileText,
@@ -15,6 +16,7 @@ import {
   Minimize2,
   Pencil,
   Save,
+  TextCursorInput,
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -519,7 +521,10 @@ export function FileViewer({
             <>
               {officeEditHref && (
                 <Button size="sm" asChild>
-                  <Link href={officeEditHref}>{t("officeEdit")}</Link>
+                  <Link href={officeEditHref}>
+                    <FilePenLine />
+                    {t("officeEdit")}
+                  </Link>
                 </Button>
               )}
               {canEdit && (
@@ -535,7 +540,7 @@ export function FileViewer({
                 aria-label={t("rename")}
                 title={t("rename")}
               >
-                <Pencil />
+                <TextCursorInput />
               </Button>
               <Button
                 variant="ghost"

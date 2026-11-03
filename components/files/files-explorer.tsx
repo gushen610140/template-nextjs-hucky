@@ -9,11 +9,12 @@ import {
   ChevronUp,
   Download,
   Eye,
+  FilePenLine,
   FileUp,
   Folder,
   FolderPlus,
-  Pencil,
   Search,
+  TextCursorInput,
   Trash2,
   Upload,
   UserRound,
@@ -661,7 +662,7 @@ export function FilesExplorer({
                       aria-label={t("renameFolder")}
                       title={t("renameFolder")}
                     >
-                      <Pencil />
+                      <TextCursorInput />
                     </Button>
                     <Button
                       variant="ghost"
@@ -744,7 +745,7 @@ export function FilesExplorer({
                       aria-label={t("rename")}
                       title={t("rename")}
                     >
-                      <Pencil />
+                      <TextCursorInput />
                     </Button>
                     <Button
                       variant="ghost"
@@ -1034,7 +1035,7 @@ function ContextMenu({
           />
           {getOfficeDocumentInfo(file.name, file.mimeType) && (
             <MenuItem
-              icon={<Pencil />}
+              icon={<FilePenLine />}
               label={t("editOffice")}
               onClick={() => {
                 onEditOfficeFile(file);
@@ -1043,7 +1044,7 @@ function ContextMenu({
             />
           )}
           <MenuItem
-            icon={<Pencil />}
+            icon={<TextCursorInput />}
             label={t("rename")}
             onClick={() => {
               onRenameFile(file);
@@ -1073,7 +1074,7 @@ function ContextMenu({
       {folder && (
         <>
           <MenuItem
-            icon={<Pencil />}
+            icon={<TextCursorInput />}
             label={t("renameFolder")}
             onClick={() => {
               onRenameFolder(folder);
