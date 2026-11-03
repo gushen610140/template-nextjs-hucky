@@ -255,6 +255,7 @@
     "actions": "操作",
     "download": "下载",
     "preview": "预览",
+    "editOffice": "在线编辑",
     "rename": "重命名",
     "renameTitle": "重命名文件",
     "renameDescription": "只修改显示名称，对象位置不变。",
@@ -289,6 +290,7 @@
   "FileViewer": {
     "back": "返回文件列表",
     "edit": "编辑",
+    "officeEdit": "在线编辑",
     "save": "保存",
     "savingWithProgress": "保存中 {progress}%",
     "cancel": "取消",
@@ -343,6 +345,17 @@
       "forbidden": "没有操作文件的权限。",
       "unknown": "操作失败，请重试。"
     }
+  },
+  "OfficeEditor": {
+    "back": "返回预览",
+    "online": "在线编辑",
+    "hint": "编辑后按 Ctrl/Cmd + S 保存",
+    "unsaved": "有未保存的修改",
+    "loading": "正在加载编辑器...",
+    "error": "无法启动在线编辑器，请检查 OnlyOffice 配置或稍后重试。",
+    "retry": "重试",
+    "notConfigured": "OnlyOffice 未配置，缺少：{missing}",
+    "storageFailed": "无法生成文档地址，请检查存储配置。"
   },
   "Rbac": {
     "common": {

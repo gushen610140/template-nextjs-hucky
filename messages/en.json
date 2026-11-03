@@ -256,6 +256,7 @@
     "actions": "Actions",
     "download": "Download",
     "preview": "Preview",
+    "editOffice": "Edit online",
     "rename": "Rename",
     "renameTitle": "Rename file",
     "renameDescription": "Only the display name changes; the object stays in place.",
@@ -290,6 +291,7 @@
   "FileViewer": {
     "back": "Back to files",
     "edit": "Edit",
+    "officeEdit": "Edit online",
     "save": "Save",
     "savingWithProgress": "Saving {progress}%",
     "cancel": "Cancel",
@@ -344,6 +346,17 @@
       "forbidden": "You do not have permission to manage files.",
       "unknown": "Something went wrong. Please try again."
     }
+  },
+  "OfficeEditor": {
+    "back": "Back to preview",
+    "online": "Online editor",
+    "hint": "Press Ctrl/Cmd + S to save",
+    "unsaved": "Unsaved changes",
+    "loading": "Starting the editor...",
+    "error": "The online editor could not start. Check the OnlyOffice configuration and try again.",
+    "retry": "Try again",
+    "notConfigured": "OnlyOffice is not configured. Missing: {missing}",
+    "storageFailed": "The document URL could not be created. Check the storage configuration."
   },
   "Rbac": {
     "common": {

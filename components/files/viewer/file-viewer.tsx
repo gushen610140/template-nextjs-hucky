@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -70,6 +71,8 @@ type FileViewerProps = {
   storageError: boolean;
   managed: boolean;
   fallbackHref: string;
+  /** Office 文件的在线编辑入口; 其他类型为 null */
+  officeEditHref?: string | null;
 };
 
 type Banner = { tone: "success" | "error"; text: string };
@@ -144,6 +147,7 @@ export function FileViewer({
   storageError,
   managed,
   fallbackHref,
+  officeEditHref = null,
 }: FileViewerProps) {
   const t = useTranslations("FileViewer");
   const locale = useLocale();
@@ -512,6 +516,14 @@ export function FileViewer({
             </>
           ) : (
             <>
+              {officeEditHref && (
+                <Button size="sm" variant="outline" asChild>
+                  <Link href={officeEditHref}>
+                    <Pencil />
+                    {t("officeEdit")}
+                  </Link>
+                </Button>
+              )}
               {canEdit && (
                 <Button size="sm" onClick={startEditing}>
                   <Pencil />

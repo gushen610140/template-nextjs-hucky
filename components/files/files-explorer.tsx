@@ -71,6 +71,7 @@ import type {
 } from "@/lib/files/types";
 import { FILE_PAGE_SIZES } from "@/lib/files/types";
 import { putToStorage } from "@/lib/files/upload-client";
+import { getOfficeDocumentInfo } from "@/lib/onlyoffice/documents";
 import { cn } from "@/lib/utils";
 
 /** 行拖拽用的自定义 MIME; 与系统文件拖拽 (Files) 区分开 */
@@ -192,6 +193,10 @@ export function FilesExplorer({
   function openPreview(file: FileRow) {
     const suffix = own ? "" : "?from=all";
     router.push(`/${locale}/dashboard/files/${file.id}${suffix}`);
+  }
+
+  function openOfficeEditor(file: FileRow) {
+    router.push(`/${locale}/dashboard/files/${file.id}/edit`);
   }
 
   /** 服务端 DNS/网络抖动时, 客户端再补两次确认; completeUpload 是幂等的 */
@@ -834,6 +839,7 @@ export function FilesExplorer({
           canCreateFolder={folderMode}
           onRenameFile={(file) => setRenameTarget(file)}
           onPreviewFile={openPreview}
+          onEditOfficeFile={openOfficeEditor}
           onDownloadFile={(file) => downloadFile(file, setBanner, errorText)}
           onDeleteFile={(file) => setDeleteTarget(file)}
           onRenameFolder={(folder) => setRenameFolderTarget(folder)}
@@ -960,6 +966,7 @@ type ContextMenuProps = {
   canCreateFolder: boolean;
   onRenameFile: (file: FileRow) => void;
   onPreviewFile: (file: FileRow) => void;
+  onEditOfficeFile: (file: FileRow) => void;
   onDownloadFile: (file: FileRow) => void;
   onDeleteFile: (file: FileRow) => void;
   onRenameFolder: (folder: FolderRow) => void;
@@ -973,6 +980,7 @@ function ContextMenu({
   canCreateFolder,
   onRenameFile,
   onPreviewFile,
+  onEditOfficeFile,
   onDownloadFile,
   onDeleteFile,
   onRenameFolder,
@@ -1025,6 +1033,16 @@ function ContextMenu({
               onClose();
             }}
           />
+          {getOfficeDocumentInfo(file.name, file.mimeType) && (
+            <MenuItem
+              icon={<Pencil />}
+              label={t("editOffice")}
+              onClick={() => {
+                onEditOfficeFile(file);
+                onClose();
+              }}
+            />
+          )}
           <MenuItem
             icon={<Pencil />}
             label={t("rename")}

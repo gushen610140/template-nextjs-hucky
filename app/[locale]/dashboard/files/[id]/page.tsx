@@ -9,6 +9,7 @@ import {
 } from "@/lib/files/preview";
 import { getFileDetail } from "@/lib/files/queries";
 import { decodeText } from "@/lib/files/text";
+import { getOfficeDocumentInfo } from "@/lib/onlyoffice/documents";
 import { PERMISSIONS } from "@/lib/permissions";
 import { readObjectPrefix } from "@/lib/storage/objects";
 import { createPreviewUrl } from "@/lib/storage/presign";
@@ -42,6 +43,7 @@ export default async function FilePreviewPage({
   if (!canManage && file.ownerId !== user.id) notFound();
 
   const preview = describeFilePreview(file.name, file.mimeType);
+  const office = getOfficeDocumentInfo(file.name, file.mimeType);
   const rawFrom = (await searchParams).from;
   const from = Array.isArray(rawFrom) ? rawFrom[0] : rawFrom;
 
@@ -113,6 +115,9 @@ export default async function FilePreviewPage({
       storageError={storageError}
       managed={canManage && file.ownerId !== user.id}
       fallbackHref={fallbackHref}
+      officeEditHref={
+        office ? `/${locale}/dashboard/files/${file.id}/edit` : null
+      }
     />
   );
 }
