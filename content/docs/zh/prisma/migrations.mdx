@@ -195,7 +195,7 @@ bun start
 
 `prisma.config.ts` 和 `prisma/seed.ts` 都会优先读取 `MIGRATE_DATABASE_URL`，未设置时回退到 `DATABASE_URL`。
 
-如果使用 Vercel，把 `bun run db:setup` 放进生产部署的 Build Command（或部署前脚本），确保迁移和 seed 都在应用启动前完成。只让生产部署执行，不要在每个 Preview 部署上跑迁移。要点：
+如果使用 Vercel，完整步骤见[部署](../deployment)：在 Build Command 中使用 `bun run vercel-build`（它内部执行 `bun run db:setup`），确保迁移和 seed 都在应用启动前完成。只让生产部署执行，不要在每个 Preview 部署上跑迁移。要点：
 
 - 生产数据库先备份。
 - 只运行已提交、已审查的迁移。

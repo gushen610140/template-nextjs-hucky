@@ -1,0 +1,143 @@
+---
+title: Deployment
+description: Deploy to Vercel and understand the Prisma migration and seed steps that run during the build
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+Deploying to Vercel is recommended. The `vercel-build` script in `package.json` runs the database preparation before `next build`, so one automatic deployment generates the Prisma Client, applies migrations, syncs the RBAC seed, and then builds Next.js.
+
+## Before deploying
+
+- PostgreSQL: the production database provides both a pooled connection string for the runtime and a direct connection string for migrations and the seed.
+- Logto: a production application whose redirect URI points to the production domain.
+- RustFS: an S3 API reachable from the browser, a private bucket, and CORS that allows the production origin.
+- Vercel: a project connected to the Git repository.
+
+<Callout type="warn" title="Do not reuse development values in production">
+`LOGTO_BASE_URL`, `LOGTO_COOKIE_SECRET`, the database URLs, and `RUSTFS_*` all depend on the real domain or production environment. Copying `.env.development` as-is breaks sign-in redirects, session cookies, or direct file uploads in production.
+</Callout>
+
+## Vercel project settings
+
+When importing the project, choose Next.js as the Framework Preset and keep the repository root as the Root Directory.
+
+### Build Command
+
+The Next.js preset on Vercel runs the `build` script by default, which is `next build`. Open Project Settings → Build and Deployment → Build Command, enable Override, and set it to:
+
+```text
+bun run vercel-build
+```
+
+Using only `next build` or `bun run build` skips Prisma Client generation, database migrations, and the seed, so the deployed app can fail immediately. You can set `buildCommand` in `vercel.json` instead, but do not configure it in both places.
+
+Leave Install Command on auto-detection. Vercel uses Bun after detecting `bun.lock`; set it to `bun ci` manually if needed. Choose Node.js 20 or newer.
+
+### Environment variables
+
+Add the variables under Project Settings → Environment Variables with the Production scope. The build also reads them, so do not keep the database variables in runtime-only configuration.
+
+| Variable | Production value |
+| --- | --- |
+| `DATABASE_URL` | Pooled / connection-pool URL for the production database, used at runtime |
+| `MIGRATE_DATABASE_URL` | Direct URL for the production database, used by `migrate deploy` and the seed; must not be a PgBouncer transaction pooler |
+| `LOGTO_ENDPOINT` | Production Logto tenant URL |
+| `LOGTO_APP_ID` / `LOGTO_APP_SECRET` | Production Logto application; the secret stays server-side |
+| `LOGTO_BASE_URL` | `https://<production domain>`, and update the Logto redirect URI to the same domain |
+| `LOGTO_COOKIE_SECRET` | A newly generated random value, at least 32 characters |
+| `BOOTSTRAP_ADMIN_EMAILS` | Administrator emails for the first deployment, comma separated |
+| `RUSTFS_ENDPOINT` | Production S3 API address reachable from the browser, not the 9001 console |
+| `RUSTFS_ACCESS_KEY` / `RUSTFS_SECRET_KEY` | Production credentials, server-side only |
+| `RUSTFS_BUCKET` | Production private bucket with CORS allowing the production origin |
+
+<Callout type="warn" title="These values must be replaced for production">
+Reconfigure `DATABASE_URL`, `MIGRATE_DATABASE_URL`, `LOGTO_BASE_URL`, `LOGTO_COOKIE_SECRET`, the `LOGTO_*` application credentials, `RUSTFS_ENDPOINT`, `RUSTFS_BUCKET`, and the RustFS CORS for production. In particular, do not keep localhost, sample emails, or development secrets. Fill `BOOTSTRAP_ADMIN_EMAILS` with real administrator addresses.
+</Callout>
+
+Vercel injects `NODE_ENV=production` for Production builds automatically; do not set it manually. Redeploy after changing environment variables.
+
+## What vercel-build does
+
+```json
+{
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:seed": "prisma db seed",
+    "db:setup": "prisma generate && prisma migrate deploy && prisma db seed",
+    "vercel-build": "bun run db:setup && next build"
+  }
+}
+```
+
+`vercel-build` is `bun run db:setup && next build`, where `db:setup` expands into three database preparation steps.
+
+<Steps>
+
+<Step>
+### Generate the Prisma Client
+
+`prisma generate` writes the client for `prisma/schema.prisma` to `lib/generated/prisma`. That directory is ignored by `.gitignore`, so a clean environment must regenerate it first; otherwise `next build` cannot resolve the generated code.
+</Step>
+
+<Step>
+### Apply migrations
+
+`prisma migrate deploy` only applies committed migrations under `prisma/migrations`. It does not create new migrations and does not reset the database. If it fails, the build fails and Vercel does not promote the new version. It reads `MIGRATE_DATABASE_URL` first and falls back to `DATABASE_URL`.
+</Step>
+
+<Step>
+### Sync the RBAC seed
+
+`prisma db seed` reads the `migrations.seed` entry in `prisma.config.ts` and runs `bun prisma/seed.ts`. The script connects directly with `MIGRATE_DATABASE_URL ?? DATABASE_URL`, then upserts permissions and the built-in `admin` / `user` roles in a transaction, aligning their permissions with `lib/permissions`.
+
+The seed is idempotent: it runs on every deployment, but it does not insert duplicates or delete custom roles or business data.
+
+**`migrate deploy` does not run the seed.** If a deployment only applies migrations, the built-in roles and permissions stay empty and permission checks lock users out of the admin area.
+</Step>
+
+<Step>
+### Build Next.js
+
+`next build` runs last. The schema is migrated, the client is generated, and the RBAC data is ready, so the build output can go live.
+</Step>
+
+</Steps>
+
+<Callout title="A local build does none of this">
+`bun run build` only runs `next build`. Database preparation exists in `vercel-build` and `db:setup` only, so the Vercel Build Command must point to `vercel-build`.
+</Callout>
+
+## Preview deployments
+
+The Build Command applies to every deployment, so Preview deployments run `vercel-build` too. Either give Preview its own database and environment variables, or make Preview generate the client and build without applying migrations.
+
+To migrate only on Production, branch `vercel-build` on `VERCEL_ENV`: run the full `db:setup` for Production, and keep at least `prisma generate && next build` for Preview. Do not skip the database step entirely for Preview, or the preview build will lack the generated Prisma Client.
+
+<Callout type="error" title="Do not point Preview at the production database">
+Every push creates a Preview deployment. If Preview shares the production `MIGRATE_DATABASE_URL`, every push runs migrations and the seed against production.
+</Callout>
+
+## First deployment
+
+1. Back up the production database.
+2. Push to the production branch on Vercel and confirm the build log succeeds in the order `prisma generate` → `migrate deploy` → `RBAC seed completed.` → `next build`.
+3. Sign in with an email from `BOOTSTRAP_ADMIN_EMAILS` and confirm it receives the `admin` role. The variable stops having an effect once an administrator exists.
+4. Check the Logto redirect and file upload/download; they depend on the production domain and production RustFS CORS.
+5. Run `bunx prisma migrate status` locally against the production database and confirm there are no pending migrations.
+
+## Common failures
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Build cannot find the Prisma Client | Build Command is still `next build` | Change it to `bun run vercel-build` |
+| Database connection times out | The Vercel build cannot reach the database, or the URL is wrong | Check the database allowlist, SSL parameters, and `MIGRATE_DATABASE_URL` |
+| Migration reports P3009 | A failed migration exists in production | Back up first, fix it, and mark it with `migrate resolve`; never run `migrate reset` in production |
+| Signed in but has no permissions | The seed did not run, or the email is not in `BOOTSTRAP_ADMIN_EMAILS` | Confirm `RBAC seed completed.` in the log and check the address |
+| Upload or download fails | `RUSTFS_ENDPOINT` is unreachable from the browser, or CORS lacks the production origin | Use the public S3 address and add CORS for `PUT`, `GET`, and `HEAD` |
+
+## Related docs
+
+- [Environment variables](./infrastructure/environment-variables)
+- [Migrations](./prisma/migrations)
+- [File storage](./files)
