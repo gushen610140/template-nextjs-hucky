@@ -65,7 +65,7 @@ Local sessions use an opaque token:
 - Expired sessions and disabled users are rejected and their sessions are deleted.
 - Logout deletes the local session and clears the Logto SDK cookie.
 
-See [Sessions and route protection](./session) for details.
+See [Sessions and route protection](/en/docs/authentication/session) for details.
 
 ## Key files
 
@@ -88,11 +88,11 @@ See [Sessions and route protection](./session) for details.
 - There is no local registration, password, code, or password-reset flow; Logto owns all of them.
 - There is no UI to inspect or unlink a Logto identity.
 - RBAC tables exist, but there is no admin UI or authorization API yet; business code must enforce permissions.
-- There is no login rate limiting, audit log, or MFA; configure these in Logto first. See [Evolution](./evolution) for incremental upgrades.
+- There is no login rate limiting, audit log, or MFA; configure these in Logto first. See [Evolution](/en/docs/authentication/evolution) for incremental upgrades.
 
 ## Next
 
-- [Sessions and route protection](./session): sessions, cookies, optimistic proxy checks, authoritative checks, and logout.
-- [Logto](./logto): OIDC flow, claims mapping, and account binding.
-- [RBAC](./rbac): users, roles, permissions, and authorization.
-- [Evolution](./evolution): multiple identities, revocation, and audit.
+- [Sessions and route protection](/en/docs/authentication/session): sessions, cookies, optimistic proxy checks, authoritative checks, and logout.
+- [Logto](/en/docs/authentication/logto): OIDC flow, claims mapping, and account binding.
+- [RBAC](/en/docs/authentication/rbac): users, roles, permissions, and authorization.
+- [Evolution](/en/docs/authentication/evolution): multiple identities, revocation, and audit.

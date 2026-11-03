@@ -222,7 +222,7 @@ In Route Handlers, map expected constraint errors to 4xx responses instead of re
 
 - Use `select` to limit returned fields, especially for users and sessions.
 - Avoid querying inside loops; use `findMany`, `include`, or a transaction to batch work.
-- Add indexes for `where`, `orderBy`, and relation columns; see [Data model](./schema).
+- Add indexes for `where`, `orderBy`, and relation columns; see [Data model](/en/docs/prisma/schema).
 - Do not create a Prisma Client per request; reuse the `lib/prisma.ts` singleton.
 - Do not run database queries from client components; expose what is needed through a Route Handler or Server Action.
 - If caching is needed, cache in the server data layer without bypassing authorization or session checks.

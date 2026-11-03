@@ -98,7 +98,7 @@ If the user still has a Logto SSO session, clicking Logto again may return witho
 ## Current limits
 
 - There is no UI to inspect or unlink a Logto identity.
-- One local user can bind only one Logto identity today. If you need multiple identities, add an `AuthIdentity` table; see [Evolution](./evolution).
+- One local user can bind only one Logto identity today. If you need multiple identities, add an `AuthIdentity` table; see [Evolution](/en/docs/authentication/evolution).
 - Callback errors all redirect to `/login?error=logto` without finer error codes.
 - Logto access tokens are not cached locally. When calling the Account or Management API, request one explicitly with `getAccessToken` / `getAccessTokenRSC`.
 

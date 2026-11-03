@@ -98,7 +98,7 @@ Logto 的 `sub` 在用户生命周期内不变，邮箱却可能被用户修改�
 ## 当前限制
 
 - 没有“解绑 Logto”或“查看已绑定身份”的界面。
-- 一个本地用户目前只能绑定一个 Logto 身份。需要多身份绑定时，建议增加 `AuthIdentity` 表，详见[演进与扩展](./evolution)。
+- 一个本地用户目前只能绑定一个 Logto 身份。需要多身份绑定时，建议增加 `AuthIdentity` 表，详见[演进与扩展](/zh/docs/authentication/evolution)。
 - Logto 回调失败时统一回到 `/login?error=logto`，没有细分错误码。
 - 没有在本地缓存 Logto 的 access token。需要调用 Account API 或 Management API 时，应通过 `getAccessToken` / `getAccessTokenRSC` 显式获取。
 

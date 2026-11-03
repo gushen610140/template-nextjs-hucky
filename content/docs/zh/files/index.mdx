@@ -53,9 +53,9 @@ RustFS 需要先准备好，应用才能读写：
 预签名 URL 的签名包含请求 host。服务端签名用的是 `RUSTFS_ENDPOINT`，浏览器实际请求的也必须是同一个 host，否则 RustFS 会返回 `SignatureDoesNotMatch`。
 </Callout>
 
-区域固定为 `us-east-1`，预签名有效期固定为 15 分钟，两者都写在 `lib/storage/client.ts` 里，不需要也不应该通过环境变量配置。环境变量的完整清单见[环境变量](../infrastructure/environment-variables)。
+区域固定为 `us-east-1`，预签名有效期固定为 15 分钟，两者都写在 `lib/storage/client.ts` 里，不需要也不应该通过环境变量配置。环境变量的完整清单见[环境变量](/zh/docs/infrastructure/environment-variables)。
 
 ## 接下来
 
-- [使用教程](./usage)：上传、文件夹、拖拽、右键菜单和管理员视图。
-- [设计思路](./design)：直传流程、状态机、软删除、权限和已知限制。
+- [使用教程](/zh/docs/files/usage)：上传、文件夹、拖拽、右键菜单和管理员视图。
+- [设计思路](/zh/docs/files/design)：直传流程、状态机、软删除、权限和已知限制。

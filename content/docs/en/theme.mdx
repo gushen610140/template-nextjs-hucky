@@ -51,7 +51,7 @@ The provider selects the light or dark palette from `resolvedTheme`, then applie
 
 Fonts default to the system stack and trigger no webfont request. Selecting a local face makes `FontProvider` load it through `FontFace` from `public/fonts/`, then write `--font-latin-*` (Latin glyphs) or `--font-cjk-sans` (Chinese body glyphs) on `<html>`.
 
-The panel merges the Latin sans and Chinese body faces into one Body option; underneath they remain two layers. The Chinese face replaces Chinese glyphs only, leaving English, digits, and code untouched. It bundles Latin glyphs too, but `unicode-range` limits it to CJK code points, so Latin characters skip it entirely. See [Typography](./shadcn/typography).
+The panel merges the Latin sans and Chinese body faces into one Body option; underneath they remain two layers. The Chinese face replaces Chinese glyphs only, leaving English, digits, and code untouched. It bundles Latin glyphs too, but `unicode-range` limits it to CJK code points, so Latin characters skip it entirely. See [Typography](/en/docs/shadcn/typography).
 
 ## shadcn tokens
 

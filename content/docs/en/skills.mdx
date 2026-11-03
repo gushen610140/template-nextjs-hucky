@@ -5,7 +5,7 @@ description: Agent skills used by this project, the lock file, and installation
 
 import { Step, Steps } from "fumadocs-ui/components/steps";
 
-Skills are reusable instruction packs for agents. This project captures repeatable workflows as skills so an agent can load them on demand instead of repeating the instructions in every prompt. For the recommended OpenCode workflow and worktrees, see [OpenCode](./opencode).
+Skills are reusable instruction packs for agents. This project captures repeatable workflows as skills so an agent can load them on demand instead of repeating the instructions in every prompt. For the recommended OpenCode workflow and worktrees, see [OpenCode](/en/docs/opencode).
 
 ## Why .agents is not committed
 
@@ -90,4 +90,4 @@ bunx skills add juliusbrussee/caveman --skill caveman-commit -a opencode -y
 
 Only run `add` / `update` when you intentionally change the skill set. Those commands rewrite `skills-lock.json`; commit the lock file with your changes, but do not commit `.agents/`, which is an install directory that can be rebuilt at any time.
 
-Other agents can reuse these skills too, but OpenCode is the recommended agent for this project. See [OpenCode](./opencode) for the workflow.
+Other agents can reuse these skills too, but OpenCode is the recommended agent for this project. See [OpenCode](/en/docs/opencode) for the workflow.

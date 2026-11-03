@@ -111,4 +111,4 @@ await requireUser();
 - 生产环境必须启用 HTTPS，`secure` Cookie 才会生效。
 - 登出会删除本地 Session，但不会撤销 Logto 的全局 SSO 会话；再次点击 Logto 登录可能无需输入密码直接返回，这是正常行为。
 - 在 Logto 中禁用用户不会立刻让已有本地 Session 失效，最长要等到 7 天过期。需要即时封禁时，应在业务侧同步设置 `User.isActive = false`，或缩短会话有效期。
-- 当前没有“登出所有设备”功能，可以按 `userId` 批量删除 `Session` 实现，详见[演进与扩展](./evolution)。
+- 当前没有“登出所有设备”功能，可以按 `userId` 批量删除 `Session` 实现，详见[演进与扩展](/zh/docs/authentication/evolution)。

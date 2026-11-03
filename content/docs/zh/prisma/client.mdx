@@ -222,7 +222,7 @@ try {
 
 - 用 `select` 限制返回字段，尤其是用户表和会话表。
 - 避免在循环里逐条查询；用 `findMany`、`include` 或一次事务批量处理。
-- 为 `where`、`orderBy` 和关联字段建立合适索引，参考[数据模型](./schema)。
+- 为 `where`、`orderBy` 和关联字段建立合适索引，参考[数据模型](/zh/docs/prisma/schema)。
 - 不要在每个请求中创建 Prisma Client；复用 `lib/prisma.ts` 的单例。
 - 不要在客户端组件中触发数据库查询；通过 Route Handler 或 Server Action 暴露必要接口。
 - 需要缓存时，在服务端数据层做缓存，不要让缓存绕过权限和会话校验。

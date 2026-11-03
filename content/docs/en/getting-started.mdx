@@ -66,11 +66,11 @@ RUSTFS_BUCKET=your-bucket
 
 `DATABASE_URL` is used by the application at runtime; in production it should be the managed database's pooled connection string. `MIGRATE_DATABASE_URL` is only for migrations, seeding, and Prisma Studio, and must be a direct connection. In local development both can use the same value.
 
-`LOGTO_BASE_URL` is the app's own URL; Logto redirects back here. `LOGTO_COOKIE_SECRET` must be at least 32 characters and should be strongly random in production. `.env.example` is committed to Git; real `.env*` files are not. See [Environment variables](./infrastructure/environment-variables) for details.
+`LOGTO_BASE_URL` is the app's own URL; Logto redirects back here. `LOGTO_COOKIE_SECRET` must be at least 32 characters and should be strongly random in production. `.env.example` is committed to Git; real `.env*` files are not. See [Environment variables](/en/docs/infrastructure/environment-variables) for details.
 
 `BOOTSTRAP_ADMIN_EMAILS` bootstraps the first deployment: while the system has no administrator, these verified emails receive the `admin` role on sign-in. Once an administrator exists, the variable has no effect and can be kept or removed.
 
-`RUSTFS_*` powers the file module: `RUSTFS_ENDPOINT` must be an S3 API address the browser can reach directly (usually port 9000, not the 9001 console), the bucket must be private, and CORS must allow `PUT`, `GET`, and `HEAD`. The region is fixed to `us-east-1` and is not configurable. See [File storage](./files).
+`RUSTFS_*` powers the file module: `RUSTFS_ENDPOINT` must be an S3 API address the browser can reach directly (usually port 9000, not the 9001 console), the bucket must be private, and CORS must allow `PUT`, `GET`, and `HEAD`. The region is fixed to `us-east-1` and is not configurable. See [File storage](/en/docs/files).
 
 </Step>
 
@@ -82,7 +82,7 @@ bunx prisma generate
 bun run db:setup
 ```
 
-`prisma generate` writes the client to `lib/generated/prisma`. `db:setup` generates the client, runs `prisma migrate deploy`, and then the idempotent RBAC seed, which creates the built-in roles and permissions. Use `bunx prisma migrate dev` when you are developing new migrations. Use `bunx prisma studio` to browse data. See [Prisma database](./prisma) for the schema, PostgreSQL setup, and migration workflow.
+`prisma generate` writes the client to `lib/generated/prisma`. `db:setup` generates the client, runs `prisma migrate deploy`, and then the idempotent RBAC seed, which creates the built-in roles and permissions. Use `bunx prisma migrate dev` when you are developing new migrations. Use `bunx prisma studio` to browse data. See [Prisma database](/en/docs/prisma) for the schema, PostgreSQL setup, and migration workflow.
 
 </Step>
 
@@ -128,11 +128,11 @@ When you add a public page, update `publicRoutes` in `proxy.ts` too, or it will 
 
 ## Next steps
 
-- Read the [overview](./index) for the project layout.
-- Read [Deployment](./deployment) for the Vercel build command and production configuration.
-- Read [Infrastructure](./infrastructure) for the package manager and [environment variable](./infrastructure/environment-variables) conventions.
-- Read [shadcn/ui components](./shadcn) for component and Tailwind CSS rules.
-- Read [Prisma database](./prisma) for the data model, PostgreSQL, and migrations.
-- Read [Authentication & users](./authentication) for local accounts, Logto, and RBAC.
-- Read [File storage](./files) for RustFS setup, the upload flow, and permission boundaries.
+- Read the [overview](/en/docs) for the project layout.
+- Read [Deployment](/en/docs/deployment) for the Vercel build command and production configuration.
+- Read [Infrastructure](/en/docs/infrastructure) for the package manager and [environment variable](/en/docs/infrastructure/environment-variables) conventions.
+- Read [shadcn/ui components](/en/docs/shadcn) for component and Tailwind CSS rules.
+- Read [Prisma database](/en/docs/prisma) for the data model, PostgreSQL, and migrations.
+- Read [Authentication & users](/en/docs/authentication) for local accounts, Logto, and RBAC.
+- Read [File storage](/en/docs/files) for RustFS setup, the upload flow, and permission boundaries.
 - Add matching `.mdx` files under `content/docs/zh/` and `content/docs/en/` to keep both locales in sync.

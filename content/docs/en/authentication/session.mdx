@@ -111,4 +111,4 @@ A forged cookie with the right shape passes the optimistic check in `proxy.ts`. 
 - Production must use HTTPS for the `secure` cookie flag to take effect.
 - Logout deletes the local session but does not revoke the global Logto SSO session. Clicking Logto again may return without a password prompt; that is expected.
 - Disabling a user in Logto does not immediately invalidate existing local sessions; they can live for up to 7 days. For immediate lockout, also set `User.isActive = false`, or shorten the session lifetime.
-- There is no "sign out everywhere" yet. It is a `deleteMany` on `Session` by `userId`; see [Evolution](./evolution).
+- There is no "sign out everywhere" yet. It is a `deleteMany` on `Session` by `userId`; see [Evolution](/en/docs/authentication/evolution).

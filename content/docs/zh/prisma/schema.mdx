@@ -197,7 +197,7 @@ User ──< FileObject >── FileFolder ──< FileFolder（自关联树）
 - `FileFolder.parent` 使用级联删除，删除父文件夹时子文件夹自动清理；文件必须先由业务代码软删除。
 - `ownerId` 同时出现在两个模型上，配合 `(ownerId, folderId, status, createdAt)` 索引支撑按用户 + 目录 + 状态的列表查询。
 
-完整的删除语义和权限边界见[文件存储](../files/design)。
+完整的删除语义和权限边界见[文件存储](/zh/docs/files/design)。
 
 ## 字段与索引约定
 
@@ -211,7 +211,7 @@ User ──< FileObject >── FileFolder ──< FileFolder（自关联树）
 
 ## 修改模型时
 
-模型修改不能只改 `schema.prisma` 就结束。完整流程见[迁移](./migrations)：
+模型修改不能只改 `schema.prisma` 就结束。完整流程见[迁移](/zh/docs/prisma/migrations)：
 
 1. 修改模型。
 2. `bunx prisma format`

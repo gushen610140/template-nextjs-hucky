@@ -51,7 +51,7 @@ hucky-font-settings
 
 字体默认全部使用系统字体，不会请求任何 webfont。用户在面板里选择本地字体后，`FontProvider` 才会通过 `FontFace` 加载 `public/fonts/` 下的文件，并把 `--font-latin-*`（拉丁字形）或 `--font-cjk-sans`（中文正文字形）写到 `<html>`。
 
-面板把拉丁无衬线和中文正文字体合并成一个「正文」选项；底层仍是两条链，中文字体只替换中文字形，不会影响英文、数字和代码的观感。中文字体自带拉丁字形，但注册时用 `unicode-range` 限定在中文码位，英文码位会直接跳过它。详见[字体](./shadcn/typography)。
+面板把拉丁无衬线和中文正文字体合并成一个「正文」选项；底层仍是两条链，中文字体只替换中文字形，不会影响英文、数字和代码的观感。中文字体自带拉丁字形，但注册时用 `unicode-range` 限定在中文码位，英文码位会直接跳过它。详见[字体](/zh/docs/shadcn/typography)。
 
 ## shadcn token
 

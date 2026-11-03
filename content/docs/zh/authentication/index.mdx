@@ -65,7 +65,7 @@ Logto 只负责“这个人是谁”，本应用负责“这个人能做什么�
 - 会话过期或用户被禁用时，服务端会删除会话并拒绝访问。
 - 登出会删除本地 Session，并清理 Logto SDK 的 Cookie。
 
-详见[会话与路由保护](./session)。
+详见[会话与路由保护](/zh/docs/authentication/session)。
 
 ## 关键文件
 
@@ -87,12 +87,12 @@ Logto 只负责“这个人是谁”，本应用负责“这个人能做什么�
 
 - 本地没有注册、密码、验证码或找回密码流程，这些全部由 Logto 提供。
 - 没有“解绑 Logto”或“查看已绑定身份”的界面。
-- RBAC 数据模型已经建立，但还没有角色管理 UI 和授权 API；授权判断需要业务代码自己实现，详见 [RBAC 权限](./rbac)。
-- 没有登录频率限制、审计日志和 MFA；这些能力应优先在 Logto 侧配置。增量升级建议见[演进与扩展](./evolution)。
+- RBAC 数据模型已经建立，但还没有角色管理 UI 和授权 API；授权判断需要业务代码自己实现，详见 [RBAC 权限](/zh/docs/authentication/rbac)。
+- 没有登录频率限制、审计日志和 MFA；这些能力应优先在 Logto 侧配置。增量升级建议见[演进与扩展](/zh/docs/authentication/evolution)。
 
 ## 接下来
 
-- [会话与路由保护](./session)：Session、Cookie、proxy 乐观检查、数据层权威校验和登出。
-- [Logto 接入](./logto)：OIDC 流程、claims 映射和账号绑定。
-- [RBAC 权限](./rbac)：用户、角色、权限模型和授权方式。
-- [演进与扩展](./evolution)：多身份、会话撤销和审计。
+- [会话与路由保护](/zh/docs/authentication/session)：Session、Cookie、proxy 乐观检查、数据层权威校验和登出。
+- [Logto 接入](/zh/docs/authentication/logto)：OIDC 流程、claims 映射和账号绑定。
+- [RBAC 权限](/zh/docs/authentication/rbac)：用户、角色、权限模型和授权方式。
+- [演进与扩展](/zh/docs/authentication/evolution)：多身份、会话撤销和审计。

@@ -58,7 +58,7 @@ DATABASE_URL=postgresql://user:password@localhost:5432/hucky
 MIGRATE_DATABASE_URL=postgresql://user:password@localhost:5432/hucky
 ```
 
-`DATABASE_URL` 供应用运行时使用；`MIGRATE_DATABASE_URL` 供迁移和 seed 使用，生产环境应指向直连地址。环境变量的完整规则见[环境变量](../infrastructure/environment-variables)。还没有数据库时，先看 [PostgreSQL](./postgresql)。
+`DATABASE_URL` 供应用运行时使用；`MIGRATE_DATABASE_URL` 供迁移和 seed 使用，生产环境应指向直连地址。环境变量的完整规则见[环境变量](/zh/docs/infrastructure/environment-variables)。还没有数据库时，先看 [PostgreSQL](/zh/docs/prisma/postgresql)。
 </Step>
 
 <Step>
@@ -71,7 +71,7 @@ bunx prisma migrate dev
 
 `generate` 把客户端写到 `lib/generated/prisma`。`migrate dev` 会把 `prisma/migrations` 中尚未应用的迁移执行到当前数据库；在全新数据库上，它相当于按顺序建表。
 
-生产环境不要执行 `migrate dev`，应使用 `bunx prisma migrate deploy`，详见[迁移](./migrations)。
+生产环境不要执行 `migrate dev`，应使用 `bunx prisma migrate deploy`，详见[迁移](/zh/docs/prisma/migrations)。
 </Step>
 
 <Step>
@@ -143,7 +143,7 @@ lib/prisma.ts
 
 ## 接下来
 
-- [PostgreSQL](./postgresql)：本地数据库、连接串、SSL、连接池和备份。
-- [数据模型](./schema)：当前模型、关系、索引和字段设计约定。
-- [Prisma Client](./client)：在 Server Component、Route Handler 和事务中使用客户端。
-- [迁移](./migrations)：增量修改、生产部署、重置和 drift 处理。
+- [PostgreSQL](/zh/docs/prisma/postgresql)：本地数据库、连接串、SSL、连接池和备份。
+- [数据模型](/zh/docs/prisma/schema)：当前模型、关系、索引和字段设计约定。
+- [Prisma Client](/zh/docs/prisma/client)：在 Server Component、Route Handler 和事务中使用客户端。
+- [迁移](/zh/docs/prisma/migrations)：增量修改、生产部署、重置和 drift 处理。

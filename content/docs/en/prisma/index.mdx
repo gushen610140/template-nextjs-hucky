@@ -58,7 +58,7 @@ DATABASE_URL=postgresql://user:password@localhost:5432/hucky
 MIGRATE_DATABASE_URL=postgresql://user:password@localhost:5432/hucky
 ```
 
-`DATABASE_URL` is used by the application runtime; `MIGRATE_DATABASE_URL` is used by migrations and seeding and should point at a direct connection in production. See [Environment variables](../infrastructure/environment-variables) for the full environment-file rules. If you do not have a database yet, start with [PostgreSQL](./postgresql).
+`DATABASE_URL` is used by the application runtime; `MIGRATE_DATABASE_URL` is used by migrations and seeding and should point at a direct connection in production. See [Environment variables](/en/docs/infrastructure/environment-variables) for the full environment-file rules. If you do not have a database yet, start with [PostgreSQL](/en/docs/prisma/postgresql).
 </Step>
 
 <Step>
@@ -71,7 +71,7 @@ bunx prisma migrate dev
 
 `generate` writes the client to `lib/generated/prisma`. `migrate dev` applies pending migrations from `prisma/migrations`; on a fresh database it creates the tables in order.
 
-Do not run `migrate dev` in production. Use `bunx prisma migrate deploy` there; see [Migrations](./migrations).
+Do not run `migrate dev` in production. Use `bunx prisma migrate deploy` there; see [Migrations](/en/docs/prisma/migrations).
 </Step>
 
 <Step>
@@ -143,7 +143,7 @@ Manually adding columns, dropping tables, or changing types in PostgreSQL create
 
 ## Next
 
-- [PostgreSQL](./postgresql): local database, connection strings, SSL, pooling, and backups.
-- [Data model](./schema): current models, relations, indexes, and field conventions.
-- [Prisma Client](./client): usage in Server Components, Route Handlers, and transactions.
-- [Migrations](./migrations): incremental changes, production deploys, resets, and drift.
+- [PostgreSQL](/en/docs/prisma/postgresql): local database, connection strings, SSL, pooling, and backups.
+- [Data model](/en/docs/prisma/schema): current models, relations, indexes, and field conventions.
+- [Prisma Client](/en/docs/prisma/client): usage in Server Components, Route Handlers, and transactions.
+- [Migrations](/en/docs/prisma/migrations): incremental changes, production deploys, resets, and drift.

@@ -195,7 +195,7 @@ Split the production connection strings:
 
 Both `prisma.config.ts` and `prisma/seed.ts` prefer `MIGRATE_DATABASE_URL` and fall back to `DATABASE_URL`.
 
-On Vercel, see [Deployment](../deployment) for the full setup: use `bun run vercel-build` as the Build Command (it runs `bun run db:setup` internally) so migrations and the seed run before the app starts. Run it for production deployments only, not for every Preview deployment. Keep these rules:
+On Vercel, see [Deployment](/en/docs/deployment) for the full setup: use `bun run vercel-build` as the Build Command (it runs `bun run db:setup` internally) so migrations and the seed run before the app starts. Run it for production deployments only, not for every Preview deployment. Keep these rules:
 
 - Back up the production database first.
 - Run only committed, reviewed migrations.

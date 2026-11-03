@@ -5,7 +5,7 @@ description: 项目使用的 Agent Skills、锁文件与安装方式
 
 import { Step, Steps } from "fumadocs-ui/components/steps";
 
-Skills 是可复用的 Agent 指令包。项目把可复用的流程沉淀成 Skill，Agent 需要时再按需加载，而不是每次都在提示词里重复说明。OpenCode 的推荐用法和 worktree 工作流见 [OpenCode](./opencode)。
+Skills 是可复用的 Agent 指令包。项目把可复用的流程沉淀成 Skill，Agent 需要时再按需加载，而不是每次都在提示词里重复说明。OpenCode 的推荐用法和 worktree 工作流见 [OpenCode](/zh/docs/opencode)。
 
 ## 为什么 .agents 不提交
 
@@ -90,4 +90,4 @@ bunx skills add juliusbrussee/caveman --skill caveman-commit -a opencode -y
 
 只有在新增、删除或更新 Skill 时才需要执行 `add` / `update`。这些操作会改写 `skills-lock.json`，请把锁文件的变更和代码一起提交；不要提交 `.agents/`，它是可以随时重建的安装目录。
 
-其他 Agent 也可以复用这些 Skill，但本项目的推荐 Agent 是 OpenCode，具体工作流见 [OpenCode](./opencode)。
+其他 Agent 也可以复用这些 Skill，但本项目的推荐 Agent 是 OpenCode，具体工作流见 [OpenCode](/zh/docs/opencode)。

@@ -197,7 +197,7 @@ Design notes:
 - `FileFolder.parent` cascades, so deleting a parent removes child folders. Files must be soft-deleted by application code first.
 - `ownerId` appears on both models; `(ownerId, folderId, status, createdAt)` supports listing by owner, folder, and status.
 
-See [File storage](../files/design) for the full deletion and permission semantics.
+See [File storage](/en/docs/files/design) for the full deletion and permission semantics.
 
 ## Field and index conventions
 
@@ -211,7 +211,7 @@ See [File storage](../files/design) for the full deletion and permission semanti
 
 ## Changing the model
 
-Updating `schema.prisma` is not the whole change. See [Migrations](./migrations) for the full flow:
+Updating `schema.prisma` is not the whole change. See [Migrations](/en/docs/prisma/migrations) for the full flow:
 
 1. Edit the model.
 2. `bunx prisma format`

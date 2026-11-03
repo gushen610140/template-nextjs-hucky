@@ -62,7 +62,7 @@ Setting `NODE_ENV=production` inside `.env.development` puts the file-loading lo
 | `RUSTFS_SECRET_KEY` | RustFS secret key | Server-side only; leaking it grants bucket write access |
 | `RUSTFS_BUCKET` | Private bucket name | Create it beforehand and configure CORS for `PUT`, `GET`, `HEAD` on the frontend origin |
 
-The region is fixed to `us-east-1` and presign expiry to 15 minutes, both in `lib/storage/client.ts` rather than environment variables. The app still boots without `RUSTFS_*`; only upload, confirm, and download fail. See [File storage](../files) for the full module guide.
+The region is fixed to `us-east-1` and presign expiry to 15 minutes, both in `lib/storage/client.ts` rather than environment variables. The app still boots without `RUSTFS_*`; only upload, confirm, and download fail. See [File storage](/en/docs/files) for the full module guide.
 
 The Prisma CLI prefers `MIGRATE_DATABASE_URL` and falls back to `DATABASE_URL`; the application runtime only reads `DATABASE_URL`. This lets production use a direct connection for migrations and a pooled connection for runtime.
 
