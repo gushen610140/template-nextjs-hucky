@@ -183,6 +183,15 @@ export function FileViewer({
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [dirty]);
 
+  // 重命名等操作会刷新服务端数据, 同步乐观锁令牌和大小, 避免保存时误报 conflict
+  useEffect(() => {
+    setUpdatedAt(file.updatedAt);
+  }, [file.updatedAt]);
+
+  useEffect(() => {
+    setSize(file.size);
+  }, [file.size]);
+
   useEffect(() => {
     function handleFullscreen() {
       setFullscreen(document.fullscreenElement === containerRef.current);
