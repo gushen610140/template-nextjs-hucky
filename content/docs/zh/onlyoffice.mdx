@@ -42,13 +42,14 @@ Next.js /api/onlyoffice/callback
 ```bash
 ONLYOFFICE_DS_URL=https://office.example.com
 ONLYOFFICE_JWT_SECRET=与 Document Server 相同的随机字符串
-# 必须是项目部署服务器的公网可访问地址，不能填 127.0.0.1 / localhost
+# 可选。生产环境必须是项目部署服务器的公网可访问地址，不能填 127.0.0.1 / localhost
+# 本地开发可以留空：编辑器仍可打开，但保存功能不可用
 ONLYOFFICE_SAVE_CALLBACK_URL=https://app.example.com
 ```
 
-`ONLYOFFICE_SAVE_CALLBACK_URL` 可以写完整接口地址，也可以只写公网域名，代码会自动补 `/api/onlyoffice/callback`。本地 `localhost` 无法被远程 Document Server 回调，本地开发需要使用隧道（如 `cloudflared tunnel`）或直接使用已部署的公网地址。
+`ONLYOFFICE_SAVE_CALLBACK_URL` 可以写完整接口地址，也可以只写公网域名，代码会自动补 `/api/onlyoffice/callback`。本地开发留空或填 `localhost` / `127.0.0.1` 时，编辑器仍可进入，但页面会提示保存不可用；需要保存时使用隧道（如 `cloudflared tunnel`）或已部署的公网地址。
 
-Document Server 必须能访问：
+配置了保存回调时，Document Server 必须能访问：
 
 - `ONLYOFFICE_SAVE_CALLBACK_URL` 指向的回调地址
 - RustFS 的预签名地址（或你提供的文件代理地址）

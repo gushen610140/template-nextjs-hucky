@@ -351,6 +351,8 @@
     "back": "Back to preview",
     "online": "Online editor",
     "hint": "Press Ctrl/Cmd + S to save",
+    "hintDisabled": "Local debugging: saving is unavailable",
+    "saveDisabled": "ONLYOFFICE_SAVE_CALLBACK_URL is not configured, so edits will not be saved. Set a public callback URL after deployment to enable saving.",
     "unsaved": "Unsaved changes",
     "loading": "Starting the editor...",
     "error": "The online editor could not start. Check the OnlyOffice configuration and try again.",

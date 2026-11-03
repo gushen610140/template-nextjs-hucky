@@ -42,13 +42,14 @@ Entry points:
 ```bash
 ONLYOFFICE_DS_URL=https://office.example.com
 ONLYOFFICE_JWT_SECRET=the same random string as the Document Server
-# Must be publicly reachable from the Document Server; never 127.0.0.1 or localhost
+# Optional. In production it must be publicly reachable from the Document Server; never 127.0.0.1 / localhost
+# Local development may leave it empty: the editor opens, but saving is unavailable
 ONLYOFFICE_SAVE_CALLBACK_URL=https://app.example.com
 ```
 
-`ONLYOFFICE_SAVE_CALLBACK_URL` accepts either the full callback endpoint or just the public domain; the app appends `/api/onlyoffice/callback` when needed. A local `localhost` app cannot be reached by a remote Document Server; use a tunnel (for example `cloudflared tunnel`) or a deployed public URL for local testing.
+`ONLYOFFICE_SAVE_CALLBACK_URL` accepts either the full callback endpoint or just the public domain; the app appends `/api/onlyoffice/callback` when needed. Leaving it empty or pointing at `localhost` / `127.0.0.1` still opens the editor, but the UI reports that saving is unavailable. Use a tunnel (for example `cloudflared tunnel`) or a deployed public URL when testing saves.
 
-The Document Server must be able to reach:
+When a save callback is configured, the Document Server must be able to reach:
 
 - The callback address in `ONLYOFFICE_SAVE_CALLBACK_URL`
 - RustFS presigned URLs (or your own file proxy)

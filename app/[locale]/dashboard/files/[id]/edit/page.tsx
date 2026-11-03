@@ -81,12 +81,17 @@ export default async function OfficeEditPage({ params }: OfficeEditPageProps) {
   }
 
   const documentKey = `${file.id}-${randomUUID()}`;
-  const callbackToken = await signOnlyOfficeToken({
-    kind: "callback",
-    fileId: file.id,
-  });
-  const callbackUrl = new URL(settings.value.saveCallbackUrl);
-  callbackUrl.searchParams.set("token", callbackToken);
+  const callbackUrl = settings.value.saveCallbackUrl
+    ? new URL(settings.value.saveCallbackUrl)
+    : null;
+
+  if (callbackUrl) {
+    const callbackToken = await signOnlyOfficeToken({
+      kind: "callback",
+      fileId: file.id,
+    });
+    callbackUrl.searchParams.set("token", callbackToken);
+  }
 
   const baseConfig: Omit<OfficeEditorConfig, "token"> = {
     document: {
@@ -100,7 +105,7 @@ export default async function OfficeEditPage({ params }: OfficeEditPageProps) {
     editorConfig: {
       mode: "edit",
       lang: locale === "zh" ? "zh-CN" : "en",
-      callbackUrl: callbackUrl.toString(),
+      ...(callbackUrl ? { callbackUrl: callbackUrl.toString() } : {}),
       user: {
         id: user.id,
         name: user.name ?? user.email,
@@ -126,6 +131,7 @@ export default async function OfficeEditPage({ params }: OfficeEditPageProps) {
       config={config}
       fileName={file.name}
       previewHref={previewHref}
+      saveDisabled={!callbackUrl}
     />
   );
 }

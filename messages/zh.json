@@ -350,6 +350,8 @@
     "back": "返回预览",
     "online": "在线编辑",
     "hint": "编辑后按 Ctrl/Cmd + S 保存",
+    "hintDisabled": "本地调试：保存功能不可用",
+    "saveDisabled": "未配置 ONLYOFFICE_SAVE_CALLBACK_URL，编辑内容不会保存。部署后配置公网回调地址即可恢复保存。",
     "unsaved": "有未保存的修改",
     "loading": "正在加载编辑器...",
     "error": "无法启动在线编辑器，请检查 OnlyOffice 配置或稍后重试。",

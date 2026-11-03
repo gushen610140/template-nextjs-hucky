@@ -17,7 +17,8 @@ export type OfficeEditorConfig = {
   editorConfig: {
     mode: "edit";
     lang: string;
-    callbackUrl: string;
+    /** 仅在配置了可访问的保存回调时存在 */
+    callbackUrl?: string;
     user: { id: string; name: string };
     customization: {
       forcesave: boolean;

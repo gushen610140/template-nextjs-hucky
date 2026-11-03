@@ -67,11 +67,13 @@ export function OfficeEditor({
   config,
   fileName,
   previewHref,
+  saveDisabled,
 }: {
   dsUrl: string;
   config: OfficeEditorConfig;
   fileName: string;
   previewHref: string;
+  saveDisabled: boolean;
 }) {
   const t = useTranslations("OfficeEditor");
   const router = useRouter();
@@ -153,11 +155,19 @@ export function OfficeEditor({
             )}
           </div>
           <span className="truncate text-muted-foreground text-xs">
-            {t("hint")}
+            {saveDisabled ? t("hintDisabled") : t("hint")}
           </span>
         </div>
         <Badge variant="outline">{t("online")}</Badge>
       </header>
+
+      {saveDisabled && (
+        <Alert className="border-amber-500/50 bg-amber-500/5">
+          <AlertDescription className="text-amber-700 dark:text-amber-400">
+            {t("saveDisabled")}
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border bg-card">
         <div id="onlyoffice-editor" className="h-full w-full" />
