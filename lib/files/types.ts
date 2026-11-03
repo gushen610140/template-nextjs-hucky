@@ -54,6 +54,27 @@ export type FileListResult = {
   breadcrumb: FolderCrumb[];
 };
 
+/** 预览页需要的单文件详情 (含存储键, 只在服务端使用) */
+export type FileDetail = {
+  id: string;
+  ownerId: string;
+  folderId: string | null;
+  key: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  etag: string | null;
+  status: "PENDING" | "READY" | "DELETED";
+  createdAt: string;
+  updatedAt: string;
+  owner: {
+    id: string;
+    name: string | null;
+    email: string;
+  };
+  folder: { id: string; name: string } | null;
+};
+
 /** Server Action 的统一返回值; 失败时返回错误码, 由客户端翻译成文案。 */
 export type FileActionResult = { ok: true } | { ok: false; error: string };
 
@@ -65,4 +86,14 @@ export type FileUploadTarget =
 /** 下载地址; 客户端用它做跳转, 不经过 Next.js 转发文件流。 */
 export type FileDownloadTarget =
   | { ok: true; url: string }
+  | { ok: false; error: string };
+
+/** 编辑保存第一步: 拿到同对象键的预签名 PUT */
+export type FileEditTarget =
+  | { ok: true; uploadUrl: string; contentType: string }
+  | { ok: false; error: string };
+
+/** 编辑保存第二步: 回查对象并刷新元数据 */
+export type FileEditResult =
+  | { ok: true; size: number; updatedAt: string }
   | { ok: false; error: string };
