@@ -238,6 +238,8 @@
     "clearSearch": "Clear search",
     "allUsers": "All users",
     "userFilter": "Owner",
+    "userFilterTitle": "Choose an owner",
+    "userFilterDescription": "Pick a user to browse only their files with the same folder tools.",
     "totalCount": "{count, plural, one {# file} other {# files}}",
     "pageOf": "Page {page} of {total}",
     "prev": "Previous",

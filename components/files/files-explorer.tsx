@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -14,6 +15,7 @@ import {
   Search,
   Trash2,
   Upload,
+  UserRound,
   X,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -32,6 +34,7 @@ import {
 } from "@/app/[locale]/dashboard/files/actions";
 import { ConfirmDeleteDialog } from "@/components/rbac/confirm-delete-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -116,6 +119,7 @@ export function FilesExplorer({
     useState<FolderRow | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
+  const [userPickerOpen, setUserPickerOpen] = useState(false);
   const [searchValue, setSearchValue] = useState(state.q);
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
   const [fileDragActive, setFileDragActive] = useState(false);
@@ -437,27 +441,21 @@ export function FilesExplorer({
         </div>
 
         {!own && users.length > 0 && (
-          <label className="flex items-center gap-2 text-muted-foreground text-sm">
-            <span>{t("userFilter")}</span>
-            <select
-              value={selectedOwnerId ?? ""}
-              onChange={(event) =>
-                navigate({
-                  owner: event.target.value || null,
-                  folder: null,
-                  page: 1,
-                })
-              }
-              className="h-9 rounded-md border border-input bg-transparent px-2 text-foreground text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              <option value="">{t("allUsers")}</option>
-              {users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.name ?? user.email}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setUserPickerOpen(true)}
+            className="gap-2"
+            aria-label={t("userFilter")}
+          >
+            <UserRound />
+            <span className="max-w-40 truncate">
+              {selectedUser
+                ? (selectedUser.name ?? selectedUser.email)
+                : t("allUsers")}
+            </span>
+            <ChevronDown className="size-3.5 text-muted-foreground" />
+          </Button>
         )}
       </form>
 
@@ -528,7 +526,19 @@ export function FilesExplorer({
                 key={folder.id}
                 onDoubleClick={() => navigate({ folder: folder.id, page: 1 })}
                 onContextMenu={(event) => openFolderMenu(event, folder)}
-                className="cursor-pointer select-none"
+                onDragOver={(event) => {
+                  if (!isRowDrag(event) && !isFileDrag(event)) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setDragOverFolder(folder.id);
+                }}
+                onDragLeave={() => setDragOverFolder(null)}
+                onDrop={(event) => handleFolderDrop(event, folder.id)}
+                className={cn(
+                  "cursor-pointer select-none",
+                  dragOverFolder === folder.id &&
+                    "bg-primary/5 ring-1 ring-primary ring-inset",
+                )}
               >
                 <TableCell>
                   <div className="flex items-center gap-2.5">
@@ -778,6 +788,18 @@ export function FilesExplorer({
           ownerId={targetOwnerId}
           onClose={() => setFolderDialogOpen(false)}
           errorText={errorText}
+        />
+      )}
+
+      {userPickerOpen && (
+        <UserPickerDialog
+          users={users}
+          selectedOwnerId={selectedOwnerId}
+          onSelect={(ownerId) => {
+            setUserPickerOpen(false);
+            navigate({ owner: ownerId, folder: null, page: 1 });
+          }}
+          onClose={() => setUserPickerOpen(false)}
         />
       )}
     </div>
@@ -1165,7 +1187,6 @@ type FolderDialogProps = {
   onClose: () => void;
   errorText: (code: string) => string;
 };
-
 function FolderDialog({
   parentId,
   ownerId,
@@ -1235,6 +1256,86 @@ function FolderDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+type UserPickerDialogProps = {
+  users: FileUserOption[];
+  selectedOwnerId: string | null;
+  onSelect: (ownerId: string | null) => void;
+  onClose: () => void;
+};
+
+/** 用列表选择的用户筛选器; 单击一行立即生效并关闭 */
+function UserPickerDialog({
+  users,
+  selectedOwnerId,
+  onSelect,
+  onClose,
+}: UserPickerDialogProps) {
+  const t = useTranslations("Files");
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{t("userFilterTitle")}</DialogTitle>
+          <DialogDescription>{t("userFilterDescription")}</DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-80 overflow-y-auto rounded-lg border">
+          <button
+            type="button"
+            onClick={() => onSelect(null)}
+            className={cn(
+              "flex w-full items-center gap-2.5 border-b px-3 py-2.5 text-left transition-colors hover:bg-muted",
+              selectedOwnerId === null && "bg-muted/60",
+            )}
+          >
+            <span className="flex size-7 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <UserRound className="size-4" />
+            </span>
+            <span className="font-medium text-sm">{t("allUsers")}</span>
+            {selectedOwnerId === null && <Check className="ml-auto size-4" />}
+          </button>
+
+          {users.map((user) => {
+            const label = user.name ?? user.email;
+            return (
+              <button
+                key={user.id}
+                type="button"
+                onClick={() => onSelect(user.id)}
+                className={cn(
+                  "flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted",
+                  selectedOwnerId === user.id && "bg-muted/60",
+                )}
+              >
+                <Avatar size="sm">
+                  <AvatarFallback>
+                    {label.slice(0, 1).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="grid min-w-0">
+                  <span className="truncate font-medium text-sm">{label}</span>
+                  <span className="truncate text-muted-foreground text-xs">
+                    {user.email}
+                  </span>
+                </span>
+                {selectedOwnerId === user.id && (
+                  <Check className="ml-auto size-4" />
+                )}
+              </button>
+            );
+          })}
+        </div>
       </DialogContent>
     </Dialog>
   );
