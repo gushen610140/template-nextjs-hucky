@@ -16,7 +16,6 @@ import { createPreviewUrl } from "@/lib/storage/presign";
 
 type FilePreviewPageProps = {
   params: Promise<{ locale: string; id: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 /**
@@ -28,7 +27,6 @@ type FilePreviewPageProps = {
  */
 export default async function FilePreviewPage({
   params,
-  searchParams,
 }: FilePreviewPageProps) {
   const { locale, id } = await params;
   const user = await requireUser();
@@ -44,8 +42,9 @@ export default async function FilePreviewPage({
 
   const preview = describeFilePreview(file.name, file.mimeType);
   const office = getOfficeDocumentInfo(file.name, file.mimeType);
-  const rawFrom = (await searchParams).from;
-  const from = Array.isArray(rawFrom) ? rawFrom[0] : rawFrom;
+  const fallbackHref = canOwn
+    ? `/${locale}/dashboard/files`
+    : `/${locale}/dashboard/files/all`;
 
   let previewUrl: string | null = null;
   let textContent: string | null = null;
@@ -81,13 +80,6 @@ export default async function FilePreviewPage({
       }
     }
   }
-
-  const fallbackHref =
-    from === "all" && canManage
-      ? `/${locale}/dashboard/files/all`
-      : canOwn
-        ? `/${locale}/dashboard/files`
-        : `/${locale}/dashboard/files/all`;
 
   return (
     <FileViewer

@@ -189,10 +189,9 @@ export function FilesExplorer({
     return t.has(key) ? t(key) : t("errors.unknown");
   }
 
-  /** 单击文件进入预览页; `from=all` 让返回按钮回到管理员视图 */
+  /** 单击文件进入预览页 */
   function openPreview(file: FileRow) {
-    const suffix = own ? "" : "?from=all";
-    router.push(`/${locale}/dashboard/files/${file.id}${suffix}`);
+    router.push(`/${locale}/dashboard/files/${file.id}`);
   }
 
   function openOfficeEditor(file: FileRow) {
