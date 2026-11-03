@@ -99,7 +99,6 @@ export function AppSidebar({
   if (fileItems.length > 0) {
     navGroups.push({
       label: t("filesGroup"),
-      separator: true,
       items: fileItems,
     });
   }
