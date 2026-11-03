@@ -1,0 +1,61 @@
+---
+title: File storage
+description: How RustFS is wired in, what it covers, and what to prepare before deploying
+---
+
+The file module turns uploads, downloads, folder organization, and permission checks into reusable infrastructure. File bodies live in **RustFS** (S3-compatible object storage); the database only stores metadata and ownership.
+
+## Capabilities
+
+| Capability | Description |
+| --- | --- |
+| Upload | Browser uploads directly to storage with a presigned PUT; the app server never proxies bytes |
+| Download | Short-lived presigned GET, saved under the original file name |
+| Folders | Virtual folders stored as metadata; moving a file copies nothing |
+| Management | Rename, soft delete, drag to move, context menu |
+| Search | Name search, sorting by name/size/time, pagination |
+| Permissions | `file:own` for your own files, `file:manage` for every file |
+
+## Pages
+
+| Route | Permission | Description |
+| --- | --- | --- |
+| `/[locale]/dashboard/files` | `file:own` | My files: folders, uploads, search |
+| `/[locale]/dashboard/files/all` | `file:manage` | All files: owner filter and cross-user management |
+
+## Code map
+
+| Path | Role |
+| --- | --- |
+| `lib/storage/config.ts` | Reads and validates the `RUSTFS_*` variables |
+| `lib/storage/client.ts` | S3 client singleton, fixed region, presign TTL constant |
+| `lib/storage/keys.ts` | Object key generation and file name sanitizing |
+| `lib/storage/presign.ts` | Upload and download presigned URLs |
+| `lib/storage/objects.ts` | `HeadObject` verification and object deletion |
+| `lib/storage/limits.ts` | Size cap and MIME validation |
+| `lib/files/auth.ts` | `file:own` / `file:manage` plus row-level checks |
+| `lib/files/queries.ts` | Listing, folders, search, sort, pagination |
+| `lib/files/query-params.ts` | Turns URL params into validated list state |
+| `app/[locale]/dashboard/files/actions.ts` | Server Actions: upload, move, rename, delete, download URL |
+| `components/files/files-explorer.tsx` | Table, drag and drop, context menu, dialogs |
+| `FileObject` / `FileFolder` in `prisma/schema.prisma` | File metadata and virtual folders |
+
+## Before deploying
+
+RustFS has to be ready before the app can read or write files:
+
+1. Create a **private** bucket and put its name in `RUSTFS_BUCKET`.
+2. Configure bucket CORS for the frontend origin, allowing `PUT`, `GET`, and `HEAD`. Direct upload and download both depend on it.
+3. `RUSTFS_ENDPOINT` must be reachable from the browser (usually an HTTPS domain on port 9000, not the 9001 console). Presigned URLs are signed against that host; an internal host breaks the signature.
+4. Note the `RUSTFS_ACCESS_KEY` / `RUSTFS_SECRET_KEY` values.
+
+<Callout type="warn" title="The endpoint must match what the browser calls">
+The signature covers the request host. The server signs with `RUSTFS_ENDPOINT`, and the browser must call the same host, otherwise RustFS answers with `SignatureDoesNotMatch`.
+</Callout>
+
+The region is fixed to `us-east-1` and presign expiry to 15 minutes, both in `lib/storage/client.ts`. They are intentionally not environment variables. See [Environment variables](../infrastructure/environment-variables) for the full list.
+
+## Next
+
+- [Usage](./usage): uploads, folders, drag and drop, context menu, admin view.
+- [Design](./design): direct upload flow, state machine, soft delete, permissions, and limits.

@@ -1,0 +1,61 @@
+---
+title: 文件存储
+description: RustFS 对象存储的接入方式、能力范围与部署前置条件
+---
+
+文件模块把上传、下载、目录组织和权限校验做成了一套可复用的基础设施。文件本体存放在 **RustFS**（S3 兼容对象存储），数据库只保存元数据与归属关系。
+
+## 能力一览
+
+| 能力 | 说明 |
+| --- | --- |
+| 上传 | 浏览器直传对象存储，使用预签名 PUT，不经过应用服务器 |
+| 下载 | 短时效预签名 GET，按原文件名返回 |
+| 目录 | 虚拟文件夹，纯数据库分组；移动文件不复制对象 |
+| 管理 | 重命名、软删除、拖拽移动、右键菜单 |
+| 检索 | 名称搜索、按名称/大小/时间排序、分页 |
+| 权限 | `file:own` 管理自己的文件，`file:manage` 管理全站文件 |
+
+## 页面位置
+
+| 路由 | 可见角色 | 说明 |
+| --- | --- | --- |
+| `/[locale]/dashboard/files` | `file:own` | 我的文件：目录、上传、文件夹、搜索 |
+| `/[locale]/dashboard/files/all` | `file:manage` | 全部文件：用户筛选 + 跨用户管理 |
+
+## 代码位置
+
+| 路径 | 作用 |
+| --- | --- |
+| `lib/storage/config.ts` | 读取并校验 `RUSTFS_*` 环境变量 |
+| `lib/storage/client.ts` | S3 客户端单例、固定 region 和预签名有效期常量 |
+| `lib/storage/keys.ts` | 对象键生成与文件名清洗 |
+| `lib/storage/presign.ts` | 上传 / 下载预签名地址 |
+| `lib/storage/objects.ts` | `HeadObject` 校验与对象删除 |
+| `lib/storage/limits.ts` | 单文件大小上限、MIME 校验 |
+| `lib/files/auth.ts` | `file:own` / `file:manage` 与行级归属校验 |
+| `lib/files/queries.ts` | 列表、文件夹、搜索、排序、分页查询 |
+| `lib/files/query-params.ts` | 把 URL 查询参数收敛成受控状态 |
+| `app/[locale]/dashboard/files/actions.ts` | Server Actions：上传、移动、重命名、删除、下载地址 |
+| `components/files/files-explorer.tsx` | 页面主体：表格、拖拽、右键菜单、对话框 |
+| `prisma/schema.prisma` 中的 `FileObject` / `FileFolder` | 文件元数据与虚拟文件夹 |
+
+## 部署前置条件
+
+RustFS 需要先准备好，应用才能读写：
+
+1. 创建一个**私有** bucket，名字填进 `RUSTFS_BUCKET`。
+2. 为前端域名配置 bucket CORS，允许 `PUT`、`GET`、`HEAD`。浏览器直传和下载都依赖它。
+3. `RUSTFS_ENDPOINT` 必须是浏览器能直接访问的地址（通常是 HTTPS 域名，端口 9000，不是 9001 控制台）。预签名 URL 以该 host 签名，换成内部地址会导致签名不匹配。
+4. 记下 `RUSTFS_ACCESS_KEY` / `RUSTFS_SECRET_KEY`。
+
+<Callout type="warn" title="endpoint 必须与浏览器访问的地址一致">
+预签名 URL 的签名包含请求 host。服务端签名用的是 `RUSTFS_ENDPOINT`，浏览器实际请求的也必须是同一个 host，否则 RustFS 会返回 `SignatureDoesNotMatch`。
+</Callout>
+
+区域固定为 `us-east-1`，预签名有效期固定为 15 分钟，两者都写在 `lib/storage/client.ts` 里，不需要也不应该通过环境变量配置。环境变量的完整清单见[环境变量](../infrastructure/environment-variables)。
+
+## 接下来
+
+- [使用教程](./usage)：上传、文件夹、拖拽、右键菜单和管理员视图。
+- [设计思路](./design)：直传流程、状态机、软删除、权限和已知限制。

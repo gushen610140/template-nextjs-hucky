@@ -11,6 +11,7 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 - Bun 1.2 或更高版本（`bun.lock` 使用文本格式）
 - 一个 PostgreSQL 数据库
 - 一个 Logto 应用（本地开发也需要）
+- 一个 RustFS（S3 兼容）实例、私有 bucket，以及配置好的 CORS
 
 ## 安装
 
@@ -55,6 +56,12 @@ LOGTO_APP_SECRET=your-app-secret
 LOGTO_BASE_URL=http://localhost:3000
 LOGTO_COOKIE_SECRET=a-long-random-string
 BOOTSTRAP_ADMIN_EMAILS=you@example.com
+
+# RustFS（S3 兼容对象存储）
+RUSTFS_ENDPOINT=https://s3.example.com
+RUSTFS_ACCESS_KEY=your-access-key
+RUSTFS_SECRET_KEY=your-secret-key
+RUSTFS_BUCKET=your-bucket
 ```
 
 `DATABASE_URL` 是应用运行时使用的连接串；生产环境应使用托管数据库的 pooled / 连接池地址。`MIGRATE_DATABASE_URL` 只用于迁移、seed 和 Prisma Studio，必须是直连地址；本地开发两者可以填同一个值。
@@ -62,6 +69,8 @@ BOOTSTRAP_ADMIN_EMAILS=you@example.com
 `LOGTO_BASE_URL` 是应用自身的地址，Logto 回调会回到这里；`LOGTO_COOKIE_SECRET` 至少 32 个字符，生产环境务必换成足够随机的值。`.env.example` 会提交到 Git，真实的 `.env*` 文件不会；完整说明见[环境变量](./infrastructure/environment-variables)。
 
 `BOOTSTRAP_ADMIN_EMAILS` 用于首次部署：系统里还没有任何管理员时，这些邮箱登录后会自动获得 `admin` 角色。一旦存在管理员，该变量自动失效，可以保留也可以删除。
+
+`RUSTFS_*` 是文件功能的前置条件：`RUSTFS_ENDPOINT` 必须是浏览器能直接访问的 S3 API 地址（通常 9000 端口，不是 9001 控制台），bucket 需要是私有的，并允许 `PUT`、`GET`、`HEAD` 的 CORS。区域固定 `us-east-1`，不通过环境变量配置。详见[文件存储](./files)。
 
 </Step>
 
@@ -124,4 +133,5 @@ bun dev
 - 阅读 [shadcn/ui 组件库](./shadcn)了解组件规范与 Tailwind CSS 约定。
 - 阅读 [Prisma 数据库](./prisma) 了解数据库模型、PostgreSQL 和迁移。
 - 阅读 [认证与用户](./authentication) 了解本地账号、Logto 和 RBAC。
+- 阅读 [文件存储](./files) 了解 RustFS 接入、上传流程和权限边界。
 - 在 `content/docs/zh/` 和 `content/docs/en/` 添加对应的 `.mdx` 文件，保持两种语言同步。

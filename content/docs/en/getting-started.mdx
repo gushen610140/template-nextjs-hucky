@@ -11,6 +11,7 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 - Bun 1.2 or newer (`bun.lock` uses the text format)
 - A PostgreSQL database
 - A Logto application (required for local development too)
+- A RustFS (S3-compatible) instance with a private bucket and CORS configured
 
 ## Setup
 
@@ -55,6 +56,12 @@ LOGTO_APP_SECRET=your-app-secret
 LOGTO_BASE_URL=http://localhost:3000
 LOGTO_COOKIE_SECRET=a-long-random-string
 BOOTSTRAP_ADMIN_EMAILS=you@example.com
+
+# RustFS (S3-compatible object storage)
+RUSTFS_ENDPOINT=https://s3.example.com
+RUSTFS_ACCESS_KEY=your-access-key
+RUSTFS_SECRET_KEY=your-secret-key
+RUSTFS_BUCKET=your-bucket
 ```
 
 `DATABASE_URL` is used by the application at runtime; in production it should be the managed database's pooled connection string. `MIGRATE_DATABASE_URL` is only for migrations, seeding, and Prisma Studio, and must be a direct connection. In local development both can use the same value.
@@ -62,6 +69,8 @@ BOOTSTRAP_ADMIN_EMAILS=you@example.com
 `LOGTO_BASE_URL` is the app's own URL; Logto redirects back here. `LOGTO_COOKIE_SECRET` must be at least 32 characters and should be strongly random in production. `.env.example` is committed to Git; real `.env*` files are not. See [Environment variables](./infrastructure/environment-variables) for details.
 
 `BOOTSTRAP_ADMIN_EMAILS` bootstraps the first deployment: while the system has no administrator, these verified emails receive the `admin` role on sign-in. Once an administrator exists, the variable has no effect and can be kept or removed.
+
+`RUSTFS_*` powers the file module: `RUSTFS_ENDPOINT` must be an S3 API address the browser can reach directly (usually port 9000, not the 9001 console), the bucket must be private, and CORS must allow `PUT`, `GET`, and `HEAD`. The region is fixed to `us-east-1` and is not configurable. See [File storage](./files).
 
 </Step>
 
@@ -124,4 +133,5 @@ When you add a public page, update `publicRoutes` in `proxy.ts` too, or it will 
 - Read [shadcn/ui components](./shadcn) for component and Tailwind CSS rules.
 - Read [Prisma database](./prisma) for the data model, PostgreSQL, and migrations.
 - Read [Authentication & users](./authentication) for local accounts, Logto, and RBAC.
+- Read [File storage](./files) for RustFS setup, the upload flow, and permission boundaries.
 - Add matching `.mdx` files under `content/docs/zh/` and `content/docs/en/` to keep both locales in sync.

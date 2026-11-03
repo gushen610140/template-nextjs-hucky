@@ -56,6 +56,13 @@ Setting `NODE_ENV=production` inside `.env.development` puts the file-loading lo
 | `LOGTO_APP_SECRET` | Logto application secret | Server-side only; never prefix it with `NEXT_PUBLIC_` |
 | `LOGTO_BASE_URL` | The app's own URL | Usually `http://localhost:3000` in development; use the real domain in production |
 | `LOGTO_COOKIE_SECRET` | Session cookie signing secret | At least 32 characters; use a strong random value and replace it in production |
+| `BOOTSTRAP_ADMIN_EMAILS` | First-deployment admin emails | Comma separated; ignored once an administrator exists |
+| `RUSTFS_ENDPOINT` | S3 API endpoint | Must be reachable from the browser, usually port 9000 rather than the 9001 console; presigned URLs are signed against this host |
+| `RUSTFS_ACCESS_KEY` | RustFS access key | Server-side only; never prefix with `NEXT_PUBLIC_` |
+| `RUSTFS_SECRET_KEY` | RustFS secret key | Server-side only; leaking it grants bucket write access |
+| `RUSTFS_BUCKET` | Private bucket name | Create it beforehand and configure CORS for `PUT`, `GET`, `HEAD` on the frontend origin |
+
+The region is fixed to `us-east-1` and presign expiry to 15 minutes, both in `lib/storage/client.ts` rather than environment variables. The app still boots without `RUSTFS_*`; only upload, confirm, and download fail. See [File storage](../files) for the full module guide.
 
 The Prisma CLI prefers `MIGRATE_DATABASE_URL` and falls back to `DATABASE_URL`; the application runtime only reads `DATABASE_URL`. This lets production use a direct connection for migrations and a pooled connection for runtime.
 
@@ -78,6 +85,13 @@ LOGTO_APP_ID=
 LOGTO_APP_SECRET=
 LOGTO_BASE_URL=
 LOGTO_COOKIE_SECRET=
+
+BOOTSTRAP_ADMIN_EMAILS=
+
+RUSTFS_ENDPOINT=
+RUSTFS_ACCESS_KEY=
+RUSTFS_SECRET_KEY=
+RUSTFS_BUCKET=
 ```
 
 The app never loads it. Its job is to tell a new contributor which variables are needed. To start developing, copy it and fill in real values:

@@ -34,6 +34,8 @@ datasource db {
 | `UserRole` | Many-to-many join table between users and roles |
 | `RolePermission` | Many-to-many join table between roles and permissions |
 | `Session` | Opaque server-side sessions with token hashes and expiry |
+| `FileObject` | File metadata: object key, size, status, owner, and folder |
+| `FileFolder` | Virtual folder tree; files reference it through `folderId` |
 
 ### User
 
@@ -50,6 +52,8 @@ model User {
 
   roles    UserRole[]
   sessions Session[]
+  files    FileObject[]
+  folders  FileFolder[]
 }
 ```
 
@@ -128,6 +132,72 @@ User ──< UserRole >── Role ──< RolePermission >── Permission
 - Both sides use `onDelete: Cascade`, so deleting a role or permission cleans up its links.
 - `Permission.name` is unique and is a stable identifier for authorization checks.
 - `Permission.module` groups permissions by area, such as `user`, `post`, or `settings`.
+
+## Files and folders
+
+File bodies live in object storage; the database only holds metadata:
+
+```prisma
+enum FileStatus {
+  PENDING
+  READY
+  DELETED
+}
+
+model FileObject {
+  id        String     @id @default(cuid())
+  ownerId   String
+  folderId  String?
+  bucket    String
+  key       String     @unique
+  name      String
+  mimeType  String
+  size      BigInt
+  etag      String?
+  status    FileStatus @default(PENDING)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  deletedAt DateTime?
+
+  owner  User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  folder FileFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, status, createdAt(sort: Desc)])
+  @@index([ownerId, folderId, status, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+}
+
+model FileFolder {
+  id        String   @id @default(cuid())
+  ownerId   String
+  parentId  String?
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner    User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  parent   FileFolder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children FileFolder[] @relation("FolderTree")
+  files    FileObject[]
+
+  @@index([ownerId, parentId, createdAt(sort: Desc)])
+}
+```
+
+```text
+User ──< FileObject >── FileFolder ──< FileFolder (self tree)
+```
+
+Design notes:
+
+- `status` implements soft deletion; `deletedAt` records when it happened and lists filter on `status`.
+- `size` uses `BigInt` so files over 2 GB do not overflow.
+- `key` is the unique object key in the bucket; `name` is what users see. They are decoupled, so renaming never moves an object.
+- `folder` uses `onDelete: SetNull`: after a folder is hard-deleted, already soft-deleted file rows fall back to the root instead of losing metadata.
+- `FileFolder.parent` cascades, so deleting a parent removes child folders. Files must be soft-deleted by application code first.
+- `ownerId` appears on both models; `(ownerId, folderId, status, createdAt)` supports listing by owner, folder, and status.
+
+See [File storage](../files/design) for the full deletion and permission semantics.
 
 ## Field and index conventions
 

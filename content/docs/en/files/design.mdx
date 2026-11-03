@@ -1,0 +1,122 @@
+---
+title: Design
+description: Why uploads bypass the app, the three-state record, soft delete, and permission boundaries
+---
+
+## Why the browser uploads directly
+
+The app runs on a hosted platform while RustFS sits on a self-managed server. Proxying bytes through Next.js would cost three things:
+
+1. Double the bandwidth (user → app → storage).
+2. Request body and execution time limits on large files.
+3. Server Actions accept only 1 MB request bodies by default.
+
+So uploads use "server signs, browser uploads":
+
+```text
+Browser                Next.js                     RustFS
+  │  createUpload        │                           │
+  ├─────────────────────▶│  create PENDING record    │
+  │  uploadUrl           │  presign PUT              │
+  │◀─────────────────────┤                           │
+  │  PUT body (with progress)                         │
+  ├─────────────────────────────────────────────────▶│
+  │  completeUpload      │                           │
+  ├─────────────────────▶│  HEAD size / content type │
+  │                      ├──────────────────────────▶│
+  │                      │  mark READY               │
+  │◀─────────────────────┤                           │
+```
+
+Server Actions only carry JSON, so no request-body limit applies.
+
+## Record state machine
+
+`FileObject.status` has three values:
+
+```text
+createUpload ──▶ PENDING ──completeUpload──▶ READY
+                    │                         │
+                    └──── verification fails ─┴──▶ DELETED
+```
+
+| Status | Meaning | Listed |
+| --- | --- | --- |
+| `PENDING` | Presigned, not yet confirmed | No |
+| `READY` | Object exists and passed checks | Yes |
+| `DELETED` | Soft-deleted, metadata kept | No |
+
+`completeUpload` is idempotent. It calls `HeadObject` to read the real size and MIME type, because a presigned PUT cannot enforce `Content-Length`. If the object exceeds 200 MB the action deletes it and marks the record `DELETED`.
+
+## Object keys vs display names
+
+```text
+{ownerId}/{yyyy}/{mm}/{uuid}-{sanitized-name}
+```
+
+- The prefix is the owner ID, which isolates users at the key level.
+- The UUID prevents overwrites on rename or re-upload.
+- The sanitized segment keeps only letters, digits, `._-`.
+
+The user-facing name lives in `FileObject.name` and is decoupled from the key, so **renaming only updates metadata** and never moves an object.
+
+## Folders are metadata only
+
+`FileFolder` is a self-relation tree via `parentId` and does not map to key prefixes. Moving a file only updates `FileObject.folderId`, so drag and drop is effectively instant.
+
+Deletion is intentionally asymmetric:
+
+| Target | Strategy | Why |
+| --- | --- | --- |
+| File | Soft delete, keep the row | Auditing and a future recycle bin |
+| Folder | Hard delete, files soft-deleted first | Folders have no value of their own; avoids empty shells |
+
+Deleting a folder walks the subtree breadth-first, soft-deletes every file inside, then deletes the root; child folders go through the foreign-key cascade. Objects are removed best-effort after the transaction commits, and failures are logged rather than rolled back.
+
+## Permission model
+
+Checks happen at two levels:
+
+1. **Feature level**: `file:own` or `file:manage`, which decides whether a page or Action is reachable.
+2. **Row level**: `canAccessFile()` allows `canManage || file.ownerId === user.id`.
+
+Acting on behalf of a user in the admin view passes an extra `ownerId`:
+
+- Only `file:manage` may point `ownerId` at someone else.
+- Folders and files are validated against that `ownerId`, so nothing can be mounted across owners.
+- Uploads and new folders are written to the target user.
+
+<Callout type="warn" title="ownerId is untrusted input">
+`ownerId` comes from the client. `resolveOwner()` checks `file:manage` and that the target user exists before writing; without that step it would be a privilege escalation.
+</Callout>
+
+## Queries and pagination
+
+`listFilePage()` returns the file page, the current folder's subfolders, the breadcrumb, and normalized query state in one call.
+
+Key rules:
+
+- 20 files per page; count first, then clamp `page` into `[1, pageCount]`.
+- Every sort has `id` as a tie-breaker so page boundaries stay stable.
+- A search term widens the scope to the owner's whole tree (files and folders by name); otherwise only the current folder is listed.
+- `q`, `sort`, `dir`, `page`, `folder`, and `owner` are validated in `parseFileListState()`, so raw input never reaches Prisma.
+- A `folder` that is missing or owned by someone else falls back to the root instead of returning an empty list.
+
+## Security boundaries
+
+| Risk | Handling |
+| --- | --- |
+| Forged file size | `completeUpload` trusts `HeadObject`, not the client |
+| Oversized file | 200 MB cap; object removed and record soft-deleted |
+| Cross-user access | Every Action checks ownership and returns `not_found` |
+| Presigned URL reuse | 15-minute expiry, scoped to a single key |
+| Key leakage | Keys embed a random UUID and the bucket is private |
+| File name injection | Keys use sanitized segments; the display name is stored separately |
+
+## Known limits
+
+- Multipart upload (files over 5 GB) is not implemented.
+- A presigned PUT cannot enforce `Content-Length`; size is verified after the fact.
+- No virus scanning, versioning, or recycle bin; soft-deleted rows are only recoverable from the database.
+- If a client abandons an upload, the `PENDING` row stays until a cleanup job exists.
+- Only files are paginated; folders are always fully listed.

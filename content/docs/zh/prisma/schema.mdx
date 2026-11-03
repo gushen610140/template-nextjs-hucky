@@ -34,6 +34,8 @@ datasource db {
 | `UserRole` | 用户与角色的多对多关联表 |
 | `RolePermission` | 角色与权限的多对多关联表 |
 | `Session` | 服务端不透明会话，保存 token 哈希和过期时间 |
+| `FileObject` | 文件元数据：对象键、大小、状态、归属和所属文件夹 |
+| `FileFolder` | 虚拟文件夹树，文件通过 `folderId` 关联 |
 
 ### User
 
@@ -50,6 +52,8 @@ model User {
 
   roles    UserRole[]
   sessions Session[]
+  files    FileObject[]
+  folders  FileFolder[]
 }
 ```
 
@@ -128,6 +132,72 @@ User ──< UserRole >── Role ──< RolePermission >── Permission
 - 两边的外键都使用 `onDelete: Cascade`，删除角色或权限时自动清理关联。
 - `Permission.name` 唯一，适合作为权限判断的稳定标识。
 - `Permission.module` 用于按模块分组，例如 `user`、`post`、`settings`。
+
+## 文件与文件夹
+
+文件本体存放在对象存储，数据库只保存元数据：
+
+```prisma
+enum FileStatus {
+  PENDING
+  READY
+  DELETED
+}
+
+model FileObject {
+  id        String     @id @default(cuid())
+  ownerId   String
+  folderId  String?
+  bucket    String
+  key       String     @unique
+  name      String
+  mimeType  String
+  size      BigInt
+  etag      String?
+  status    FileStatus @default(PENDING)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  deletedAt DateTime?
+
+  owner  User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  folder FileFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, status, createdAt(sort: Desc)])
+  @@index([ownerId, folderId, status, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+}
+
+model FileFolder {
+  id        String   @id @default(cuid())
+  ownerId   String
+  parentId  String?
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner    User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  parent   FileFolder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children FileFolder[] @relation("FolderTree")
+  files    FileObject[]
+
+  @@index([ownerId, parentId, createdAt(sort: Desc)])
+}
+```
+
+```text
+User ──< FileObject >── FileFolder ──< FileFolder（自关联树）
+```
+
+设计要点：
+
+- `status` 实现软删除；`deletedAt` 只用于记录删除时间，列表按 `status` 过滤。
+- `size` 用 `BigInt`，避免单文件超过 2 GB 时溢出。
+- `key` 是 bucket 内的对象键并唯一；`name` 是用户可见的文件名。两者解耦，改名不需要移动对象。
+- `folder` 使用 `onDelete: SetNull`：文件夹被硬删除后，已软删除的文件记录回落根目录，不会丢行。
+- `FileFolder.parent` 使用级联删除，删除父文件夹时子文件夹自动清理；文件必须先由业务代码软删除。
+- `ownerId` 同时出现在两个模型上，配合 `(ownerId, folderId, status, createdAt)` 索引支撑按用户 + 目录 + 状态的列表查询。
+
+完整的删除语义和权限边界见[文件存储](../files/design)。
 
 ## 字段与索引约定
 
