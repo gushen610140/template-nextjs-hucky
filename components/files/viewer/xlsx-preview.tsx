@@ -94,14 +94,6 @@ export function XlsxPreview({ url, name }: { url: string; name: string }) {
 
   return (
     <Tabs defaultValue="0" className="h-full min-h-0 gap-3">
-      <TabsList className="max-w-full overflow-x-auto overflow-y-hidden">
-        {sheets.map((sheet, index) => (
-          <TabsTrigger key={sheet.sheet} value={String(index)}>
-            {sheet.sheet || t("sheetFallback", { index: index + 1 })}
-          </TabsTrigger>
-        ))}
-      </TabsList>
-
       {sheets.map((sheet, index) => {
         const rows = sheet.data.slice(0, MAX_TABLE_ROWS);
         const truncated = sheet.data.length > rows.length;
@@ -162,6 +154,15 @@ export function XlsxPreview({ url, name }: { url: string; name: string }) {
           </TabsContent>
         );
       })}
+
+      <TabsList className="max-w-full self-end overflow-x-auto overflow-y-hidden">
+        {sheets.map((sheet, index) => (
+          <TabsTrigger key={sheet.sheet} value={String(index)}>
+            {sheet.sheet || t("sheetFallback", { index: index + 1 })}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+
       <span className="sr-only">{name}</span>
     </Tabs>
   );
