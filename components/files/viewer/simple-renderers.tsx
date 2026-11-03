@@ -14,13 +14,13 @@ export function ImagePreview({ url, name }: PreviewSourceProps) {
   const t = useTranslations("FileViewer");
 
   return (
-    <div className="relative h-full min-h-0 overflow-hidden rounded-xl border bg-muted/30">
+    <div className="absolute inset-0 overflow-hidden rounded-xl border bg-muted/30">
       <TransformWrapper
         minScale={0.2}
         maxScale={8}
         centerOnInit
         doubleClick={{ disabled: false }}
-        wheel={{ step: 0.15 }}
+        wheel={{ step: 0.0015 }}
       >
         {({ zoomIn, zoomOut, resetTransform }) => (
           <>
@@ -28,7 +28,7 @@ export function ImagePreview({ url, name }: PreviewSourceProps) {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => zoomIn()}
+                onClick={() => zoomIn(0.2)}
                 aria-label={t("zoomIn")}
               >
                 <ZoomIn />
@@ -36,7 +36,7 @@ export function ImagePreview({ url, name }: PreviewSourceProps) {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => zoomOut()}
+                onClick={() => zoomOut(0.2)}
                 aria-label={t("zoomOut")}
               >
                 <ZoomOut />

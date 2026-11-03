@@ -536,7 +536,9 @@ export function FileViewer({
       )}
 
       <div className="flex min-h-0 flex-1 gap-3">
-        <div className="min-h-0 min-w-0 flex-1">{renderContent()}</div>
+        <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
+          {renderContent()}
+        </div>
 
         <aside
           className="hidden w-64 shrink-0 overflow-y-auto rounded-xl border bg-card p-4 lg:block"
