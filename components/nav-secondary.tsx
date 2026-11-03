@@ -17,6 +17,8 @@ export type NavSecondaryItem = {
   icon: React.ReactNode;
   /** 外部链接在站外打开；mailto 等协议由 <a> 直接处理 */
   external?: boolean;
+  /** 站内链接，但在新标签页打开（例如文档） */
+  newTab?: boolean;
 };
 
 export function NavSecondary({
@@ -43,6 +45,11 @@ export function NavSecondary({
                     {item.icon}
                     <span>{item.title}</span>
                   </a>
+                ) : item.newTab ? (
+                  <Link href={item.url} target="_blank" rel="noreferrer">
+                    {item.icon}
+                    <span>{item.title}</span>
+                  </Link>
                 ) : (
                   <Link href={item.url}>
                     {item.icon}

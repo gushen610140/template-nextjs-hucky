@@ -179,6 +179,7 @@ export function AppSidebar({
               title: t("documentation"),
               url: `/${locale}/docs`,
               icon: <BookOpen />,
+              newTab: true,
             },
           ]}
         />
