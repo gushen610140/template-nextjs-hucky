@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowLeft,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -23,9 +24,11 @@ import {
   createFolder,
   createUpload,
   deleteFile,
+  deleteFolder,
   getDownloadUrl,
   moveFile,
   renameFile,
+  renameFolder,
 } from "@/app/[locale]/dashboard/files/actions";
 import { ConfirmDeleteDialog } from "@/components/rbac/confirm-delete-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -59,8 +62,18 @@ import { cn } from "@/lib/utils";
 /** 行拖拽用的自定义 MIME; 与系统文件拖拽 (Files) 区分开 */
 const FILE_DRAG_TYPE = "application/x-file-id";
 
+type FileUserOption = {
+  id: string;
+  name: string | null;
+  email: string;
+};
+
 type FilesExplorerProps = FileListResult & {
   scope: "own" | "all";
+  /** 仅文件管理页: 用户筛选器选项 */
+  users?: FileUserOption[];
+  /** 仅文件管理页: 当前选中的用户, 为空表示全站平铺视图 */
+  selectedOwnerId?: string | null;
 };
 
 type UploadTask = {
@@ -73,10 +86,13 @@ type MenuState = {
   x: number;
   y: number;
   file: FileRow | null;
+  folder: FolderRow | null;
 };
 
 export function FilesExplorer({
   scope,
+  users = [],
+  selectedOwnerId = null,
   files,
   folders,
   total,
@@ -94,6 +110,10 @@ export function FilesExplorer({
   const [banner, setBanner] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<FileRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FileRow | null>(null);
+  const [renameFolderTarget, setRenameFolderTarget] =
+    useState<FolderRow | null>(null);
+  const [deleteFolderTarget, setDeleteFolderTarget] =
+    useState<FolderRow | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [searchValue, setSearchValue] = useState(state.q);
@@ -101,20 +121,28 @@ export function FilesExplorer({
   const [fileDragActive, setFileDragActive] = useState(false);
 
   const own = scope === "own";
+  /** 有属主上下文 (自己的文件 / 管理员选中的某个用户) 才有文件夹 */
+  const folderMode = own || Boolean(selectedOwnerId);
+  /** 管理员替选中用户操作时传入的目标属主 */
+  const targetOwnerId = own ? null : selectedOwnerId;
+  const selectedUser =
+    users.find((user) => user.id === selectedOwnerId) ?? null;
 
-  /** 所有列表状态都放在 URL 里, 刷新 / 返回时保持一致 */
+  /** 列表状态全部放在 URL 里, 刷新 / 返回时保持一致 */
   function navigate(next: {
     q?: string;
     sort?: FileSort;
     dir?: "asc" | "desc";
     page?: number;
     folder?: string | null;
+    owner?: string | null;
   }) {
     const q = next.q ?? state.q;
     const sort = next.sort ?? state.sort;
     const dir = next.dir ?? state.dir;
     const page = next.page ?? 1;
     const folder = next.folder === undefined ? state.folderId : next.folder;
+    const owner = next.owner === undefined ? selectedOwnerId : next.owner;
 
     const params = new URLSearchParams();
     if (q) params.set("q", q);
@@ -122,6 +150,7 @@ export function FilesExplorer({
     if (dir !== "desc") params.set("dir", dir);
     if (page > 1) params.set("page", String(page));
     if (folder) params.set("folder", folder);
+    if (owner) params.set("owner", owner);
 
     const query = params.toString();
     router.push(query ? `${pathname}?${query}` : pathname);
@@ -145,6 +174,7 @@ export function FilesExplorer({
         mimeType: file.type || "application/octet-stream",
         size: file.size,
         folderId,
+        ownerId: targetOwnerId,
       });
       if (!target.ok) {
         setBanner(errorText(target.error));
@@ -185,7 +215,7 @@ export function FilesExplorer({
 
   async function handleSelected(fileList: FileList | null) {
     if (!fileList) return;
-    await uploadFiles(Array.from(fileList), own ? state.folderId : null);
+    await uploadFiles(Array.from(fileList), folderMode ? state.folderId : null);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -224,35 +254,45 @@ export function FilesExplorer({
     navigate({ sort: nextSort, dir, page: 1 });
   }
 
-  function openMenu(event: React.MouseEvent, file: FileRow | null) {
+  function clampMenuPoint(event: React.MouseEvent, height: number) {
+    return {
+      x: Math.min(event.clientX, window.innerWidth - 200),
+      y: Math.min(event.clientY, window.innerHeight - height),
+    };
+  }
+
+  function openFileMenu(event: React.MouseEvent, file: FileRow) {
     event.preventDefault();
     event.stopPropagation();
-    // 全站视图没有文件夹操作, 空白处不弹菜单
-    if (!file && !own) return;
+    setMenu({ ...clampMenuPoint(event, 140), file, folder: null });
+  }
+
+  function openFolderMenu(event: React.MouseEvent, folder: FolderRow) {
+    event.preventDefault();
+    event.stopPropagation();
+    setMenu({ ...clampMenuPoint(event, 100), file: null, folder });
+  }
+
+  function openBlankMenu(event: React.MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!folderMode) return;
 
     // 输入框 / 按钮 / 面包屑上的右键保留浏览器默认行为
     const target = event.target as HTMLElement;
-    if (
-      !file &&
-      target.closest("input, textarea, button, nav, [role='menu']")
-    ) {
-      return;
-    }
+    if (target.closest("input, textarea, button, nav, [role='menu']")) return;
 
-    const width = 200;
-    const height = 160;
-    setMenu({
-      x: Math.min(event.clientX, window.innerWidth - width),
-      y: Math.min(event.clientY, window.innerHeight - height),
-      file,
-    });
+    setMenu({ ...clampMenuPoint(event, 60), file: null, folder: null });
   }
+
+  const parentCrumb =
+    breadcrumb.length > 1 ? breadcrumb[breadcrumb.length - 2] : null;
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: 整块区域是拖拽上传与空白右键的落点, 不是可聚焦控件
     <div
       className="relative flex flex-1 flex-col gap-4 p-4 pt-0"
-      onContextMenu={(event) => openMenu(event, null)}
+      onContextMenu={openBlankMenu}
       onDragOver={(event) => {
         if (!isFileDrag(event)) return;
         event.preventDefault();
@@ -277,70 +317,97 @@ export function FilesExplorer({
             {own ? t("title") : t("allTitle")}
           </h1>
           <p className="text-muted-foreground text-sm">
-            {own ? t("description") : t("allDescription")}
+            {own
+              ? t("description")
+              : selectedUser
+                ? t("scopedDescription", {
+                    name: selectedUser.name ?? selectedUser.email,
+                  })
+                : t("allDescription")}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {own && (
-            <Button variant="outline" onClick={() => setFolderDialogOpen(true)}>
-              <FolderPlus />
-              {t("newFolder")}
-            </Button>
+          {folderMode && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => setFolderDialogOpen(true)}
+              >
+                <FolderPlus />
+                {t("newFolder")}
+              </Button>
+              <Button onClick={() => inputRef.current?.click()}>
+                <Upload />
+                {t("upload")}
+              </Button>
+              <input
+                ref={inputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  void handleSelected(event.target.files);
+                }}
+              />
+            </>
           )}
-          <Button onClick={() => inputRef.current?.click()}>
-            <Upload />
-            {t("upload")}
-          </Button>
-          <input
-            ref={inputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={(event) => {
-              void handleSelected(event.target.files);
-            }}
-          />
         </div>
       </div>
 
-      {own && (
-        <nav
-          aria-label={t("breadcrumb")}
-          className="flex flex-wrap items-center gap-1 text-sm"
-        >
-          {breadcrumb.map((crumb, index) => (
-            <span key={crumb.id ?? "root"} className="flex items-center gap-1">
-              {index > 0 && (
-                <ChevronRight className="size-3.5 text-muted-foreground" />
-              )}
-              <button
-                type="button"
-                onClick={() => navigate({ folder: crumb.id, page: 1 })}
-                onDragOver={(event) => {
-                  if (!isRowDrag(event)) return;
-                  event.preventDefault();
-                  setDragOverFolder(crumb.id ?? "root");
-                }}
-                onDragLeave={() => setDragOverFolder(null)}
-                onDrop={(event) => handleFolderDrop(event, crumb.id)}
-                className={cn(
-                  "rounded px-1.5 py-0.5 transition-colors hover:bg-muted",
-                  index === breadcrumb.length - 1
-                    ? "font-medium text-foreground"
-                    : "text-muted-foreground",
-                  dragOverFolder === (crumb.id ?? "root") &&
-                    "bg-primary/10 ring-1 ring-primary",
-                )}
+      {folderMode && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!parentCrumb}
+            onClick={() =>
+              navigate({ folder: parentCrumb?.id ?? null, page: 1 })
+            }
+          >
+            <ArrowLeft />
+            {t("back")}
+          </Button>
+          <nav
+            aria-label={t("breadcrumb")}
+            className="flex flex-wrap items-center gap-1"
+          >
+            {breadcrumb.map((crumb, index) => (
+              <span
+                key={crumb.id ?? "root"}
+                className="flex items-center gap-1"
               >
-                {crumb.id === null ? t("root") : crumb.name}
-              </button>
-            </span>
-          ))}
-        </nav>
+                {index > 0 && (
+                  <ChevronRight className="size-3.5 text-muted-foreground" />
+                )}
+                <button
+                  type="button"
+                  onClick={() => navigate({ folder: crumb.id, page: 1 })}
+                  onDragOver={(event) => {
+                    if (!isRowDrag(event)) return;
+                    event.preventDefault();
+                    setDragOverFolder(crumb.id ?? "root");
+                  }}
+                  onDragLeave={() => setDragOverFolder(null)}
+                  onDrop={(event) => handleFolderDrop(event, crumb.id)}
+                  className={cn(
+                    "rounded px-1.5 py-0.5 transition-colors hover:bg-muted",
+                    index === breadcrumb.length - 1
+                      ? "font-medium text-foreground"
+                      : "text-muted-foreground",
+                    dragOverFolder === (crumb.id ?? "root") &&
+                      "bg-primary/10 ring-1 ring-primary",
+                  )}
+                >
+                  {crumb.id === null ? t("root") : crumb.name}
+                </button>
+              </span>
+            ))}
+          </nav>
+        </div>
       )}
 
       <form
-        className="flex items-center gap-2"
+        className="flex flex-wrap items-center gap-2"
         onSubmit={(event) => {
           event.preventDefault();
           navigate({ q: searchValue.trim(), page: 1 });
@@ -351,9 +418,7 @@ export function FilesExplorer({
           <Input
             value={searchValue}
             onChange={(event) => setSearchValue(event.target.value)}
-            placeholder={
-              own ? t("searchPlaceholder") : t("searchPlaceholderAll")
-            }
+            placeholder={t("searchPlaceholder")}
             className="pl-8"
           />
           {searchValue && (
@@ -370,6 +435,30 @@ export function FilesExplorer({
             </button>
           )}
         </div>
+
+        {!own && users.length > 0 && (
+          <label className="flex items-center gap-2 text-muted-foreground text-sm">
+            <span>{t("userFilter")}</span>
+            <select
+              value={selectedOwnerId ?? ""}
+              onChange={(event) =>
+                navigate({
+                  owner: event.target.value || null,
+                  folder: null,
+                  page: 1,
+                })
+              }
+              className="h-9 rounded-md border border-input bg-transparent px-2 text-foreground text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <option value="">{t("allUsers")}</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name ?? user.email}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </form>
 
       {banner && (
@@ -397,26 +486,6 @@ export function FilesExplorer({
                 />
               </div>
             </div>
-          ))}
-        </div>
-      )}
-
-      {own && folders.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          {folders.map((folder) => (
-            <FolderTile
-              key={folder.id}
-              folder={folder}
-              active={dragOverFolder === folder.id}
-              onOpen={() => navigate({ folder: folder.id, page: 1 })}
-              onDragOver={(event) => {
-                if (!isRowDrag(event) && !isFileDrag(event)) return;
-                event.preventDefault();
-                setDragOverFolder(folder.id);
-              }}
-              onDragLeave={() => setDragOverFolder(null)}
-              onDrop={(event) => handleFolderDrop(event, folder.id)}
-            />
           ))}
         </div>
       )}
@@ -454,82 +523,141 @@ export function FilesExplorer({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {files.length === 0 ? (
+            {folders.map((folder) => (
+              <TableRow
+                key={folder.id}
+                onDoubleClick={() => navigate({ folder: folder.id, page: 1 })}
+                onContextMenu={(event) => openFolderMenu(event, folder)}
+                className="cursor-pointer select-none"
+              >
+                <TableCell>
+                  <div className="flex items-center gap-2.5">
+                    <Folder className="size-4 text-muted-foreground" />
+                    <div className="grid min-w-0">
+                      <span className="truncate font-medium">
+                        {folder.name}
+                      </span>
+                      <span className="text-muted-foreground text-xs">
+                        {t("folderFileCount", { count: folder.fileCount })}
+                      </span>
+                    </div>
+                  </div>
+                </TableCell>
+                {!own && (
+                  <TableCell className="text-muted-foreground text-sm">
+                    {selectedUser?.name ?? selectedUser?.email ?? "—"}
+                  </TableCell>
+                )}
+                <TableCell className="text-muted-foreground text-sm">
+                  —
+                </TableCell>
+                <TableCell className="text-muted-foreground text-sm">
+                  {new Intl.DateTimeFormat(locale, {
+                    dateStyle: "medium",
+                  }).format(new Date(folder.createdAt))}
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setRenameFolderTarget(folder)}
+                      aria-label={t("renameFolder")}
+                      title={t("renameFolder")}
+                    >
+                      <Pencil />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-destructive"
+                      onClick={() => setDeleteFolderTarget(folder)}
+                      aria-label={t("deleteFolder")}
+                      title={t("deleteFolder")}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+
+            {files.map((file) => (
+              <TableRow
+                key={file.id}
+                draggable={folderMode}
+                onDragStart={(event) => {
+                  event.dataTransfer.setData(FILE_DRAG_TYPE, file.id);
+                  event.dataTransfer.effectAllowed = "move";
+                }}
+                onContextMenu={(event) => openFileMenu(event, file)}
+                className={cn(
+                  folderMode && "cursor-grab active:cursor-grabbing",
+                )}
+              >
+                <TableCell>
+                  <div className="flex items-center gap-2.5">
+                    <FileUp className="size-4 text-muted-foreground" />
+                    <div className="grid min-w-0">
+                      <span className="truncate font-medium">{file.name}</span>
+                      <span className="truncate text-muted-foreground text-xs">
+                        {file.mimeType}
+                      </span>
+                    </div>
+                  </div>
+                </TableCell>
+                {!own && (
+                  <TableCell className="text-muted-foreground text-sm">
+                    {file.owner.name ?? file.owner.email}
+                  </TableCell>
+                )}
+                <TableCell className="text-muted-foreground text-sm tabular-nums">
+                  {formatBytes(file.size, locale)}
+                </TableCell>
+                <TableCell className="text-muted-foreground text-sm">
+                  {new Intl.DateTimeFormat(locale, {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }).format(new Date(file.createdAt))}
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-1">
+                    <DownloadButton file={file} />
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setRenameTarget(file)}
+                      aria-label={t("rename")}
+                      title={t("rename")}
+                    >
+                      <Pencil />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-destructive"
+                      onClick={() => setDeleteTarget(file)}
+                      aria-label={t("delete")}
+                      title={t("delete")}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+
+            {files.length === 0 && folders.length === 0 && (
               <TableRow>
                 <TableCell
                   colSpan={own ? 4 : 5}
                   className="h-24 text-center text-muted-foreground"
                 >
-                  {state.q || (own && state.folderId)
+                  {state.q || (folderMode && state.folderId)
                     ? t("emptyFiltered")
                     : t("empty")}
                 </TableCell>
               </TableRow>
-            ) : (
-              files.map((file) => (
-                <TableRow
-                  key={file.id}
-                  draggable={own}
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData(FILE_DRAG_TYPE, file.id);
-                    event.dataTransfer.effectAllowed = "move";
-                  }}
-                  onContextMenu={(event) => openMenu(event, file)}
-                  className={cn(own && "cursor-grab active:cursor-grabbing")}
-                >
-                  <TableCell>
-                    <div className="flex items-center gap-2.5">
-                      <FileUp className="size-4 text-muted-foreground" />
-                      <div className="grid min-w-0">
-                        <span className="truncate font-medium">
-                          {file.name}
-                        </span>
-                        <span className="truncate text-muted-foreground text-xs">
-                          {file.mimeType}
-                        </span>
-                      </div>
-                    </div>
-                  </TableCell>
-                  {!own && (
-                    <TableCell className="text-muted-foreground text-sm">
-                      {file.owner.name ?? file.owner.email}
-                    </TableCell>
-                  )}
-                  <TableCell className="text-muted-foreground text-sm tabular-nums">
-                    {formatBytes(file.size, locale)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {new Intl.DateTimeFormat(locale, {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    }).format(new Date(file.createdAt))}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <DownloadButton file={file} />
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setRenameTarget(file)}
-                        aria-label={t("rename")}
-                        title={t("rename")}
-                      >
-                        <Pencil />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-destructive"
-                        onClick={() => setDeleteTarget(file)}
-                        aria-label={t("delete")}
-                        title={t("delete")}
-                      >
-                        <Trash2 />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
             )}
           </TableBody>
         </Table>
@@ -574,10 +702,12 @@ export function FilesExplorer({
         <ContextMenu
           menu={menu}
           onClose={() => setMenu(null)}
-          canCreateFolder={own}
-          onRename={(file) => setRenameTarget(file)}
-          onDownload={(file) => downloadFile(file, setBanner, errorText)}
-          onDelete={(file) => setDeleteTarget(file)}
+          canCreateFolder={folderMode}
+          onRenameFile={(file) => setRenameTarget(file)}
+          onDownloadFile={(file) => downloadFile(file, setBanner, errorText)}
+          onDeleteFile={(file) => setDeleteTarget(file)}
+          onRenameFolder={(folder) => setRenameFolderTarget(folder)}
+          onDeleteFolder={(folder) => setDeleteFolderTarget(folder)}
           onNewFolder={() => setFolderDialogOpen(true)}
         />
       )}
@@ -611,9 +741,41 @@ export function FilesExplorer({
         />
       )}
 
+      {renameFolderTarget && (
+        <RenameFolderDialog
+          key={renameFolderTarget.id}
+          folder={renameFolderTarget}
+          onClose={() => setRenameFolderTarget(null)}
+          errorText={errorText}
+        />
+      )}
+
+      {deleteFolderTarget && (
+        <ConfirmDeleteDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setDeleteFolderTarget(null);
+          }}
+          title={t("deleteFolderTitle")}
+          description={t("deleteFolderDescription", {
+            name: deleteFolderTarget.name,
+          })}
+          confirmLabel={t("deleteFolder")}
+          cancelLabel={t("cancel")}
+          pendingLabel={t("deleting")}
+          onConfirm={async () => {
+            const result = await deleteFolder(deleteFolderTarget.id);
+            return result.ok
+              ? result
+              : { ok: false, error: errorText(result.error) };
+          }}
+        />
+      )}
+
       {folderDialogOpen && (
         <FolderDialog
           parentId={state.folderId}
+          ownerId={targetOwnerId}
           onClose={() => setFolderDialogOpen(false)}
           errorText={errorText}
         />
@@ -651,57 +813,15 @@ function SortButton({ label, active, dir, onClick }: SortButtonProps) {
   );
 }
 
-type FolderTileProps = {
-  folder: FolderRow;
-  active: boolean;
-  onOpen: () => void;
-  onDragOver: (event: React.DragEvent) => void;
-  onDragLeave: () => void;
-  onDrop: (event: React.DragEvent) => void;
-};
-
-function FolderTile({
-  folder,
-  active,
-  onOpen,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-}: FolderTileProps) {
-  const t = useTranslations("Files");
-
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-      className={cn(
-        "flex items-center gap-2.5 rounded-xl border bg-card p-3 text-left transition-colors hover:bg-muted/50",
-        active && "border-primary bg-primary/5",
-      )}
-    >
-      <Folder className="size-5 shrink-0 text-muted-foreground" />
-      <span className="min-w-0">
-        <span className="block truncate font-medium text-sm">
-          {folder.name}
-        </span>
-        <span className="block text-muted-foreground text-xs">
-          {t("folderFileCount", { count: folder.fileCount })}
-        </span>
-      </span>
-    </button>
-  );
-}
-
 type ContextMenuProps = {
   menu: MenuState;
   onClose: () => void;
   canCreateFolder: boolean;
-  onRename: (file: FileRow) => void;
-  onDownload: (file: FileRow) => void;
-  onDelete: (file: FileRow) => void;
+  onRenameFile: (file: FileRow) => void;
+  onDownloadFile: (file: FileRow) => void;
+  onDeleteFile: (file: FileRow) => void;
+  onRenameFolder: (folder: FolderRow) => void;
+  onDeleteFolder: (folder: FolderRow) => void;
   onNewFolder: () => void;
 };
 
@@ -709,9 +829,11 @@ function ContextMenu({
   menu,
   onClose,
   canCreateFolder,
-  onRename,
-  onDownload,
-  onDelete,
+  onRenameFile,
+  onDownloadFile,
+  onDeleteFile,
+  onRenameFolder,
+  onDeleteFolder,
   onNewFolder,
 }: ContextMenuProps) {
   const t = useTranslations("Files");
@@ -737,7 +859,7 @@ function ContextMenu({
     };
   }, [onClose]);
 
-  const file = menu.file;
+  const { file, folder } = menu;
 
   return (
     <div
@@ -750,13 +872,13 @@ function ContextMenu({
         event.stopPropagation();
       }}
     >
-      {file ? (
+      {file && (
         <>
           <MenuItem
             icon={<Pencil />}
             label={t("rename")}
             onClick={() => {
-              onRename(file);
+              onRenameFile(file);
               onClose();
             }}
           />
@@ -764,7 +886,7 @@ function ContextMenu({
             icon={<Download />}
             label={t("download")}
             onClick={() => {
-              onDownload(file);
+              onDownloadFile(file);
               onClose();
             }}
           />
@@ -773,12 +895,36 @@ function ContextMenu({
             label={t("delete")}
             destructive
             onClick={() => {
-              onDelete(file);
+              onDeleteFile(file);
               onClose();
             }}
           />
         </>
-      ) : canCreateFolder ? (
+      )}
+
+      {folder && (
+        <>
+          <MenuItem
+            icon={<Pencil />}
+            label={t("renameFolder")}
+            onClick={() => {
+              onRenameFolder(folder);
+              onClose();
+            }}
+          />
+          <MenuItem
+            icon={<Trash2 />}
+            label={t("deleteFolder")}
+            destructive
+            onClick={() => {
+              onDeleteFolder(folder);
+              onClose();
+            }}
+          />
+        </>
+      )}
+
+      {!file && !folder && canCreateFolder && (
         <MenuItem
           icon={<FolderPlus />}
           label={t("newFolder")}
@@ -787,7 +933,7 @@ function ContextMenu({
             onClose();
           }}
         />
-      ) : null}
+      )}
     </div>
   );
 }
@@ -932,13 +1078,100 @@ function RenameDialog({ file, onClose, errorText }: RenameDialogProps) {
   );
 }
 
-type FolderDialogProps = {
-  parentId: string | null;
+type RenameFolderDialogProps = {
+  folder: FolderRow;
   onClose: () => void;
   errorText: (code: string) => string;
 };
 
-function FolderDialog({ parentId, onClose, errorText }: FolderDialogProps) {
+function RenameFolderDialog({
+  folder,
+  onClose,
+  errorText,
+}: RenameFolderDialogProps) {
+  const t = useTranslations("Files");
+  const [name, setName] = useState(folder.name);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+
+    startTransition(async () => {
+      const result = await renameFolder(folder.id, name);
+      if (!result.ok) {
+        setError(errorText(result.error));
+        return;
+      }
+      onClose();
+    });
+  }
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <form onSubmit={handleSubmit} className="grid gap-4">
+          <DialogHeader>
+            <DialogTitle>{t("renameFolderTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("renameFolderDescription")}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-2">
+            <Label htmlFor="folder-name">{t("folderName")}</Label>
+            <Input
+              id="folder-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              autoComplete="off"
+            />
+          </div>
+
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={pending}
+            >
+              {t("cancel")}
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? t("saving") : t("save")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+type FolderDialogProps = {
+  parentId: string | null;
+  ownerId: string | null;
+  onClose: () => void;
+  errorText: (code: string) => string;
+};
+
+function FolderDialog({
+  parentId,
+  ownerId,
+  onClose,
+  errorText,
+}: FolderDialogProps) {
   const t = useTranslations("Files");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -949,7 +1182,7 @@ function FolderDialog({ parentId, onClose, errorText }: FolderDialogProps) {
     setError(null);
 
     startTransition(async () => {
-      const result = await createFolder({ name, parentId });
+      const result = await createFolder({ name, parentId, ownerId });
       if (!result.ok) {
         setError(errorText(result.error));
         return;
