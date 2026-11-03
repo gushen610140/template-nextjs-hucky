@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",
+    "@aws-sdk/lib-storage": "^3.1161.0",
     "@aws-sdk/s3-request-presigner": "^3.1161.0",
     "@codemirror/lang-css": "^6.3.1",
     "@codemirror/lang-html": "^6.4.12",
@@ -37,6 +38,7 @@
     "clsx": "^2.1.1",
     "docx-preview": "^0.4.1",
     "gsap": "^3.15.0",
+    "jose": "^6.2.15",
     "lenis": "^1.2.3",
     "lucide-react": "^1.17.0",
     "mermaid": "^12.2.0",
