@@ -31,6 +31,8 @@ model User {
   sessions Session[]
 
   files FileObject[]
+
+  folders FileFolder[]
 }
 
 // ─── 角色 ──────────────────────────────────────────────
@@ -109,9 +111,11 @@ enum FileStatus {
 /// 文件元数据。对象本体在 RustFS, 这里只存索引与归属关系。
 /// - `key` 是 bucket 内的完整对象键, 全局唯一
 /// - `name` 是用户可见的文件名, 与 `key` 解耦, 因此改名不需要移动对象
+/// - `folderId` 为空表示根目录; 移动文件只改这一个字段, 不复制对象
 model FileObject {
   id        String     @id @default(cuid())
   ownerId   String
+  folderId  String?
   bucket    String
   key       String     @unique
   name      String
@@ -123,8 +127,28 @@ model FileObject {
   updatedAt DateTime   @updatedAt
   deletedAt DateTime?
 
-  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner  User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  folder FileFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   @@index([ownerId, status, createdAt(sort: Desc)])
+  @@index([ownerId, folderId, status, createdAt(sort: Desc)])
   @@index([status, createdAt(sort: Desc)])
+}
+
+/// 虚拟文件夹: 只存在于数据库, 不映射到对象键前缀。
+/// 移动文件不需要在存储侧做任何操作, 因此改名 / 移动都是纯元数据操作。
+model FileFolder {
+  id        String   @id @default(cuid())
+  ownerId   String
+  parentId  String?
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner    User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  parent   FileFolder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children FileFolder[] @relation("FolderTree")
+  files    FileObject[]
+
+  @@index([ownerId, parentId, createdAt(sort: Desc)])
 }

@@ -8,12 +8,50 @@ export type FileRow = {
   name: string;
   mimeType: string;
   size: number;
+  folderId: string | null;
   createdAt: string;
   owner: {
     id: string;
     name: string | null;
     email: string;
   };
+};
+
+export type FolderRow = {
+  id: string;
+  name: string;
+  fileCount: number;
+  createdAt: string;
+};
+
+/** 面包屑节点; `id` 为 null 表示根目录 */
+export type FolderCrumb = {
+  id: string | null;
+  name: string;
+};
+
+export const FILE_SORTS = ["name", "size", "createdAt"] as const;
+export type FileSort = (typeof FILE_SORTS)[number];
+
+export type SortDirection = "asc" | "desc";
+
+/** 由 URL 查询参数解析出的列表状态 */
+export type FileListState = {
+  q: string;
+  sort: FileSort;
+  dir: SortDirection;
+  page: number;
+  folderId: string | null;
+};
+
+/** 一次列表查询的完整结果 (文件 + 子文件夹 + 分页 + 面包屑) */
+export type FileListResult = {
+  files: FileRow[];
+  folders: FolderRow[];
+  total: number;
+  pageCount: number;
+  state: FileListState;
+  breadcrumb: FolderCrumb[];
 };
 
 /** Server Action 的统一返回值; 失败时返回错误码, 由客户端翻译成文案。 */

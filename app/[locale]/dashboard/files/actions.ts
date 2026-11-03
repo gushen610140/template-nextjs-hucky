@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { canAccessFile, guardFileAction } from "@/lib/files/auth";
-import { findFileForAction } from "@/lib/files/queries";
+import { findFileForAction, findFolderForAction } from "@/lib/files/queries";
 import type {
   FileActionResult,
   FileDownloadTarget,
@@ -47,6 +47,7 @@ export async function createUpload(input: {
   name: string;
   mimeType: string;
   size: number;
+  folderId?: string | null;
 }): Promise<FileUploadTarget> {
   const guard = await guardFileAction();
   if (!guard.ok) return guard;
@@ -54,6 +55,15 @@ export async function createUpload(input: {
   const name = input.name.trim();
   if (!name || name.length > MAX_FILE_NAME_LENGTH) {
     return { ok: false, error: "invalid_name" };
+  }
+
+  // 只能上传到自己的文件夹; 管理员替他人上传不在本期范围
+  const folderId = input.folderId ?? null;
+  if (folderId) {
+    const folder = await findFolderForAction(folderId);
+    if (!folder || folder.ownerId !== guard.user.id) {
+      return { ok: false, error: "not_found" };
+    }
   }
 
   const mimeType = input.mimeType.trim().toLowerCase();
@@ -75,6 +85,7 @@ export async function createUpload(input: {
     record = await prisma.fileObject.create({
       data: {
         ownerId: guard.user.id,
+        folderId,
         bucket: getStorageBucket(),
         key,
         name,
@@ -231,4 +242,89 @@ export async function getDownloadUrl(id: string): Promise<FileDownloadTarget> {
     console.error("getDownloadUrl failed:", error);
     return { ok: false, error: "unknown" };
   }
+}
+
+/** 新建文件夹; parentId 为空表示根目录 */
+export async function createFolder(input: {
+  name: string;
+  parentId?: string | null;
+}): Promise<FileActionResult> {
+  const guard = await guardFileAction();
+  if (!guard.ok) return guard;
+
+  const name = input.name.trim();
+  if (!name || name.length > MAX_FILE_NAME_LENGTH) {
+    return { ok: false, error: "invalid_name" };
+  }
+
+  const parentId = input.parentId ?? null;
+  if (parentId) {
+    const parent = await findFolderForAction(parentId);
+    if (!parent || parent.ownerId !== guard.user.id) {
+      return { ok: false, error: "not_found" };
+    }
+  }
+
+  // 同一目录下不允许重名, 否则拖拽 / 面包屑都会产生歧义
+  const existing = await prisma.fileFolder.findFirst({
+    where: { ownerId: guard.user.id, parentId, name },
+    select: { id: true },
+  });
+  if (existing) return { ok: false, error: "folder_exists" };
+
+  try {
+    await prisma.fileFolder.create({
+      data: { ownerId: guard.user.id, parentId, name },
+    });
+  } catch (error) {
+    console.error("createFolder failed:", error);
+    return { ok: false, error: "unknown" };
+  }
+
+  revalidateFilePages();
+  return { ok: true };
+}
+
+/**
+ * 把文件移动到指定文件夹 (folderId 为 null 表示根目录)。
+ * 只改元数据, 对象键不变, 存储侧不需要复制。
+ */
+export async function moveFile(
+  id: string,
+  folderId: string | null,
+): Promise<FileActionResult> {
+  const guard = await guardFileAction();
+  if (!guard.ok) return guard;
+
+  const file = await findFileForAction(id);
+  if (
+    !file ||
+    !canAccessFile(guard, file.ownerId) ||
+    file.status === "DELETED"
+  ) {
+    return { ok: false, error: "not_found" };
+  }
+
+  if (folderId) {
+    const folder = await findFolderForAction(folderId);
+    // 只能移动到文件属主自己的文件夹, 避免跨用户挂载
+    if (!folder || folder.ownerId !== file.ownerId) {
+      return { ok: false, error: "not_found" };
+    }
+  }
+
+  if (file.folderId === folderId) return { ok: true };
+
+  try {
+    await prisma.fileObject.update({
+      where: { id: file.id },
+      data: { folderId },
+    });
+  } catch (error) {
+    console.error("moveFile failed:", error);
+    return { ok: false, error: "unknown" };
+  }
+
+  revalidateFilePages();
+  return { ok: true };
 }
