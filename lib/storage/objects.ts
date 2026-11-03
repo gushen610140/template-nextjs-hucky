@@ -1,8 +1,10 @@
+import type { Readable } from "node:stream";
 import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import { getS3Client } from "./client";
 import { getStorageBucket } from "./config";
 import { withStorageRetry } from "./retry";
@@ -31,6 +33,30 @@ export async function headObject(key: string): Promise<StoredObject | null> {
       throw error;
     }
   });
+}
+
+/**
+ * 服务端写入对象 (OnlyOffice callback 保存用)。
+ *
+ * 用 lib-storage 流式上传, 避免把 200MB 文件一次性读进内存。
+ * 调用方负责在写完后用 `headObject` 回查真实大小 / ETag。
+ */
+export async function putObject(
+  key: string,
+  body: Readable | ReadableStream | Uint8Array,
+  contentType: string,
+): Promise<void> {
+  const upload = new Upload({
+    client: getS3Client(),
+    params: {
+      Bucket: getStorageBucket(),
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    },
+  });
+
+  await upload.done();
 }
 
 /**
