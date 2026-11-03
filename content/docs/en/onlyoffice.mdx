@@ -42,12 +42,15 @@ Entry points:
 ```bash
 ONLYOFFICE_DS_URL=https://office.example.com
 ONLYOFFICE_JWT_SECRET=the same random string as the Document Server
-APP_BASE_URL=https://app.example.com
+# Optional; leave empty to use the request host
+APP_BASE_URL=
 # Optional: used to validate internal callback URLs returned by DS
 ONLYOFFICE_INTERNAL_URL=
 ```
 
-If `APP_BASE_URL` is missing it falls back to `LOGTO_BASE_URL`. The Document Server must be able to reach:
+If `APP_BASE_URL` is empty, the callback base is built from the current request's `x-forwarded-host` / `host` and protocol, so preview deployments and multiple domains need no extra configuration. Set it explicitly in production to avoid ambiguous or spoofed proxy headers; the reverse proxy must overwrite `x-forwarded-host` and `x-forwarded-proto`.
+
+The Document Server must be able to reach:
 
 - `${APP_BASE_URL}/api/onlyoffice/callback`
 - RustFS presigned URLs (or your own file proxy)

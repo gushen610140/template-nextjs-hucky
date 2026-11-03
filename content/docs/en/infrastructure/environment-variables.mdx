@@ -63,7 +63,7 @@ Setting `NODE_ENV=production` inside `.env.development` puts the file-loading lo
 | `RUSTFS_BUCKET` | Private bucket name | Create it beforehand and configure CORS for `PUT`, `GET`, `HEAD` on the frontend origin |
 | `ONLYOFFICE_DS_URL` | Document Server URL | Reachable by both the browser and DS, e.g. `https://office.example.com` |
 | `ONLYOFFICE_JWT_SECRET` | OnlyOffice JWT secret | Must match the DS `JWT_SECRET` exactly |
-| `APP_BASE_URL` | Public app URL | Used to build the OnlyOffice callback URL; falls back to `LOGTO_BASE_URL` |
+| `APP_BASE_URL` | Public app URL (optional) | Empty uses the request's `x-forwarded-host` / `host`; set it explicitly for a fixed production domain |
 | `ONLYOFFICE_INTERNAL_URL` | DS internal callback URL | Optional; used to validate internal URLs returned by DS |
 
 The region is fixed to `us-east-1` and presign expiry to 15 minutes, both in `lib/storage/client.ts` rather than environment variables. The app still boots without `RUSTFS_*`; only upload, confirm, and download fail. See [File storage](/en/docs/files) for the full module guide.
