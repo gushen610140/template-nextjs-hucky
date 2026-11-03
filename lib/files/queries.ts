@@ -32,32 +32,17 @@ export async function listFilePage(options: {
   const folderId = ownerId && breadcrumb.length > 1 ? state.folderId : null;
   const normalizedState: FileListState = { ...state, folderId };
 
+  // 有搜索词时跨整个属主范围查找, 否则只看当前目录
+  const searching = state.q.length > 0;
+
   const where: Prisma.FileObjectWhereInput = {
     status: "READY",
     ...(ownerId ? { ownerId } : {}),
-    ...(ownerId ? { folderId } : {}),
-    ...(state.q
+    ...(ownerId && !searching ? { folderId } : {}),
+    ...(searching
       ? {
-          OR: [
-            { name: { contains: state.q, mode: "insensitive" as const } },
-            {
-              owner: {
-                is: {
-                  OR: [
-                    {
-                      name: { contains: state.q, mode: "insensitive" as const },
-                    },
-                    {
-                      email: {
-                        contains: state.q,
-                        mode: "insensitive" as const,
-                      },
-                    },
-                  ],
-                },
-              },
-            },
-          ],
+          // 只按文件名搜索; 上传者通过用户筛选器定位, 不再混进关键词
+          name: { contains: state.q, mode: "insensitive" as const },
         }
       : {}),
   };
@@ -83,7 +68,11 @@ export async function listFilePage(options: {
       },
     }),
     ownerId
-      ? listFolders({ ownerId, parentId: folderId, q: state.q })
+      ? listFolders({
+          ownerId,
+          parentId: searching ? undefined : folderId,
+          q: state.q,
+        })
       : Promise.resolve<FolderRow[]>([]),
   ]);
 
@@ -109,13 +98,14 @@ export async function listFilePage(options: {
 
 async function listFolders(options: {
   ownerId: string;
-  parentId: string | null;
+  /** undefined 表示不限层级 (搜索时跨目录); null 表示根目录 */
+  parentId?: string | null;
   q: string;
 }): Promise<FolderRow[]> {
   const rows = await prisma.fileFolder.findMany({
     where: {
       ownerId: options.ownerId,
-      parentId: options.parentId,
+      ...(options.parentId === undefined ? {} : { parentId: options.parentId }),
       ...(options.q
         ? { name: { contains: options.q, mode: "insensitive" as const } }
         : {}),
