@@ -9,49 +9,25 @@ import { Button } from "@/components/ui/button";
 type RenderState = "loading" | "ready" | "error";
 
 /**
- * iframe 是独立文档, 继承不到站点的滚动条 CSS, 只能把同一套样式注入进去。
- * 数值对应 globals.css 里的 4px 细滚动条 + 悬停显形。
- */
-function scrollbarStyle(dark: boolean): string {
-  const hover = dark ? "rgba(255, 255, 255, 0.45)" : "rgba(0, 0, 0, 0.35)";
-  const active = dark ? "rgba(255, 255, 255, 0.6)" : "rgba(0, 0, 0, 0.5)";
-
-  return `
-    html { color-scheme: ${dark ? "dark" : "light"}; }
-    @supports not selector(::-webkit-scrollbar) {
-      html, body {
-        scrollbar-width: thin;
-        scrollbar-color: ${hover} transparent;
-      }
-    }
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: transparent; border-radius: 9999px; }
-    body:hover::-webkit-scrollbar-thumb { background: ${hover}; }
-    ::-webkit-scrollbar-thumb:hover,
-    ::-webkit-scrollbar-thumb:active { background: ${active}; }
-    ::-webkit-scrollbar-corner { background: transparent; }
-  `;
-}
-
-/**
  * DOCX 近似还原。
  *
- * 渲染目标是一个 `sandbox="allow-same-origin"` 的 iframe:
- * 父页面可以写入 DOM, 但文档里的脚本 / 事件处理器不会执行。
+ * 渲染目标仍然是 `sandbox="allow-same-origin"` 的 iframe, 文档脚本不会执行;
+ * 但 iframe 本身不滚动, 高度跟随文档内容, 由外层滚动容器负责滚动,
+ * 这样滚动条和 PDF / 其他预览一样使用站点的全局样式。
  */
 export function DocxPreview({ url, name }: { url: string; name: string }) {
   const t = useTranslations("FileViewer");
   const { resolvedTheme } = useTheme();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [state, setState] = useState<RenderState>("loading");
+  const [frameHeight, setFrameHeight] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const dark = resolvedTheme === "dark";
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt 是重试计数器, dark 变化时需重绘滚动条和背景
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt 是重试计数器, dark 变化时需重绘背景
   useEffect(() => {
     let cancelled = false;
+    let resizeObserver: ResizeObserver | null = null;
     const controller = new AbortController();
 
     async function render() {
@@ -69,11 +45,12 @@ export function DocxPreview({ url, name }: { url: string; name: string }) {
         const doc = iframeRef.current?.contentDocument;
         if (!doc) throw new Error("Preview iframe is not ready");
 
-        doc.head.innerHTML = `<meta charset="utf-8"><style>${scrollbarStyle(dark)}</style>`;
+        doc.head.innerHTML = '<meta charset="utf-8">';
         doc.body.replaceChildren();
         doc.body.style.margin = "0";
         doc.body.style.padding = "24px";
         doc.body.style.background = dark ? "#18181b" : "#e5e7eb";
+        doc.body.style.overflow = "hidden";
 
         await renderAsync(blob, doc.body, doc.head, {
           className: "docx",
@@ -85,7 +62,21 @@ export function DocxPreview({ url, name }: { url: string; name: string }) {
           experimental: true,
         });
 
-        if (!cancelled) setState("ready");
+        if (cancelled) return;
+
+        const syncHeight = () => {
+          const height = Math.max(
+            doc.body.scrollHeight,
+            doc.documentElement.scrollHeight,
+          );
+          if (height > 0) setFrameHeight(height);
+        };
+
+        syncHeight();
+        resizeObserver = new ResizeObserver(syncHeight);
+        resizeObserver.observe(doc.body);
+        resizeObserver.observe(doc.documentElement);
+        setState("ready");
       } catch (error) {
         if (cancelled || controller.signal.aborted) return;
         console.error("docx preview failed:", error);
@@ -96,18 +87,23 @@ export function DocxPreview({ url, name }: { url: string; name: string }) {
     void render();
     return () => {
       cancelled = true;
+      resizeObserver?.disconnect();
       controller.abort();
     };
   }, [url, attempt, dark]);
 
   return (
     <div className="relative h-full min-h-0 overflow-hidden rounded-xl border bg-muted/30">
-      <iframe
-        ref={iframeRef}
-        title={name}
-        sandbox="allow-same-origin"
-        className="h-full w-full bg-transparent"
-      />
+      <div className="absolute inset-0 overflow-auto" data-lenis-prevent>
+        <iframe
+          ref={iframeRef}
+          title={name}
+          sandbox="allow-same-origin"
+          scrolling="no"
+          className="block w-full border-0 bg-transparent"
+          style={{ height: frameHeight > 0 ? `${frameHeight}px` : "100%" }}
+        />
+      </div>
 
       {state === "loading" && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/70 text-muted-foreground text-sm">
