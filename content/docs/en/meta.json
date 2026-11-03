@@ -11,6 +11,7 @@
     "shadcn",
     "theme",
     "scroll",
+    "file-preview",
     "---Backend---",
     "prisma",
     "authentication",
