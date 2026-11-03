@@ -283,8 +283,9 @@ export function FileViewer({
   }, [editing, save]);
 
   function navigateBack() {
-    if (window.history.length > 1) router.back();
-    else router.push(fallbackHref);
+    // 预览页返回固定回文件列表: 从 URL 里移除文件 id。
+    // 不走 history, 避免和面包屑 / 编辑页返回叠加出循环。
+    router.push(fallbackHref);
   }
 
   function goBack() {

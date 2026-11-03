@@ -134,9 +134,8 @@ export function OfficeEditor({
   }, [dsUrl, previewHref, router, attempt]);
 
   function leaveEditor() {
-    // 返回上一页而不是再 push 一个预览页, 否则预览页的返回会回到编辑页。
-    if (window.history.length > 1) router.back();
-    else router.push(previewHref);
+    // 直接把 URL 尾部的 /edit 替换掉, 回到同一个文件的预览页。
+    router.replace(previewHref);
   }
 
   return (
