@@ -1,0 +1,96 @@
+---
+title: OnlyOffice online editing
+description: Remote Document Server setup, environment variables, save callback, and deployment limits
+---
+
+Office editing uses a separately deployed **ONLYOFFICE Docs Community Edition**. The editor only renders and edits documents; ownership, permissions, listing, and previews stay in this app, and edits are written back to RustFS through a callback.
+
+## Architecture
+
+```text
+Browser
+  └─ /dashboard/files/[id]/edit
+        └─ iframe → ONLYOFFICE_DS_URL
+                        │ open: server-side fetch
+                        ▼
+                  RustFS presigned GET
+                        ▲
+                        │ save callback
+Next.js /api/onlyoffice/callback
+  ├─ verify JWT
+  ├─ download the edited file from DS
+  └─ write to RustFS + update FileObject
+```
+
+## Supported formats
+
+| Format | Preview | Online editing |
+| --- | --- | --- |
+| `.docx` | Approximate rendering | Yes |
+| `.xlsx` | Read-only sheets | Yes |
+| `.pptx` | No preview, download only | Yes |
+| Other formats | Existing previews | No |
+
+Entry points:
+
+- "Edit online" in the preview header.
+- "Edit online" in the file list context menu.
+- Editor route: `/[locale]/dashboard/files/[id]/edit`.
+
+## Environment variables
+
+```bash
+ONLYOFFICE_DS_URL=https://office.example.com
+ONLYOFFICE_JWT_SECRET=the same random string as the Document Server
+APP_BASE_URL=https://app.example.com
+# Optional: used to validate internal callback URLs returned by DS
+ONLYOFFICE_INTERNAL_URL=
+```
+
+If `APP_BASE_URL` is missing it falls back to `LOGTO_BASE_URL`. The Document Server must be able to reach:
+
+- `${APP_BASE_URL}/api/onlyoffice/callback`
+- RustFS presigned URLs (or your own file proxy)
+
+## Save flow
+
+1. The edit page creates a `document.key`, a signed editor config, and a callback token.
+2. DS opens the document and calls `/api/onlyoffice/callback` on save.
+3. The callback verifies both the query token and the DS callback token.
+4. Only status `2` / `6` are processed; the edited file is downloaded from DS.
+5. The file is uploaded to RustFS under a new object key; `FileObject.key`, `size`, and `etag` are updated.
+6. The old object is deleted after the database update, then lists and previews are revalidated.
+
+A failed save never overwrites the old object; a failed database update removes the newly uploaded object.
+
+## Known limits
+
+- No co-editing: each open creates a new `document.key`; concurrent tabs are last-write-wins.
+- No version history: the old object is deleted after a successful save.
+- Legacy `.doc` / `.xls` / `.ppt` are not enabled.
+- Vercel functions default to a 60-second limit. Very large files (near 200 MB) can time out; raise `maxDuration` or move the callback to a worker next to RustFS.
+- Community Edition keeps ONLYOFFICE branding, has no mobile web editors and no official SLA; commercial closed-source SaaS should evaluate the Developer license.
+- A single DS instance is assumed. Community does not support clustering; multiple instances need sticky sessions.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| Editor reports a token error | `JWT_SECRET` differs between the app and DS |
+| Editor cannot open the document | DS cannot reach `document.url`; check RustFS domain, DNS, and TLS |
+| Content does not change after saving | DS cannot reach the callback, or callback token verification fails |
+| Callback returns 413 | File exceeds 200 MB or the downloaded `Content-Length` exceeds it |
+| Callback returns 502 | The app cannot download the edited file from DS; check `ONLYOFFICE_DS_URL` |
+| Broken Chinese fonts | The DS container lacks CJK fonts |
+
+## Code map
+
+| Path | Role |
+| --- | --- |
+| `app/[locale]/dashboard/files/[id]/edit/page.tsx` | Permissions, signed config, document URL |
+| `components/files/office/office-editor.tsx` | Loads `api.js`, mounts the editor, handles errors |
+| `app/api/onlyoffice/callback/route.ts` | Save callback and RustFS write-back |
+| `lib/onlyoffice/documents.ts` | Office type detection |
+| `lib/onlyoffice/env.ts` | Environment parsing |
+| `lib/onlyoffice/jwt.ts` | HS256 signing and verification for config / callback |
+| `lib/storage/objects.ts` | Streaming `putObject` |

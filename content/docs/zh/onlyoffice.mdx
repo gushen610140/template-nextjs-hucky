@@ -1,0 +1,96 @@
+---
+title: OnlyOffice 在线编辑
+description: 远程 Document Server 的接入方式、环境变量、保存回调与部署限制
+---
+
+Office 在线编辑接入的是独立部署的 **ONLYOFFICE Docs Community Edition**。编辑器只负责渲染和编辑，文件归属、权限、列表和预览仍由本系统管理，编辑结果通过回调写回 RustFS。
+
+## 架构
+
+```text
+浏览器
+  └─ /dashboard/files/[id]/edit
+        └─ iframe → ONLYOFFICE_DS_URL
+                        │ 打开：服务端拉取文档
+                        ▼
+                  RustFS 预签名 GET
+                        ▲
+                        │ 保存回调
+Next.js /api/onlyoffice/callback
+  ├─ 校验 JWT
+  ├─ 从 DS 下载编辑后的文件
+  └─ 写入 RustFS + 更新 FileObject
+```
+
+## 支持范围
+
+| 格式 | 预览 | 在线编辑 |
+| --- | --- | --- |
+| `.docx` | 近似还原 | 支持 |
+| `.xlsx` | 只读表格 | 支持 |
+| `.pptx` | 无预览，仅下载 | 支持 |
+| 其他格式 | 现有预览 | 不开放 |
+
+进入方式：
+
+- 预览页右上角「在线编辑」。
+- 文件列表右键菜单「在线编辑」。
+- 编辑页路由：`/[locale]/dashboard/files/[id]/edit`。
+
+## 环境变量
+
+```bash
+ONLYOFFICE_DS_URL=https://office.example.com
+ONLYOFFICE_JWT_SECRET=与 Document Server 相同的随机字符串
+APP_BASE_URL=https://app.example.com
+# 可选：DS 回调返回内部地址时用于校验
+ONLYOFFICE_INTERNAL_URL=
+```
+
+`APP_BASE_URL` 未设置时会回退到 `LOGTO_BASE_URL`。Document Server 必须能访问：
+
+- `${APP_BASE_URL}/api/onlyoffice/callback`
+- RustFS 的预签名地址（或你提供的文件代理地址）
+
+## 保存流程
+
+1. 编辑页生成 `document.key`、带签名的编辑器配置和回调 token。
+2. DS 打开文档；保存时回调 `/api/onlyoffice/callback`。
+3. 回调先校验 query token 和 DS 回调 token。
+4. 只处理 status `2` / `6`，从 DS 下载编辑后的文件。
+5. 用新对象键写入 RustFS，再更新 `FileObject.key`、`size`、`etag`。
+6. 数据库更新成功后删除旧对象并 revalidate 列表和预览页。
+
+保存失败时不会覆盖旧对象；数据库更新失败会清理刚写入的新对象。
+
+## 已知限制
+
+- 不做多人协同：每次打开生成新的 `document.key`，多个标签页同时编辑时最后保存者生效。
+- 不保留历史版本：保存后会删除旧对象。
+- 旧版 `.doc` / `.xls` / `.ppt` 不开放。
+- Vercel 函数默认 60 秒执行上限。大文件（接近 200 MB）可能超时，建议在 Vercel 提升 `maxDuration`，或把回调放到与 RustFS 同机的工作进程。
+- Community Edition 不能去品牌、没有移动端 Web 编辑器、没有官方 SLA；商业闭源 SaaS 需要评估 Developer 授权。
+- 只支持单实例 DS；Community 不支持集群，多实例需要会话粘滞。
+
+## 故障排查
+
+| 现象 | 排查 |
+| --- | --- |
+| 编辑器提示 token 错误 | 应用与 DS 的 `JWT_SECRET` 不一致 |
+| 编辑器打不开文档 | DS 无法访问 `document.url`，检查 RustFS 域名、DNS、证书 |
+| 保存后内容没变 | DS 无法访问 callback，或回调 token 校验失败 |
+| 回调 413 | 文件超过 200 MB 或下载的 `Content-Length` 超限 |
+| 回调 502 | 应用无法从 DS 下载编辑后文件，检查 `ONLYOFFICE_DS_URL` 可达性 |
+| 中文显示异常 | DS 容器缺少中文字体 |
+
+## 代码位置
+
+| 路径 | 作用 |
+| --- | --- |
+| `app/[locale]/dashboard/files/[id]/edit/page.tsx` | 权限校验、签名配置、文档 URL |
+| `components/files/office/office-editor.tsx` | 加载 `api.js`、挂载编辑器、错误处理 |
+| `app/api/onlyoffice/callback/route.ts` | 保存回调与 RustFS 写回 |
+| `lib/onlyoffice/documents.ts` | Office 类型判定 |
+| `lib/onlyoffice/env.ts` | 环境变量解析 |
+| `lib/onlyoffice/jwt.ts` | config / callback 的 HS256 签发与校验 |
+| `lib/storage/objects.ts` | `putObject` 流式写入 |
