@@ -418,7 +418,7 @@ export function FileViewer({
   return (
     <div
       ref={containerRef}
-      className="flex h-[calc(100svh-4rem)] min-h-0 flex-col gap-3 overflow-hidden bg-background p-4 pt-0 [&:fullscreen]:h-screen [&:fullscreen]:p-4"
+      className="absolute inset-x-0 top-16 bottom-0 flex min-h-0 flex-col gap-3 overflow-hidden bg-background p-4 pt-0 [&:fullscreen]:inset-0 [&:fullscreen]:p-4"
     >
       <header className="flex flex-wrap items-center gap-2 rounded-xl border bg-card px-3 py-2">
         <Button
