@@ -29,7 +29,8 @@ description: 预览页的路由、支持类型、编辑回写、存储边界与�
 | CSV / TSV | 表格 + 源码切换 | 是（源码模式） |
 | DOCX | `docx-preview` 近似还原 | 否 |
 | XLSX | `read-excel-file` 只读表格，支持多 sheet | 否 |
-| PPTX / 压缩包 / 其他二进制 | 只显示元数据与下载按钮 | 否 |
+| PPTX | `pptxviewjs` 单页 Canvas 预览，可翻页 | 否 |
+| 压缩包 / 其他二进制 | 只显示元数据与下载按钮 | 否 |
 
 CSV 表格默认把第一行当表头，最多显示 200 行、30 列。XLSX 每个 sheet 同样最多 200 行。
 
@@ -98,8 +99,7 @@ DOCX / XLSX / PPTX 可从预览页右上角进入 [OnlyOffice 在线编辑](/zh/
 
 ## 已知限制
 
-- 不做 Office 在线编辑；需要时接入 OnlyOffice / Collabora，属于独立文档服务。
-- PPTX 没有可靠的前端渲染方案，后续可以通过 LibreOffice / Gotenberg 转 PDF。
+- PPTX 使用 `pptxviewjs` 单页预览，复杂动画、媒体和部分高级效果可能无法完整还原。
 - 图片只预览不编辑；没有裁剪、旋转或替换内容。
 - 没有版本历史，覆盖保存不可回滚。
 - 文本编码只认 UTF-8 / UTF-16 BOM，其他编码会显示乱码。

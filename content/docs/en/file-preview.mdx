@@ -29,7 +29,8 @@ Back prefers browser history, so the list's search, sort, folder, and owner filt
 | CSV / TSV | Table with a source tab | Yes (source mode) |
 | DOCX | Approximate rendering with `docx-preview` | No |
 | XLSX | Read-only sheets via `read-excel-file` | No |
-| PPTX / archives / other binaries | Metadata and download only | No |
+| PPTX | Single-slide canvas preview via `pptxviewjs` | No |
+| Archives / other binaries | Metadata and download only | No |
 
 CSV treats the first row as a header and shows at most 200 rows by 30 columns. Each XLSX sheet is capped at 200 rows.
 
@@ -98,8 +99,7 @@ Previews read RustFS directly from the browser. Besides `PUT`, bucket CORS must 
 
 ## Known limits
 
-- No online Office editing; that requires a separate OnlyOffice / Collabora service.
-- PPTX has no reliable client renderer; LibreOffice / Gotenberg to PDF is the future path.
+- PPTX uses `pptxviewjs` for single-slide preview; complex animations, media, and some advanced effects may not render exactly.
 - Images are preview-only: no crop, rotate, or replace.
 - No version history; overwrite saves cannot be rolled back.
 - Only UTF-8 and UTF-16 BOM are recognized; other encodings show garbled text.
