@@ -7,6 +7,8 @@
   },
   "Dashboard": {
     "overview": "Overview",
+  "filePreview": "Preview",
+  "fileEdit": "Online editing",
     "comingSoon": "This module is under construction",
     "overviewTitle": "Overview",
     "overviewSubtitle": "Key metrics, request volume, and model usage at a glance.",

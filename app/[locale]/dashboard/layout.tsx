@@ -27,7 +27,10 @@ export default async function DashboardLayout({
         canManageFiles={permissions.has(PERMISSIONS.fileManage)}
       />
       <SidebarInset>
-        <DashboardHeader />
+        <DashboardHeader
+          canUseFiles={permissions.has(PERMISSIONS.fileOwn)}
+          canManageFiles={permissions.has(PERMISSIONS.fileManage)}
+        />
         {children}
       </SidebarInset>
     </SidebarProvider>

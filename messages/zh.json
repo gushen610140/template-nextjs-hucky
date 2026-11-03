@@ -7,6 +7,8 @@
   },
   "Dashboard": {
     "overview": "概览",
+  "filePreview": "预览",
+  "fileEdit": "在线编辑",
     "comingSoon": "该模块正在建设中",
     "overviewTitle": "概览",
     "overviewSubtitle": "关键指标、请求量与模型使用情况一览。",
