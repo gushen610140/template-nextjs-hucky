@@ -517,11 +517,8 @@ export function FileViewer({
           ) : (
             <>
               {officeEditHref && (
-                <Button size="sm" variant="outline" asChild>
-                  <Link href={officeEditHref}>
-                    <Pencil />
-                    {t("officeEdit")}
-                  </Link>
+                <Button size="sm" asChild>
+                  <Link href={officeEditHref}>{t("officeEdit")}</Link>
                 </Button>
               )}
               {canEdit && (
