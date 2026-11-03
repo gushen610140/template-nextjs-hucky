@@ -15,6 +15,7 @@ import {
   Maximize2,
   Minimize2,
   Pencil,
+  Presentation,
   Save,
   TextCursorInput,
   X,
@@ -115,6 +116,11 @@ const PdfPreview = dynamic(
   { ssr: false, loading: PreviewSkeleton },
 );
 
+const PptxPreview = dynamic(
+  () => import("./pptx-preview").then((mod) => mod.PptxPreview),
+  { ssr: false, loading: PreviewSkeleton },
+);
+
 function KindIcon({ kind }: { kind: PreviewKind }) {
   switch (kind) {
     case "image":
@@ -129,6 +135,8 @@ function KindIcon({ kind }: { kind: PreviewKind }) {
       return <FileText />;
     case "xlsx":
       return <FileSpreadsheet />;
+    case "pptx":
+      return <Presentation />;
     case "markdown":
     case "json":
     case "csv":
@@ -447,6 +455,10 @@ export function FileViewer({
 
     if (preview.kind === "xlsx" && previewUrl) {
       return <XlsxPreview url={previewUrl} name={name} />;
+    }
+
+    if (preview.kind === "pptx" && previewUrl) {
+      return <PptxPreview url={previewUrl} name={name} />;
     }
 
     return (

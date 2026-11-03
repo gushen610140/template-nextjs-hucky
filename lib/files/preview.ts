@@ -17,6 +17,7 @@ export type PreviewKind =
   | "csv"
   | "docx"
   | "xlsx"
+  | "pptx"
   | "unsupported";
 
 export type CodeLanguage =
@@ -79,6 +80,8 @@ const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const XLSX_MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const PPTX_MIME =
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
 /** 常见源码扩展名 → 高亮语言; null 表示纯文本 */
 const LANGUAGE_BY_EXTENSION: Record<string, CodeLanguage | null> = {
@@ -267,6 +270,7 @@ export function describeFilePreview(
   // Office 与 PDF 先判, 避免扩展名落进通用文本分支
   if (mime === DOCX_MIME || extension === "docx") return build("docx");
   if (mime === XLSX_MIME || extension === "xlsx") return build("xlsx");
+  if (mime === PPTX_MIME || extension === "pptx") return build("pptx");
   if (mime === "application/pdf" || extension === "pdf") return build("pdf");
 
   if (mime.startsWith("image/") || IMAGE_EXTENSIONS.has(extension)) {

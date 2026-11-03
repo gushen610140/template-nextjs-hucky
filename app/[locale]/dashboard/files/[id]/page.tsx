@@ -52,7 +52,12 @@ export default async function FilePreviewPage({
   let textBinary = false;
   let storageError = false;
 
-  if (preview.inline || preview.kind === "docx" || preview.kind === "xlsx") {
+  if (
+    preview.inline ||
+    preview.kind === "docx" ||
+    preview.kind === "xlsx" ||
+    preview.kind === "pptx"
+  ) {
     try {
       previewUrl = await createPreviewUrl(
         file.key,
