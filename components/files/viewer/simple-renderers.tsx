@@ -75,16 +75,6 @@ export function ImagePreview({ url, name }: PreviewSourceProps) {
   );
 }
 
-export function PdfPreview({ url, name }: PreviewSourceProps) {
-  return (
-    <iframe
-      src={url}
-      title={name}
-      className="h-full min-h-0 w-full rounded-xl border bg-card"
-    />
-  );
-}
-
 export function MediaPreview({
   url,
   name,

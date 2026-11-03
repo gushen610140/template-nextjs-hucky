@@ -21,7 +21,7 @@ description: 预览页的路由、支持类型、编辑回写、存储边界与�
 | 类型 | 预览方式 | 编辑 |
 | --- | --- | --- |
 | 图片 jpg/png/gif/webp/avif/svg | `img` + 缩放拖拽 | 否 |
-| PDF | 浏览器内置 PDF 查看器（iframe） | 否 |
+| PDF | pdf.js 自绘查看器（按页懒加载、可缩放） | 否 |
 | 视频 / 音频 | 原生 `video` / `audio` | 否 |
 | 纯文本 / 代码 / 日志 | CodeMirror 只读 | 是 |
 | Markdown | `react-markdown` + GFM，禁用原始 HTML | 是（源码模式） |

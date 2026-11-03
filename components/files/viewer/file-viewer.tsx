@@ -31,13 +31,13 @@ import { RenameFileDialog } from "@/components/files/rename-file-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatBytes } from "@/lib/files/format";
 import type { CodeLanguage, PreviewKind } from "@/lib/files/preview";
 import { putToStorage } from "@/lib/files/upload-client";
 import {
   ImagePreview,
   MediaPreview,
-  PdfPreview,
   UnsupportedPreview,
 } from "./simple-renderers";
 
@@ -105,6 +105,11 @@ const XlsxPreview = dynamic(
   { ssr: false, loading: PreviewSkeleton },
 );
 
+const PdfPreview = dynamic(
+  () => import("./pdf-preview").then((mod) => mod.PdfPreview),
+  { ssr: false, loading: PreviewSkeleton },
+);
+
 function KindIcon({ kind }: { kind: PreviewKind }) {
   switch (kind) {
     case "image":
@@ -155,6 +160,9 @@ export function FileViewer({
   const [progress, setProgress] = useState(0);
   const [banner, setBanner] = useState<Banner | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [discardIntent, setDiscardIntent] = useState<"back" | "cancel" | null>(
+    null,
+  );
   const [fullscreen, setFullscreen] = useState(false);
 
   const dirty = editing && draft !== savedText;
@@ -270,10 +278,17 @@ export function FileViewer({
     return () => window.removeEventListener("keydown", handleKey);
   }, [editing, save]);
 
-  function goBack() {
-    if (dirty && !window.confirm(t("discardConfirm"))) return;
+  function navigateBack() {
     if (window.history.length > 1) router.back();
     else router.push(fallbackHref);
+  }
+
+  function goBack() {
+    if (dirty) {
+      setDiscardIntent("back");
+      return;
+    }
+    navigateBack();
   }
 
   function startEditing() {
@@ -282,11 +297,28 @@ export function FileViewer({
     setEditing(true);
   }
 
-  function cancelEditing() {
-    if (dirty && !window.confirm(t("discardConfirm"))) return;
+  function resetEditing() {
     setDraft(savedText);
     setBanner(null);
     setEditing(false);
+  }
+
+  function cancelEditing() {
+    if (dirty) {
+      setDiscardIntent("cancel");
+      return;
+    }
+    resetEditing();
+  }
+
+  function confirmDiscard() {
+    const intent = discardIntent;
+    setDiscardIntent(null);
+    if (intent === "back") {
+      navigateBack();
+      return;
+    }
+    if (intent === "cancel") resetEditing();
   }
 
   async function download() {
@@ -586,6 +618,19 @@ export function FileViewer({
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={discardIntent !== null}
+        onOpenChange={(open) => {
+          if (!open) setDiscardIntent(null);
+        }}
+        title={t("discardTitle")}
+        description={t("discardDescription")}
+        confirmLabel={t("discardConfirm")}
+        cancelLabel={t("keepEditing")}
+        destructive
+        onConfirm={confirmDiscard}
+      />
     </div>
   );
 }

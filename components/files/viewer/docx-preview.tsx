@@ -1,11 +1,39 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
 type RenderState = "loading" | "ready" | "error";
+
+/**
+ * iframe 是独立文档, 继承不到站点的滚动条 CSS, 只能把同一套样式注入进去。
+ * 数值对应 globals.css 里的 4px 细滚动条 + 悬停显形。
+ */
+function scrollbarStyle(dark: boolean): string {
+  const hover = dark ? "rgba(255, 255, 255, 0.45)" : "rgba(0, 0, 0, 0.35)";
+  const active = dark ? "rgba(255, 255, 255, 0.6)" : "rgba(0, 0, 0, 0.5)";
+
+  return `
+    html { color-scheme: ${dark ? "dark" : "light"}; }
+    @supports not selector(::-webkit-scrollbar) {
+      html, body {
+        scrollbar-width: thin;
+        scrollbar-color: ${hover} transparent;
+      }
+    }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: transparent; border-radius: 9999px; }
+    body:hover::-webkit-scrollbar-thumb { background: ${hover}; }
+    ::-webkit-scrollbar-thumb:hover,
+    ::-webkit-scrollbar-thumb:active { background: ${active}; }
+    ::-webkit-scrollbar-corner { background: transparent; }
+  `;
+}
 
 /**
  * DOCX 近似还原。
@@ -15,11 +43,13 @@ type RenderState = "loading" | "ready" | "error";
  */
 export function DocxPreview({ url, name }: { url: string; name: string }) {
   const t = useTranslations("FileViewer");
+  const { resolvedTheme } = useTheme();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [state, setState] = useState<RenderState>("loading");
   const [attempt, setAttempt] = useState(0);
+  const dark = resolvedTheme === "dark";
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt 是重试计数器, 需要在变化时重新拉取
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt 是重试计数器, dark 变化时需重绘滚动条和背景
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
@@ -39,11 +69,11 @@ export function DocxPreview({ url, name }: { url: string; name: string }) {
         const doc = iframeRef.current?.contentDocument;
         if (!doc) throw new Error("Preview iframe is not ready");
 
-        doc.head.innerHTML = '<meta charset="utf-8">';
+        doc.head.innerHTML = `<meta charset="utf-8"><style>${scrollbarStyle(dark)}</style>`;
         doc.body.replaceChildren();
         doc.body.style.margin = "0";
         doc.body.style.padding = "24px";
-        doc.body.style.background = "#e5e7eb";
+        doc.body.style.background = dark ? "#18181b" : "#e5e7eb";
 
         await renderAsync(blob, doc.body, doc.head, {
           className: "docx",
@@ -68,7 +98,7 @@ export function DocxPreview({ url, name }: { url: string; name: string }) {
       cancelled = true;
       controller.abort();
     };
-  }, [url, attempt]);
+  }, [url, attempt, dark]);
 
   return (
     <div className="relative h-full min-h-0 overflow-hidden rounded-xl border bg-muted/30">
