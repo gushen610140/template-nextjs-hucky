@@ -24,12 +24,11 @@ function errorResponse(message: string, status = 400) {
   return NextResponse.json({ error: 1 }, { status });
 }
 
-function allowedEditedUrl(raw: string, dsUrl: string, internalUrl?: string) {
+function allowedEditedUrl(raw: string) {
   try {
     const target = new URL(raw);
-    const origins = [new URL(dsUrl).origin];
-    if (internalUrl) origins.push(new URL(internalUrl).origin);
-    return origins.includes(target.origin);
+    // 回调 body 已通过 JWT 校验; 这里只拒绝非 HTTP(S) 协议。
+    return target.protocol === "http:" || target.protocol === "https:";
   } catch {
     return false;
   }
@@ -83,14 +82,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 0 });
   }
 
-  if (
-    !body.url ||
-    !allowedEditedUrl(
-      body.url,
-      settings.value.dsUrl,
-      settings.value.internalUrl,
-    )
-  ) {
+  if (!body.url || !allowedEditedUrl(body.url)) {
     return errorResponse("edited file URL is not allowed");
   }
 

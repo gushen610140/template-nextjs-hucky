@@ -42,17 +42,15 @@ Next.js /api/onlyoffice/callback
 ```bash
 ONLYOFFICE_DS_URL=https://office.example.com
 ONLYOFFICE_JWT_SECRET=与 Document Server 相同的随机字符串
-# 可选，留空则使用请求地址
-APP_BASE_URL=
-# 可选：DS 回调返回内部地址时用于校验
-ONLYOFFICE_INTERNAL_URL=
+# 必须是项目部署服务器的公网可访问地址，不能填 127.0.0.1 / localhost
+ONLYOFFICE_SAVE_CALLBACK_URL=https://app.example.com
 ```
 
-`APP_BASE_URL` 可选：未设置时使用当前请求的 `x-forwarded-host` / `host` 和协议拼出回调地址，因此预览部署、多域名部署不需要改环境变量；固定生产域名仍建议显式设置，避免反向代理头被伪造或出现多个域名。反向代理必须覆盖 `x-forwarded-host` 和 `x-forwarded-proto`。
+`ONLYOFFICE_SAVE_CALLBACK_URL` 可以写完整接口地址，也可以只写公网域名，代码会自动补 `/api/onlyoffice/callback`。本地 `localhost` 无法被远程 Document Server 回调，本地开发需要使用隧道（如 `cloudflared tunnel`）或直接使用已部署的公网地址。
 
 Document Server 必须能访问：
 
-- `${APP_BASE_URL}/api/onlyoffice/callback`
+- `ONLYOFFICE_SAVE_CALLBACK_URL` 指向的回调地址
 - RustFS 的预签名地址（或你提供的文件代理地址）
 
 ## 保存流程

@@ -63,8 +63,7 @@ dotenv.config({ path: envFile, quiet: true });
 | `RUSTFS_BUCKET` | 私有 bucket 名 | 需提前创建，并为前端域名配置 `PUT`、`GET`、`HEAD` 的 CORS |
 | `ONLYOFFICE_DS_URL` | Document Server 地址 | 浏览器和 DS 都能访问；例如 `https://office.example.com` |
 | `ONLYOFFICE_JWT_SECRET` | OnlyOffice JWT 密钥 | 必须与 DS 的 `JWT_SECRET` 完全一致 |
-| `APP_BASE_URL` | 应用公网地址（可选） | 留空时使用请求的 `x-forwarded-host` / `host`；固定生产域名建议显式设置 |
-| `ONLYOFFICE_INTERNAL_URL` | DS 回调内部地址 | 可选；DS 返回内部 URL 时用于校验 |
+| `ONLYOFFICE_SAVE_CALLBACK_URL` | 保存回调地址 | 必须是项目部署服务器的公网可访问地址，不能填 `127.0.0.1` / `localhost`；可写完整接口或只写公网域名 |
 
 区域固定为 `us-east-1`，预签名有效期固定 15 分钟，两者都写在 `lib/storage/client.ts`，不通过环境变量配置。`RUSTFS_*` 缺失时应用仍能启动，只有上传、确认和下载会失败；文件模块的完整说明见[文件存储](/zh/docs/files)。
 
@@ -99,8 +98,7 @@ RUSTFS_BUCKET=
 
 ONLYOFFICE_DS_URL=
 ONLYOFFICE_JWT_SECRET=
-APP_BASE_URL=
-ONLYOFFICE_INTERNAL_URL=
+ONLYOFFICE_SAVE_CALLBACK_URL=
 ```
 
 它不会被应用直接读取，作用是告诉新成员“需要配置哪些变量”。开始开发时复制一份并填入真实值：

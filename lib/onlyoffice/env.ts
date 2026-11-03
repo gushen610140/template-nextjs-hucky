@@ -1,11 +1,9 @@
-import { headers } from "next/headers";
-
 export type OnlyOfficeSettings = {
   /** 浏览器和 Document Server 都能访问的地址 */
   dsUrl: string;
   jwtSecret: string;
-  /** DS 回调返回的内部地址 (可选), 用于校验编辑后文件 URL */
-  internalUrl?: string;
+  /** Document Server 保存时回调的完整 URL, 必须是公网可访问地址 */
+  saveCallbackUrl: string;
 };
 
 export type OnlyOfficeConfigResult =
@@ -16,40 +14,23 @@ function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
 }
 
-function isLocalHost(host: string): boolean {
-  return (
-    host.startsWith("localhost") ||
-    host.startsWith("127.") ||
-    host.startsWith("[::1]")
-  );
-}
-
 /**
- * 回调地址的应用侧基地址。
- *
- * 优先显式 APP_BASE_URL; 未配置时使用当前请求的 host,
- * 这样预览部署 / 多域名部署不需要为每个地址改环境变量。
- * 反向代理必须覆盖 x-forwarded-host / x-forwarded-proto。
+ * 回调地址支持两种写法:
+ * - https://app.example.com/api/onlyoffice/callback
+ * - https://app.example.com
+ * 只写域名时自动补全路径, 避免回调 404。
  */
-export async function resolveAppBaseUrl(): Promise<string | null> {
-  const explicit = process.env.APP_BASE_URL?.trim();
-  if (explicit) return trimTrailingSlash(explicit);
-
-  const requestHeaders = await headers();
-  const forwardedHost = requestHeaders
-    .get("x-forwarded-host")
-    ?.split(",")[0]
-    ?.trim();
-  const host = forwardedHost ?? requestHeaders.get("host");
-  if (host) {
-    const proto =
-      requestHeaders.get("x-forwarded-proto")?.split(",")[0]?.trim() ??
-      (isLocalHost(host) ? "http" : "https");
-    return `${proto}://${host}`;
+function normalizeCallbackUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    if (!url.pathname.endsWith("/api/onlyoffice/callback")) {
+      url.pathname = `${trimTrailingSlash(url.pathname)}/api/onlyoffice/callback`;
+    }
+    return url.toString();
+  } catch {
+    return null;
   }
-
-  const fallback = process.env.LOGTO_BASE_URL?.trim();
-  return fallback ? trimTrailingSlash(fallback) : null;
 }
 
 /**
@@ -58,11 +39,15 @@ export async function resolveAppBaseUrl(): Promise<string | null> {
 export function getOnlyOfficeSettings(): OnlyOfficeConfigResult {
   const dsUrl = process.env.ONLYOFFICE_DS_URL?.trim();
   const jwtSecret = process.env.ONLYOFFICE_JWT_SECRET?.trim();
-  const internalUrl = process.env.ONLYOFFICE_INTERNAL_URL?.trim();
+  const rawCallbackUrl = process.env.ONLYOFFICE_SAVE_CALLBACK_URL?.trim();
+  const saveCallbackUrl = rawCallbackUrl
+    ? normalizeCallbackUrl(rawCallbackUrl)
+    : null;
 
   const missing = [
     ["ONLYOFFICE_DS_URL", dsUrl],
     ["ONLYOFFICE_JWT_SECRET", jwtSecret],
+    ["ONLYOFFICE_SAVE_CALLBACK_URL", saveCallbackUrl],
   ]
     .filter(([, value]) => !value)
     .map(([name]) => name as string);
@@ -74,7 +59,7 @@ export function getOnlyOfficeSettings(): OnlyOfficeConfigResult {
     value: {
       dsUrl: trimTrailingSlash(dsUrl as string),
       jwtSecret: jwtSecret as string,
-      internalUrl: internalUrl ? trimTrailingSlash(internalUrl) : undefined,
+      saveCallbackUrl: saveCallbackUrl as string,
     },
   };
 }

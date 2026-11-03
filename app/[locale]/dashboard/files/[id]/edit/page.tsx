@@ -9,7 +9,7 @@ import { requireUser } from "@/lib/auth";
 import { getUserPermissions } from "@/lib/authz";
 import { getFileDetail } from "@/lib/files/queries";
 import { getOfficeDocumentInfo } from "@/lib/onlyoffice/documents";
-import { getOnlyOfficeSettings, resolveAppBaseUrl } from "@/lib/onlyoffice/env";
+import { getOnlyOfficeSettings } from "@/lib/onlyoffice/env";
 import { signOnlyOfficeToken } from "@/lib/onlyoffice/jwt";
 import type { OfficeEditorConfig } from "@/lib/onlyoffice/types";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -59,22 +59,6 @@ export default async function OfficeEditPage({ params }: OfficeEditPageProps) {
     );
   }
 
-  const appBaseUrl = await resolveAppBaseUrl();
-  if (!appBaseUrl) {
-    return (
-      <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-        <Alert variant="destructive">
-          <AlertDescription>
-            {t("notConfigured", { missing: "APP_BASE_URL" })}
-          </AlertDescription>
-        </Alert>
-        <Button variant="outline" asChild className="w-fit">
-          <Link href={previewHref}>{t("back")}</Link>
-        </Button>
-      </div>
-    );
-  }
-
   let documentUrl: string;
   try {
     documentUrl = await createEditorDocumentUrl(
@@ -101,7 +85,8 @@ export default async function OfficeEditPage({ params }: OfficeEditPageProps) {
     kind: "callback",
     fileId: file.id,
   });
-  const callbackUrl = `${appBaseUrl}/api/onlyoffice/callback?token=${encodeURIComponent(callbackToken)}`;
+  const callbackUrl = new URL(settings.value.saveCallbackUrl);
+  callbackUrl.searchParams.set("token", callbackToken);
 
   const baseConfig: Omit<OfficeEditorConfig, "token"> = {
     document: {
@@ -115,7 +100,7 @@ export default async function OfficeEditPage({ params }: OfficeEditPageProps) {
     editorConfig: {
       mode: "edit",
       lang: locale === "zh" ? "zh-CN" : "en",
-      callbackUrl,
+      callbackUrl: callbackUrl.toString(),
       user: {
         id: user.id,
         name: user.name ?? user.email,

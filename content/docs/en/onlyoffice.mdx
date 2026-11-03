@@ -42,17 +42,15 @@ Entry points:
 ```bash
 ONLYOFFICE_DS_URL=https://office.example.com
 ONLYOFFICE_JWT_SECRET=the same random string as the Document Server
-# Optional; leave empty to use the request host
-APP_BASE_URL=
-# Optional: used to validate internal callback URLs returned by DS
-ONLYOFFICE_INTERNAL_URL=
+# Must be publicly reachable from the Document Server; never 127.0.0.1 or localhost
+ONLYOFFICE_SAVE_CALLBACK_URL=https://app.example.com
 ```
 
-If `APP_BASE_URL` is empty, the callback base is built from the current request's `x-forwarded-host` / `host` and protocol, so preview deployments and multiple domains need no extra configuration. Set it explicitly in production to avoid ambiguous or spoofed proxy headers; the reverse proxy must overwrite `x-forwarded-host` and `x-forwarded-proto`.
+`ONLYOFFICE_SAVE_CALLBACK_URL` accepts either the full callback endpoint or just the public domain; the app appends `/api/onlyoffice/callback` when needed. A local `localhost` app cannot be reached by a remote Document Server; use a tunnel (for example `cloudflared tunnel`) or a deployed public URL for local testing.
 
 The Document Server must be able to reach:
 
-- `${APP_BASE_URL}/api/onlyoffice/callback`
+- The callback address in `ONLYOFFICE_SAVE_CALLBACK_URL`
 - RustFS presigned URLs (or your own file proxy)
 
 ## Save flow
