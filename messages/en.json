@@ -348,7 +348,7 @@
     }
   },
   "OfficeEditor": {
-    "back": "Back to preview",
+    "back": "Back",
     "online": "Online editor",
     "hint": "Press Ctrl/Cmd + S to save",
     "hintDisabled": "Local debugging: saving is unavailable",

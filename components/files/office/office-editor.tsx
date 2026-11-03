@@ -104,7 +104,7 @@ export function OfficeEditor({
               setDirty(Boolean(event?.data));
             },
             onRequestClose: () => {
-              router.push(previewHref);
+              leaveEditor();
             },
             onError: (event: {
               data?: { code?: number; description?: string };
@@ -133,13 +133,19 @@ export function OfficeEditor({
     };
   }, [dsUrl, previewHref, router, attempt]);
 
+  function leaveEditor() {
+    // 返回上一页而不是再 push 一个预览页, 否则预览页的返回会回到编辑页。
+    if (window.history.length > 1) router.back();
+    else router.push(previewHref);
+  }
+
   return (
     <div className="absolute inset-x-0 top-16 bottom-0 flex min-h-0 flex-col gap-3 overflow-hidden bg-background p-4 pt-0">
       <header className="flex flex-wrap items-center gap-2 rounded-xl border bg-card px-3 py-2">
         <Button
           variant="ghost"
           size="icon-sm"
-          onClick={() => router.push(previewHref)}
+          onClick={leaveEditor}
           aria-label={t("back")}
         >
           <ArrowLeft />
@@ -191,10 +197,7 @@ export function OfficeEditor({
               >
                 {t("retry")}
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => router.push(previewHref)}
-              >
+              <Button variant="outline" onClick={leaveEditor}>
                 {t("back")}
               </Button>
             </div>
