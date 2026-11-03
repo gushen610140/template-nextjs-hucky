@@ -36,7 +36,11 @@ export function CsvPreview({ content }: { content: string }) {
         <TabsTrigger value="source">{t("source")}</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="table" className="min-h-0 overflow-auto">
+      <TabsContent
+        value="table"
+        className="min-h-0 overflow-auto"
+        data-lenis-prevent
+      >
         <div className="overflow-hidden rounded-xl border bg-card">
           <table className="w-full border-collapse text-sm">
             <thead className="sticky top-0 bg-muted/80 backdrop-blur">

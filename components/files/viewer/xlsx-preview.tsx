@@ -116,6 +116,7 @@ export function XlsxPreview({ url, name }: { url: string; name: string }) {
             key={sheet.sheet}
             value={String(index)}
             className="min-h-0 overflow-auto"
+            data-lenis-prevent
           >
             <div className="overflow-hidden rounded-xl border bg-card">
               <table className="w-full border-collapse text-sm">
