@@ -46,6 +46,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -63,6 +69,7 @@ import type {
   FileSort,
   FolderRow,
 } from "@/lib/files/types";
+import { FILE_PAGE_SIZES } from "@/lib/files/types";
 import { putToStorage } from "@/lib/files/upload-client";
 import { cn } from "@/lib/utils";
 
@@ -149,6 +156,7 @@ export function FilesExplorer({
     sort?: FileSort;
     dir?: "asc" | "desc";
     page?: number;
+    perPage?: number;
     folder?: string | null;
     owner?: string | null;
   }) {
@@ -156,6 +164,7 @@ export function FilesExplorer({
     const sort = next.sort ?? state.sort;
     const dir = next.dir ?? state.dir;
     const page = next.page ?? 1;
+    const perPage = next.perPage ?? state.pageSize;
     const folder = next.folder === undefined ? state.folderId : next.folder;
     const owner = next.owner === undefined ? selectedOwnerId : next.owner;
 
@@ -164,6 +173,9 @@ export function FilesExplorer({
     if (sort !== "createdAt") params.set("sort", sort);
     if (dir !== "desc") params.set("dir", dir);
     if (page > 1) params.set("page", String(page));
+    if (perPage !== FILE_PAGE_SIZES[0]) {
+      params.set("perPage", String(perPage));
+    }
     if (folder) params.set("folder", folder);
     if (owner) params.set("owner", owner);
 
@@ -766,6 +778,25 @@ export function FilesExplorer({
           {t("totalCount", { count: total })}
         </span>
         <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                {t("perPage", { count: state.pageSize })}
+                <ChevronDown />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {FILE_PAGE_SIZES.map((size) => (
+                <DropdownMenuItem
+                  key={size}
+                  onSelect={() => navigate({ perPage: size, page: 1 })}
+                >
+                  {t("perPage", { count: size })}
+                  {state.pageSize === size && <Check className="ml-auto" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button
             variant="outline"
             size="sm"

@@ -96,7 +96,7 @@ Acting on behalf of a user in the admin view passes an extra `ownerId`:
 
 Key rules:
 
-- 20 files per page; count first, then clamp `page` into `[1, pageCount]`.
+- 10 files per page by default, switchable to 20 / 50 / 100; count first, then clamp `page` into `[1, pageCount]`.
 - Every sort has `id` as a tie-breaker so page boundaries stay stable.
 - A search term widens the scope to the owner's whole tree (files and folders by name); otherwise only the current folder is listed.
 - `q`, `sort`, `dir`, `page`, `folder`, and `owner` are validated in `parseFileListState()`, so raw input never reaches Prisma.

@@ -33,6 +33,10 @@ export type FolderCrumb = {
 export const FILE_SORTS = ["name", "size", "createdAt"] as const;
 export type FileSort = (typeof FILE_SORTS)[number];
 
+/** 每页条数选项; 默认取第一个 */
+export const FILE_PAGE_SIZES = [10, 20, 50, 100] as const;
+export type FilePageSize = (typeof FILE_PAGE_SIZES)[number];
+
 export type SortDirection = "asc" | "desc";
 
 /** 由 URL 查询参数解析出的列表状态 */
@@ -41,6 +45,7 @@ export type FileListState = {
   sort: FileSort;
   dir: SortDirection;
   page: number;
+  pageSize: FilePageSize;
   folderId: string | null;
 };
 

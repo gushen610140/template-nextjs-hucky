@@ -1,6 +1,5 @@
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { FILE_PAGE_SIZE } from "./query-params";
 import type {
   FileDetail,
   FileListResult,
@@ -49,15 +48,15 @@ export async function listFilePage(options: {
   };
 
   const total = await prisma.fileObject.count({ where });
-  const pageCount = Math.max(1, Math.ceil(total / FILE_PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(total / state.pageSize));
   const page = Math.min(Math.max(1, state.page), pageCount);
 
   const [rows, folders, pendingCount] = await Promise.all([
     prisma.fileObject.findMany({
       where,
       orderBy: buildOrderBy(state),
-      skip: (page - 1) * FILE_PAGE_SIZE,
-      take: FILE_PAGE_SIZE,
+      skip: (page - 1) * state.pageSize,
+      take: state.pageSize,
       select: {
         id: true,
         name: true,
