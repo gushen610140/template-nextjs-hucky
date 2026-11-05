@@ -1,0 +1,68 @@
+---
+title: AI 对话
+description: 供应商、模型管理与 LangChain / LangGraph 聊天接入
+---
+
+AI 模块把「管理员配置供应商和模型」与「普通用户选择模型对话」拆成两条独立的权限线。模型目录由管理员维护，用户只看到启用中的模型，不能接触 API Key。
+
+## 权限与入口
+
+| 权限 | 能力 | 入口 |
+| --- | --- | --- |
+| `ai:manage` | 供应商、模型的增删改查与连通性测试 | `/[locale]/dashboard/providers`、`/[locale]/dashboard/models` |
+| `ai:own` | 使用管理员配置的模型对话、管理自己的会话 | `/[locale]/dashboard/chat` |
+
+内置 `user` 角色在 seed 时获得 `ai:own`；`admin` 拥有全部权限。页面和 API 都会做服务端校验，侧边栏只是按权限隐藏入口。
+
+## 架构
+
+```text
+浏览器
+  │  选择模型 / 发送消息
+  ▼
+/api/ai/conversations/[id]/messages  (SSE)
+  │  读取历史 → 构建 LangGraph StateGraph
+  ▼
+lib/ai/chat/graph.ts
+  │  streamMode: "messages"
+  ▼
+LangChain chat model（由供应商配置实例化）
+  │
+  ▼
+OpenAI / Anthropic / Google / OpenAI 兼容服务
+```
+
+- LangChain 负责模型适配，LangGraph 负责对话执行与 token 流式输出。
+- 消息表是唯一事实源；图每次请求按数据库历史构建，没有额外的 checkpointer。
+- 供应商 Key 只在服务端解密，浏览器拿不到明文。
+
+## 代码位置
+
+| 路径 | 作用 |
+| --- | --- |
+| `lib/ai/crypto.ts` | API Key 的 AES-256-GCM 加解密 |
+| `lib/ai/provider-factory.ts` | 按供应商类型创建 LangChain chat model |
+| `lib/ai/models.ts` | 模型解析、进程内缓存、用户可见目录 |
+| `lib/ai/chat/service.ts` | 会话与消息读写、序号分配、标题生成 |
+| `lib/ai/chat/graph.ts` | LangGraph 图与流式事件 |
+| `app/api/ai/**` | 目录、会话、消息 SSE 接口 |
+| `app/[locale]/dashboard/chat/**` | 聊天页面 |
+| `prisma/schema.prisma` 中的 `AiProvider` / `AiModel` / `AiConversation` / `AiMessage` | 数据模型 |
+
+## 配置步骤
+
+1. 设置 `AI_SECRET_KEY`（任意长度口令，部署后不要更换）。
+2. 运行 `bun run db:setup` 或分别执行 `prisma migrate deploy`、`prisma generate`、`bun run db:seed`。
+3. 以 `ai:manage` 身份进入「提供商」创建供应商并填写 Key。
+4. 在「模型」中至少添加一个启用中的模型，可用「测试」验证连通性。
+5. 以拥有 `ai:own` 的账号进入「对话」开始聊天。
+
+<Callout type="warn" title="AI_SECRET_KEY 变更会破坏已有密文">
+`AI_SECRET_KEY` 用于派生加密密钥。更换后，数据库里已有的供应商 Key 将无法解密，需要在后台重新填写。
+</Callout>
+
+## 接下来
+
+- [供应商与模型](/zh/docs/ai/providers-models)：字段说明、密钥存储、DeepSeek 配置示例。
+- [对话与消息](/zh/docs/ai/chat)：会话数据模型、SSE 协议、切换模型与上下文裁剪。
+- [AI 回答规范](/zh/docs/ai/response-policy)：仓库级 `AGENTS.md` 对回复语气与长度的约束。

@@ -1,0 +1,68 @@
+---
+title: AI Chat
+description: Provider and model management plus LangChain / LangGraph chat integration
+---
+
+The AI module separates two permission lines: administrators configure providers and models, while regular users only pick from the enabled catalog and chat. Users never receive provider API keys.
+
+## Permissions and entry points
+
+| Permission | Capability | Entry |
+| --- | --- | --- |
+| `ai:manage` | Create, edit, delete, and test providers and models | `/[locale]/dashboard/providers`, `/[locale]/dashboard/models` |
+| `ai:own` | Chat with admin-configured models and manage own conversations | `/[locale]/dashboard/chat` |
+
+The built-in `user` role gets `ai:own` during seeding; `admin` has every permission. Pages and APIs enforce permissions on the server; the sidebar only hides unavailable entries.
+
+## Architecture
+
+```text
+Browser
+  │  select model / send message
+  ▼
+/api/ai/conversations/[id]/messages  (SSE)
+  │  load history → build LangGraph StateGraph
+  ▼
+lib/ai/chat/graph.ts
+  │  streamMode: "messages"
+  ▼
+LangChain chat model (created from provider config)
+  │
+  ▼
+OpenAI / Anthropic / Google / OpenAI-compatible service
+```
+
+- LangChain adapts providers; LangGraph runs the conversation and streams tokens.
+- The message table is the single source of truth. The graph is rebuilt from database history on every request; no extra checkpointer is used.
+- Provider keys are decrypted only on the server and never reach the browser.
+
+## Code map
+
+| Path | Purpose |
+| --- | --- |
+| `lib/ai/crypto.ts` | AES-256-GCM encryption for API keys |
+| `lib/ai/provider-factory.ts` | Creates a LangChain chat model per provider type |
+| `lib/ai/models.ts` | Model resolution, in-process cache, user-facing catalog |
+| `lib/ai/chat/service.ts` | Conversation and message reads/writes, sequence allocation, titles |
+| `lib/ai/chat/graph.ts` | LangGraph graph and streaming events |
+| `app/api/ai/**` | Catalog, conversation, and message SSE endpoints |
+| `app/[locale]/dashboard/chat/**` | Chat UI |
+| `AiProvider` / `AiModel` / `AiConversation` / `AiMessage` in `prisma/schema.prisma` | Data model |
+
+## Setup
+
+1. Set `AI_SECRET_KEY` (any passphrase; do not change it after deployment).
+2. Run `bun run db:setup`, or run `prisma migrate deploy`, `prisma generate`, and `bun run db:seed` separately.
+3. As a user with `ai:manage`, open Providers, create a provider, and enter its key.
+4. Add at least one active model under Models; use Test to verify connectivity.
+5. As a user with `ai:own`, open Chat to start.
+
+<Callout type="warn" title="Changing AI_SECRET_KEY breaks existing ciphertext">
+`AI_SECRET_KEY` derives the encryption key. After a change, existing provider keys cannot be decrypted and must be entered again.
+</Callout>
+
+## Next
+
+- [Providers and models](/en/docs/ai/providers-models): fields, key storage, and a DeepSeek example.
+- [Conversations and messages](/en/docs/ai/chat): data model, SSE protocol, model switching, and context trimming.
+- [AI response policy](/en/docs/ai/response-policy): the repo-level `AGENTS.md` rules for tone and length.

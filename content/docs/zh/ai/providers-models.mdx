@@ -1,0 +1,99 @@
+---
+title: 供应商与模型
+description: 管理供应商、加密保存 API Key，并维护用户可选的模型目录
+---
+
+供应商和模型由 `ai:manage` 管理员维护。普通用户只读取启用中的目录，不能创建、修改或看到密钥。
+
+## 页面与代码
+
+| 路由 | 作用 |
+| --- | --- |
+| `/[locale]/dashboard/providers` | 供应商列表、创建、编辑、删除 |
+| `/[locale]/dashboard/models` | 模型列表、创建、编辑、删除、连通性测试 |
+
+| 路径 | 作用 |
+| --- | --- |
+| `app/[locale]/dashboard/providers/actions.ts` | 供应商 Server Actions |
+| `app/[locale]/dashboard/models/actions.ts` | 模型 Server Actions |
+| `lib/ai/models.ts` | `resolveChatModel()` 与 `getActiveCatalog()` |
+| `lib/ai/provider-factory.ts` | 供应商类型到 LangChain 适配器的映射 |
+| `lib/ai/action-guard.ts` | `ai:manage` 授权入口 |
+
+## 供应商字段
+
+| 字段 | 说明 |
+| --- | --- |
+| `name` | 显示名称，全局唯一 |
+| `type` | `OPENAI`、`OPENAI_COMPATIBLE`、`ANTHROPIC`、`GOOGLE` |
+| `baseUrl` | 可选。留空使用供应商默认地址；兼容服务填到 `/v1` 或服务要求的前缀 |
+| `apiKey` | 加密后写入 `apiKeyCipher`，编辑时留空表示不修改 |
+| `isActive` | 停用后其下所有模型对用户不可见 |
+| `sortOrder` | 供应商在目录和后台列表中的排序 |
+
+类型映射：
+
+| 类型 | LangChain 类 | 地址字段 |
+| --- | --- | --- |
+| `OPENAI` | `ChatOpenAI` | 默认 OpenAI 地址 |
+| `OPENAI_COMPATIBLE` | `ChatOpenAI` + `configuration.baseURL` | 必填服务地址 |
+| `ANTHROPIC` | `ChatAnthropic` | `anthropicApiUrl` |
+| `GOOGLE` | `ChatGoogleGenerativeAI` | `baseUrl` |
+
+## 模型字段
+
+| 字段 | 说明 |
+| --- | --- |
+| `providerId` | 所属供应商 |
+| `modelId` | 发送给供应商的原始模型名，例如 `gpt-4.1-mini` |
+| `displayName` | 用户在选择器中看到的名称 |
+| `contextWindow` | 上下文窗口，用于裁剪历史消息 |
+| `maxTokens` | 最大输出 token，同时参与上下文预算计算 |
+| `temperature` | 采样温度，范围 0–2 |
+| `params` | 预留的额外参数 JSON，当前后台表单不暴露 |
+| `isActive` | 停用后不再出现在目录中，历史消息不受影响 |
+| `isDefault` | 每个供应商最多一个默认模型，保存时会自动取消同供应商的其他默认项 |
+| `sortOrder` | 模型排序 |
+
+同一供应商下 `modelId` 唯一。删除供应商会级联删除其模型；删除模型会把引用它的会话 `modelId` 置空，但历史消息里的模型名称快照仍会保留。
+
+## 密钥存储
+
+```text
+明文 API Key
+  → scrypt(AI_SECRET_KEY, 固定 salt, 32 bytes)
+  → AES-256-GCM
+  → v1.<iv>.<authTag>.<ciphertext>
+```
+
+- 后台列表只解密并显示末四位，接口不会返回完整密钥。
+- `AI_SECRET_KEY` 未配置时，创建或更新供应商会直接失败。
+- 解密失败（例如更换了口令）时，列表显示“密钥无法读取”，需要重新填写。
+
+## 连通性测试
+
+模型行的「测试」按钮会实际调用一次模型，发送 `Reply with the single word OK.`，超时 20 秒。它会产生一次计费请求；失败只返回「模型调用失败」，具体错误写在服务端日志。
+
+## DeepSeek 示例
+
+DeepSeek 使用 OpenAI 兼容协议：
+
+| 字段 | 值 |
+| --- | --- |
+| 类型 | `OPENAI_COMPATIBLE` |
+| 接口地址 | `https://api.deepseek.com` |
+| 模型标识 | `deepseek-flash` 或 `deepseek-v4-pro` |
+| 显示名称 | 自定义，例如 `DeepSeek Flash` |
+
+<Callout type="warn" title="不要继续使用 deepseek-chat">
+`deepseek-chat` / `deepseek-reasoner` 是旧别名，已于 2026-07-24 弃用。当前官方模型名是 `deepseek-flash`（V4.1-Flash）和 `deepseek-v4-pro`。
+</Callout>
+
+## 缓存与失效
+
+`resolveChatModel()` 以模型和供应商的 `updatedAt` 作为缓存版本，最多缓存 50 个实例。以下操作会主动清缓存：
+
+- 更新供应商：清空全部模型缓存。
+- 更新或删除模型：只清对应条目。
+
+因此后台改完 Key 或模型参数后，下一条消息会立即使用新配置。

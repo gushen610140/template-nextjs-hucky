@@ -1,0 +1,99 @@
+---
+title: Providers and Models
+description: Manage providers, store API keys encrypted, and maintain the user-facing model catalog
+---
+
+Providers and models are maintained by users with `ai:manage`. Regular users only read the enabled catalog and never see keys.
+
+## Pages and code
+
+| Route | Purpose |
+| --- | --- |
+| `/[locale]/dashboard/providers` | List, create, edit, and delete providers |
+| `/[locale]/dashboard/models` | List, create, edit, delete, and test models |
+
+| Path | Purpose |
+| --- | --- |
+| `app/[locale]/dashboard/providers/actions.ts` | Provider Server Actions |
+| `app/[locale]/dashboard/models/actions.ts` | Model Server Actions |
+| `lib/ai/models.ts` | `resolveChatModel()` and `getActiveCatalog()` |
+| `lib/ai/provider-factory.ts` | Maps provider types to LangChain adapters |
+| `lib/ai/action-guard.ts` | `ai:manage` authorization |
+
+## Provider fields
+
+| Field | Detail |
+| --- | --- |
+| `name` | Display name, globally unique |
+| `type` | `OPENAI`, `OPENAI_COMPATIBLE`, `ANTHROPIC`, `GOOGLE` |
+| `baseUrl` | Optional. Leave blank for the provider default; for compatible services include the required prefix such as `/v1` |
+| `apiKey` | Encrypted into `apiKeyCipher`; blank while editing keeps the current key |
+| `isActive` | Disabling hides every model under the provider from users |
+| `sortOrder` | Ordering in the catalog and admin list |
+
+Type mapping:
+
+| Type | LangChain class | URL field |
+| --- | --- | --- |
+| `OPENAI` | `ChatOpenAI` | Default OpenAI URL |
+| `OPENAI_COMPATIBLE` | `ChatOpenAI` + `configuration.baseURL` | Required service URL |
+| `ANTHROPIC` | `ChatAnthropic` | `anthropicApiUrl` |
+| `GOOGLE` | `ChatGoogleGenerativeAI` | `baseUrl` |
+
+## Model fields
+
+| Field | Detail |
+| --- | --- |
+| `providerId` | Parent provider |
+| `modelId` | Provider-facing model name, for example `gpt-4.1-mini` |
+| `displayName` | Name shown in the user picker |
+| `contextWindow` | Context window used to trim history |
+| `maxTokens` | Maximum output tokens; also part of the context budget |
+| `temperature` | Sampling temperature, 0–2 |
+| `params` | Reserved JSON for extra arguments; not exposed in the admin form |
+| `isActive` | Disabled models disappear from the catalog; history is unaffected |
+| `isDefault` | At most one default per provider; saving clears the previous default |
+| `sortOrder` | Model ordering |
+
+`modelId` is unique per provider. Deleting a provider cascades to its models; deleting a model sets `modelId` on referencing conversations to null, while message-level name snapshots remain.
+
+## Key storage
+
+```text
+plaintext API key
+  → scrypt(AI_SECRET_KEY, fixed salt, 32 bytes)
+  → AES-256-GCM
+  → v1.<iv>.<authTag>.<ciphertext>
+```
+
+- The admin list decrypts only to show the last four characters; APIs never return the full key.
+- Creating or updating a provider fails when `AI_SECRET_KEY` is missing.
+- If decryption fails (for example after changing the passphrase), the list shows "Key unavailable" and the key must be re-entered.
+
+## Connectivity test
+
+The Test button on a model row makes one real model call with `Reply with the single word OK.` and a 20-second timeout. It is billable. Failures return a generic message; details go to server logs.
+
+## DeepSeek example
+
+DeepSeek uses the OpenAI-compatible protocol:
+
+| Field | Value |
+| --- | --- |
+| Type | `OPENAI_COMPATIBLE` |
+| Base URL | `https://api.deepseek.com` |
+| Model ID | `deepseek-flash` or `deepseek-v4-pro` |
+| Display name | Anything, for example `DeepSeek Flash` |
+
+<Callout type="warn" title="Do not use deepseek-chat">
+`deepseek-chat` and `deepseek-reasoner` are legacy aliases deprecated on 2026-07-24. The current official names are `deepseek-flash` (V4.1-Flash) and `deepseek-v4-pro`.
+</Callout>
+
+## Cache and invalidation
+
+`resolveChatModel()` caches up to 50 instances, versioned by the `updatedAt` of the model and its provider. Cache is cleared when:
+
+- A provider is updated: all model entries are cleared.
+- A model is updated or deleted: only that entry is cleared.
+
+The next message uses the new configuration immediately after an admin change.

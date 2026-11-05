@@ -1,0 +1,104 @@
+---
+title: 对话与消息
+description: 会话持久化、SSE 流式协议、模型切换与 LangGraph 执行细节
+---
+
+聊天模块要求 `ai:own`。每个用户只能读写自己的会话，所有查询都带 `userId` 条件，越权按 404 处理。
+
+## 数据模型
+
+### AiConversation
+
+| 字段 | 说明 |
+| --- | --- |
+| `userId` | 会话所有者 |
+| `title` | 列表标题；首条用户消息自动截取前 40 个字符 |
+| `providerId` / `modelId` | 当前选中的模型，只影响下一条消息 |
+| `providerName` / `modelName` | 名称快照，供应商或模型删除后列表仍可显示 |
+| `lastMessageAt` | 列表排序字段 |
+
+### AiMessage
+
+| 字段 | 说明 |
+| --- | --- |
+| `conversationId` + `sequence` | 会话内递增序号，联合唯一 |
+| `role` | `SYSTEM`、`USER`、`ASSISTANT`、`TOOL` |
+| `content` | 文本内容；流式过程中持续更新 |
+| `status` | `STREAMING`、`COMPLETED`、`FAILED`、`ABORTED` |
+| `providerName` / `modelName` | 实际生成该条消息的模型快照 |
+| `inputTokens` / `outputTokens` | 供应商返回的用量，缺失时为 null |
+
+序号在事务里取当前最大值加一，并依赖唯一约束重试三次，避免并发写同一会话时撞号。
+
+## 页面与接口
+
+| 路由 / 方法 | 作用 |
+| --- | --- |
+| `/[locale]/dashboard/chat` | 没有会话时展示空状态；有会话时跳到最近一条 |
+| `/[locale]/dashboard/chat/[id]` | 会话详情与消息流 |
+| `GET /api/ai/catalog` | 启用中的供应商与模型目录，不含密钥 |
+| `GET /api/ai/conversations` | 当前用户最近 100 条会话 |
+| `POST /api/ai/conversations` | 创建会话，参数 `modelId`、可选 `title` |
+| `GET /api/ai/conversations/[id]` | 会话详情与最近 200 条消息 |
+| `PATCH /api/ai/conversations/[id]` | 重命名或切换模型 |
+| `DELETE /api/ai/conversations/[id]` | 删除会话及其消息 |
+| `POST /api/ai/conversations/[id]/messages` | 发送消息并以 SSE 返回生成结果 |
+
+所有接口都通过 `withPermission(PERMISSIONS.aiOwn)` 校验；会话写入前还会再次确认模型处于启用状态。
+
+## 一次发送的流程
+
+```text
+POST /messages
+  │
+  ├─ 校验会话归属与当前模型
+  ├─ 追加 USER 消息（首条消息时生成标题）
+  ├─ 读取最近 50 条可用历史
+  ├─ 创建 ASSISTANT 消息，状态 STREAMING
+  └─ 返回 text/event-stream
+       │
+       ├─ start   { userMessageId, assistantMessageId, title, modelName }
+       ├─ delta   { text }            × N
+       ├─ done    { assistantMessageId, status, usage }
+       ├─ aborted { assistantMessageId }
+       └─ error   { code }
+```
+
+服务端规则：
+
+- 用户消息在调用模型前落库，生成失败也不会丢失提问。
+- 生成结束更新 `content`、`status` 和 token 用量。
+- 客户端断开或点击停止时，服务端把已生成内容保存为 `ABORTED`。
+- 生成异常保存为 `FAILED`，历史加载时不会把失败消息送入模型。
+- 只有 `COMPLETED` 和带内容的 `ABORTED` 会进入后续上下文。
+
+## 切换模型
+
+会话允许中途换模型，顶部选择器即时 `PATCH` 会话的 `providerId` / `modelId`。
+
+- 每条 assistant 消息保存当时使用的 `providerName` / `modelName` 快照。
+- 切换只影响下一条消息，不会重写历史。
+- 生成过程中选择器禁用，避免一次请求中途换模。
+- 模型被停用或删除后，选择器不再展示；历史消息仍按快照显示。
+
+## LangGraph 执行
+
+`lib/ai/chat/graph.ts` 每次请求创建一个单节点图：
+
+```text
+START → model → END
+```
+
+- 状态使用 `MessagesAnnotation`。
+- 节点调用 `chatModel.invoke(state.messages, config)`。
+- 外层以 `streamMode: "messages"` 拉取 chunk，`BaseMessageChunk.text` 作为增量文本转发。
+- `usage_metadata` 存在时发送用量事件。
+
+历史裁剪按 `contextWindow - maxTokens` 估算预算，从最新消息向前保留；中文按约 1 字 1 token、英文按约 4 字符 1 token 粗算。至少保留最后一条用户消息。
+
+## 已知边界
+
+- 当前只有单轮图，没有工具调用、RAG 或人工介入；后续扩展节点即可。
+- 没有启用 LangGraph Postgres checkpointer，消息表是唯一事实源。
+- 请求不做幂等：重复提交同一条消息会生成两条用户消息。
+- 会话列表取最近 100 条，页面消息取最近 200 条，更早的消息需要后续做分页。

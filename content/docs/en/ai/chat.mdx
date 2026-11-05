@@ -1,0 +1,104 @@
+---
+title: Conversations and Messages
+description: Conversation persistence, the SSE streaming protocol, model switching, and LangGraph execution
+---
+
+Chat requires `ai:own`. Users can only read and write their own conversations. Every query filters by `userId`; cross-user access is treated as 404.
+
+## Data model
+
+### AiConversation
+
+| Field | Detail |
+| --- | --- |
+| `userId` | Conversation owner |
+| `title` | List title; the first user message is truncated to 40 characters |
+| `providerId` / `modelId` | Currently selected model, affecting only the next message |
+| `providerName` / `modelName` | Name snapshots so the list still renders after a provider or model is deleted |
+| `lastMessageAt` | List ordering |
+
+### AiMessage
+
+| Field | Detail |
+| --- | --- |
+| `conversationId` + `sequence` | Per-conversation incrementing order, unique together |
+| `role` | `SYSTEM`, `USER`, `ASSISTANT`, `TOOL` |
+| `content` | Text body, updated during streaming |
+| `status` | `STREAMING`, `COMPLETED`, `FAILED`, `ABORTED` |
+| `providerName` / `modelName` | Snapshot of the model that produced this message |
+| `inputTokens` / `outputTokens` | Usage returned by the provider, null when absent |
+
+The sequence is allocated inside a transaction from the current maximum plus one, with up to three retries on the unique constraint to avoid collisions under concurrent writes.
+
+## Pages and endpoints
+
+| Route / method | Purpose |
+| --- | --- |
+| `/[locale]/dashboard/chat` | Empty state when no conversation exists; otherwise redirects to the latest |
+| `/[locale]/dashboard/chat/[id]` | Conversation detail and message stream |
+| `GET /api/ai/catalog` | Enabled providers and models, without keys |
+| `GET /api/ai/conversations` | Latest 100 conversations for the current user |
+| `POST /api/ai/conversations` | Create a conversation with `modelId` and optional `title` |
+| `GET /api/ai/conversations/[id]` | Conversation detail and latest 200 messages |
+| `PATCH /api/ai/conversations/[id]` | Rename or switch model |
+| `DELETE /api/ai/conversations/[id]` | Delete the conversation and its messages |
+| `POST /api/ai/conversations/[id]/messages` | Send a message and stream the result over SSE |
+
+All endpoints use `withPermission(PERMISSIONS.aiOwn)`. Before writing, the server also re-checks that the selected model is active.
+
+## A single send
+
+```text
+POST /messages
+  │
+  ├─ verify conversation ownership and current model
+  ├─ append the USER message (generate title on the first one)
+  ├─ load the latest 50 usable history messages
+  ├─ create the ASSISTANT message with status STREAMING
+  └─ return text/event-stream
+       │
+       ├─ start   { userMessageId, assistantMessageId, title, modelName }
+       ├─ delta   { text }            × N
+       ├─ done    { assistantMessageId, status, usage }
+       ├─ aborted { assistantMessageId }
+       └─ error   { code }
+```
+
+Server rules:
+
+- The user message is persisted before calling the model, so a failed generation never loses the prompt.
+- On completion, `content`, `status`, and token usage are updated.
+- When the client disconnects or presses Stop, generated text is saved as `ABORTED`.
+- Generation errors are saved as `FAILED`; failed messages are not fed back into the model.
+- Only `COMPLETED` messages and non-empty `ABORTED` messages enter later context.
+
+## Switching models
+
+A conversation can switch models mid-thread; the header picker immediately `PATCH`es `providerId` / `modelId`.
+
+- Every assistant message stores the `providerName` / `modelName` snapshot used at generation time.
+- A switch affects only the next message and never rewrites history.
+- The picker is disabled while streaming, preventing a mid-request switch.
+- Disabled or deleted models disappear from the picker; history still renders from snapshots.
+
+## LangGraph execution
+
+`lib/ai/chat/graph.ts` builds a single-node graph per request:
+
+```text
+START → model → END
+```
+
+- State uses `MessagesAnnotation`.
+- The node calls `chatModel.invoke(state.messages, config)`.
+- The outer stream uses `streamMode: "messages"` and forwards `BaseMessageChunk.text` as deltas.
+- A `usage_metadata` chunk emits a usage event.
+
+History trimming estimates a budget from `contextWindow - maxTokens` and keeps messages from newest to oldest, roughly one token per CJK character and one per four English characters. At least the last user message is always kept.
+
+## Known limits
+
+- The graph is single-turn: no tools, RAG, or human-in-the-loop yet; extend the graph with more nodes.
+- No LangGraph Postgres checkpointer is enabled; the message table is the only source of truth.
+- Requests are not idempotent: submitting the same message twice creates two user messages.
+- The list loads 100 conversations and a page loads 200 messages; older messages need pagination later.
