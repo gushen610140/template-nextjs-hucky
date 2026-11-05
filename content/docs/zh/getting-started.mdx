@@ -7,7 +7,7 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 
 ## 环境要求
 
-- Node.js 20 或更高版本
+- Node.js 22.20 或更高版本（`skills` CLI 要求）
 - Bun 1.2 或更高版本（`bun.lock` 使用文本格式）
 - 一个 PostgreSQL 数据库
 - 一个 Logto 应用（本地开发也需要）
@@ -25,6 +25,17 @@ bun ci
 ```
 
 `bun ci` 会严格按 `bun.lock` 安装，不会改写锁文件；如果锁文件与 `package.json` 不同步，安装会直接失败。
+
+</Step>
+
+<Step>
+### 安装 Skills
+
+```bash
+bunx skills experimental_install
+```
+
+该命令读取 `skills-lock.json`，把 Agent Skills 恢复到 `.agents/skills/`。它不安装 npm 依赖，必须在依赖安装完成后执行。
 
 </Step>
 
