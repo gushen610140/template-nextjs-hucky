@@ -4,6 +4,7 @@
  * 当前采用粗粒度授权:
  * - `basic:manage`: 用户 / 角色 / 权限管理
  * - `ai:manage`:    模型 / 提供商 / 智能体 / 知识库管理
+ * - `ai:own`:       使用管理员配置的模型进行对话
  * - `file:own`:     管理自己上传的文件
  * - `file:manage`:  管理全站文件 (管理员)
  *
@@ -18,6 +19,7 @@
 export const PERMISSIONS = {
   basicManage: "basic:manage",
   aiManage: "ai:manage",
+  aiOwn: "ai:own",
   fileOwn: "file:own",
   fileManage: "file:manage",
 } as const;

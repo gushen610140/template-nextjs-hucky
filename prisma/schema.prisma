@@ -17,14 +17,14 @@ datasource db {
 // - 邮箱在 Logto 侧允许变更, 因此不参与身份关联
 // - 允许为空仅为了兼容尚未绑定 Logto 的历史数据 (本地密码已移除, 这类账号无法登录)
 model User {
-  id           String   @id @default(cuid())
-  logtoSub     String?  @unique
-  email        String   @unique
-  name         String?
-  avatarUrl    String?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id        String   @id @default(cuid())
+  logtoSub  String?  @unique
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   roles UserRole[]
 
@@ -33,6 +33,8 @@ model User {
   files FileObject[]
 
   folders FileFolder[]
+
+  aiConversations AiConversation[]
 }
 
 // ─── 角色 ──────────────────────────────────────────────
@@ -54,7 +56,7 @@ model Permission {
   id          String   @id @default(cuid())
   name        String   @unique // 如 "user:create", "post:publish"
   description String?
-  module      String?          // 按模块分组，如 "user", "post", "settings"
+  module      String? // 按模块分组，如 "user", "post", "settings"
   createdAt   DateTime @default(now())
 
   roles RolePermission[]
@@ -151,4 +153,115 @@ model FileFolder {
   files    FileObject[]
 
   @@index([ownerId, parentId, createdAt(sort: Desc)])
+}
+
+// ─── AI 供应商 / 模型 ──────────────────────────────────
+
+/// 供应商类型决定用哪个 LangChain 适配器; OPENAI_COMPATIBLE 走 ChatOpenAI
+/// 并允许自定义 baseUrl, 用于自建网关或兼容 OpenAI 协议的服务。
+enum AiProviderType {
+  OPENAI
+  ANTHROPIC
+  GOOGLE
+  OPENAI_COMPATIBLE
+}
+
+/// 管理员配置的供应商。apiKeyCipher 是 AES-256-GCM 密文, 永不返回给客户端。
+model AiProvider {
+  id           String         @id @default(cuid())
+  name         String         @unique
+  type         AiProviderType
+  baseUrl      String?
+  apiKeyCipher String
+  isActive     Boolean        @default(true)
+  sortOrder    Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  models        AiModel[]
+  conversations AiConversation[]
+
+  @@index([isActive, sortOrder])
+}
+
+/// 管理员配置的模型。modelId 是供应商侧的请求标识 (如 gpt-4.1)。
+model AiModel {
+  id            String   @id @default(cuid())
+  providerId    String
+  modelId       String
+  displayName   String
+  contextWindow Int?
+  maxTokens     Int?
+  temperature   Float?
+  params        Json?
+  isActive      Boolean  @default(true)
+  isDefault     Boolean  @default(false)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  provider      AiProvider       @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  conversations AiConversation[]
+
+  @@unique([providerId, modelId])
+  @@index([providerId, isActive, sortOrder])
+}
+
+// ─── AI 对话 ──────────────────────────────────────────
+
+enum AiMessageRole {
+  SYSTEM
+  USER
+  ASSISTANT
+  TOOL
+}
+
+/// STREAMING: 流式生成中; ABORTED: 用户手动停止; FAILED: 生成出错。
+enum AiMessageStatus {
+  STREAMING
+  COMPLETED
+  FAILED
+  ABORTED
+}
+
+/// 会话的 provider/model 是“当前选中模型”, 只影响下一条消息。
+/// 同时保存名称快照, 供应商或模型被删除后会话列表仍可显示。
+model AiConversation {
+  id            String   @id @default(cuid())
+  userId        String
+  title         String
+  providerId    String?
+  modelId       String?
+  providerName  String?
+  modelName     String?
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider AiProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  model    AiModel?    @relation(fields: [modelId], references: [id], onDelete: SetNull)
+  messages AiMessage[]
+
+  @@index([userId, lastMessageAt(sort: Desc)])
+}
+
+/// 对话消息。每条 assistant 消息记录实际使用的模型快照, 支持会话中途换模型。
+model AiMessage {
+  id             String          @id @default(cuid())
+  conversationId String
+  sequence       Int
+  role           AiMessageRole
+  content        String
+  status         AiMessageStatus @default(COMPLETED)
+  providerName   String?
+  modelName      String?
+  inputTokens    Int?
+  outputTokens   Int?
+  createdAt      DateTime        @default(now())
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, sequence])
+  @@index([conversationId, sequence])
 }
