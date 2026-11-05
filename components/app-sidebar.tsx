@@ -8,6 +8,7 @@ import {
   FolderOpen,
   Folders,
   LifeBuoy,
+  MessageSquare,
   Palette,
   Send,
   Server,
@@ -41,6 +42,10 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   canUseFiles: boolean;
   /** 是否拥有全站文件管理权限 (file:manage) */
   canManageFiles: boolean;
+  /** 是否可以使用 AI 对话 (ai:own) */
+  canUseAi: boolean;
+  /** 是否可以管理供应商 / 模型 (ai:manage) */
+  canManageAi: boolean;
 };
 
 export function AppSidebar({
@@ -48,6 +53,8 @@ export function AppSidebar({
   canManageBasic,
   canUseFiles,
   canManageFiles,
+  canUseAi,
+  canManageAi,
   ...props
 }: AppSidebarProps) {
   const t = useTranslations("Sidebar");
@@ -103,31 +110,47 @@ export function AppSidebar({
     });
   }
 
+  // 对话入口只要求 ai:own; 供应商 / 模型是管理功能, 只对 ai:manage 展示。
+  // agents / RAG 暂未接入, 保留原有占位入口。
+  const aiItems: NavItem[] = [];
+  if (canUseAi) {
+    aiItems.push({
+      title: t("chat"),
+      url: `/${locale}/dashboard/chat`,
+      icon: <MessageSquare />,
+    });
+  }
+  if (canManageAi) {
+    aiItems.push(
+      {
+        title: t("models"),
+        url: `/${locale}/dashboard/models`,
+        icon: <Bot />,
+      },
+      {
+        title: t("providers"),
+        url: `/${locale}/dashboard/providers`,
+        icon: <Server />,
+      },
+    );
+  }
+  aiItems.push(
+    {
+      title: t("agents"),
+      url: `/${locale}/dashboard/agents`,
+      icon: <Sparkles />,
+    },
+    {
+      title: t("rag"),
+      url: `/${locale}/dashboard/rag`,
+      icon: <Database />,
+    },
+  );
+
   navGroups.push(
     {
       label: t("ai"),
-      items: [
-        {
-          title: t("models"),
-          url: `/${locale}/dashboard/models`,
-          icon: <Bot />,
-        },
-        {
-          title: t("providers"),
-          url: `/${locale}/dashboard/providers`,
-          icon: <Server />,
-        },
-        {
-          title: t("agents"),
-          url: `/${locale}/dashboard/agents`,
-          icon: <Sparkles />,
-        },
-        {
-          title: t("rag"),
-          url: `/${locale}/dashboard/rag`,
-          icon: <Database />,
-        },
-      ],
+      items: aiItems,
     },
     {
       label: t("style"),

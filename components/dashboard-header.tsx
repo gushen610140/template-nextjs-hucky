@@ -26,6 +26,7 @@ const MODULE_KEYS = {
   providers: "providers",
   agents: "agents",
   rag: "rag",
+  chat: "chat",
   theme: "theme",
 } as const;
 

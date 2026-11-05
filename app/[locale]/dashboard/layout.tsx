@@ -25,6 +25,8 @@ export default async function DashboardLayout({
         canManageBasic={permissions.has(PERMISSIONS.basicManage)}
         canUseFiles={permissions.has(PERMISSIONS.fileOwn)}
         canManageFiles={permissions.has(PERMISSIONS.fileManage)}
+        canUseAi={permissions.has(PERMISSIONS.aiOwn)}
+        canManageAi={permissions.has(PERMISSIONS.aiManage)}
       />
       <SidebarInset>
         <DashboardHeader
