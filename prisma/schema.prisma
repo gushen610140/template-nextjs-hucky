@@ -35,6 +35,8 @@ model User {
   folders FileFolder[]
 
   aiConversations AiConversation[]
+
+  ragLibraries RagLibrary[]
 }
 
 // ─── 角色 ──────────────────────────────────────────────
@@ -132,6 +134,9 @@ model FileObject {
   owner  User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   folder FileFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
+  ragLibraryFiles RagLibraryFile[]
+  ragChunks       RagChunk[]
+
   @@index([ownerId, status, createdAt(sort: Desc)])
   @@index([ownerId, folderId, status, createdAt(sort: Desc)])
   @@index([status, createdAt(sort: Desc)])
@@ -166,6 +171,21 @@ enum AiProviderType {
   OPENAI_COMPATIBLE
 }
 
+/// CHAT: 对话模型; EMBEDDING: 向量模型。
+enum AiModelKind {
+  CHAT
+  EMBEDDING
+}
+
+/// 模型支持的输入 / 输出模态。嵌入模型的输出为 VECTOR。
+enum AiModality {
+  TEXT
+  IMAGE
+  AUDIO
+  VIDEO
+  VECTOR
+}
+
 /// 管理员配置的供应商。apiKeyCipher 是 AES-256-GCM 密文, 永不返回给客户端。
 model AiProvider {
   id           String         @id @default(cuid())
@@ -194,6 +214,12 @@ model AiModel {
   maxTokens     Int?
   temperature   Float?
   params        Json?
+  kind           AiModelKind @default(CHAT)
+  /// 模型支持的输入 / 输出模态; RAG 只选择输出包含 VECTOR 的模型。
+  inputModalities  AiModality[] @default([])
+  outputModalities AiModality[] @default([])
+  /// 向量模型输出维度; 非向量模型为空。
+  embeddingDimension Int?
   isActive      Boolean  @default(true)
   isDefault     Boolean  @default(false)
   sortOrder     Int      @default(0)
@@ -202,10 +228,12 @@ model AiModel {
 
   provider      AiProvider       @relation(fields: [providerId], references: [id], onDelete: Cascade)
   agents        AiAgent[]
+  ragLibraries  RagLibrary[]
   conversations AiConversation[]
 
   @@unique([providerId, modelId])
   @@index([providerId, isActive, sortOrder])
+  @@index([kind, isActive, sortOrder])
 }
 
 /// 管理员配置的智能体。用户只选择智能体, 由智能体决定模型与系统提示词。
@@ -223,6 +251,7 @@ model AiAgent {
 
   model         AiModel          @relation(fields: [modelId], references: [id], onDelete: Restrict)
   conversations AiConversation[]
+  knowledgeBases AiAgentKnowledgeBase[]
 
   @@index([isActive, sortOrder])
 }
@@ -281,10 +310,103 @@ model AiMessage {
   modelName      String?
   inputTokens    Int?
   outputTokens   Int?
+  /// 检索到的知识库来源快照; 只用于 assistant 消息。
+  citations      Json?
   createdAt      DateTime        @default(now())
 
   conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, sequence])
   @@index([conversationId, sequence])
+}
+
+// ─── RAG 知识库 ─────────────────────────────────────────
+
+/// PENDING: 已加入知识库但未向量化; QUEUED: 已入队; PROCESSING: 处理中;
+/// READY: 可检索; FAILED: 失败, 可重试。
+enum RagFileStatus {
+  PENDING
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+/// 知识库。全局共享, 但只允许 ai:manage 管理员管理。
+/// 每个库固定一个向量模型; 已有向量后切换模型必须清空重建。
+model RagLibrary {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  description      String?
+  embeddingModelId String
+  /// 创建时的模型维度快照, 用于发现 env / 模型配置变化。
+  vectorSize       Int
+  createdById      String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  embeddingModel AiModel               @relation(fields: [embeddingModelId], references: [id], onDelete: Restrict)
+  createdBy      User                  @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  files          RagLibraryFile[]
+  chunks         RagChunk[]
+  agents         AiAgentKnowledgeBase[]
+
+  @@index([embeddingModelId])
+}
+
+/// 文件加入知识库的引用。同一 FileObject 可以进入多个知识库, 各自独立向量化。
+/// 不复制文件对象; 删除引用只清理分块和 Qdrant 向量。
+model RagLibraryFile {
+  id              String        @id @default(cuid())
+  libraryId       String
+  fileId          String
+  status          RagFileStatus @default(PENDING)
+  /// 向量化时的对象 ETag; 与当前文件不一致说明内容已变, 需要重新向量化。
+  sourceEtag      String?
+  chunkCount      Int           @default(0)
+  processedChunks Int           @default(0)
+  error           String?
+  vectorizedAt    DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  library RagLibrary @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  file    FileObject @relation(fields: [fileId], references: [id], onDelete: Restrict)
+  chunks  RagChunk[]
+
+  @@unique([libraryId, fileId])
+  @@index([status, updatedAt])
+  @@index([fileId])
+}
+
+/// 分块文本存 Postgres; Qdrant 只保存向量和定位 payload, 便于引用、重灌和审计。
+model RagChunk {
+  id            String   @id @default(uuid())
+  libraryFileId String
+  libraryId     String
+  fileId        String
+  chunkIndex    Int
+  content       String
+  tokenCount    Int?
+  createdAt     DateTime @default(now())
+
+  libraryFile RagLibraryFile @relation(fields: [libraryFileId], references: [id], onDelete: Cascade)
+  library     RagLibrary     @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+  file        FileObject     @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@unique([libraryFileId, chunkIndex])
+  @@index([libraryId, fileId])
+}
+
+/// 智能体与知识库的多对多绑定; 预留 sortOrder 便于以后做优先级。
+model AiAgentKnowledgeBase {
+  agentId   String
+  libraryId String
+  sortOrder Int    @default(0)
+
+  agent   AiAgent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  library RagLibrary @relation(fields: [libraryId], references: [id], onDelete: Cascade)
+
+  @@id([agentId, libraryId])
+  @@index([libraryId])
 }
