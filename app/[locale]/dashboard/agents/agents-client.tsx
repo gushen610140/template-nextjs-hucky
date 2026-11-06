@@ -19,6 +19,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -27,6 +34,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { TooltipButton } from "@/components/ui/tooltip-button";
 import type {
   AiAgentRow,
   AiModelOption,
@@ -146,25 +154,27 @@ export function AgentsClient({ agents, models, libraries }: AgentsClientProps) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setFormTarget(agent)}
-                        aria-label={t("common.edit")}
-                        title={t("common.edit")}
-                      >
-                        <Pencil />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-destructive"
-                        onClick={() => setDeleteTarget(agent)}
-                        aria-label={t("common.delete")}
-                        title={t("common.delete")}
-                      >
-                        <Trash2 />
-                      </Button>
+                      <TooltipButton label={t("common.edit")}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setFormTarget(agent)}
+                          aria-label={t("common.edit")}
+                        >
+                          <Pencil />
+                        </Button>
+                      </TooltipButton>
+                      <TooltipButton label={t("common.delete")}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive"
+                          onClick={() => setDeleteTarget(agent)}
+                          aria-label={t("common.delete")}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </TooltipButton>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -287,7 +297,10 @@ function AgentFormDialog({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto sm:max-w-xl"
+        data-lenis-prevent
+      >
         <form onSubmit={handleSubmit} className="grid gap-5">
           <DialogHeader>
             <DialogTitle>
@@ -323,20 +336,19 @@ function AgentFormDialog({
 
             <div className="grid gap-1.5">
               <Label htmlFor="ai-agent-model">{t("agents.model")}</Label>
-              <select
-                id="ai-agent-model"
-                value={modelId}
-                onChange={(event) => setModelId(event.target.value)}
-                required
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-              >
-                {models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.providerName} · {model.displayName}
-                    {model.isActive ? "" : ` (${t("common.inactive")})`}
-                  </option>
-                ))}
-              </select>
+              <Select value={modelId} onValueChange={setModelId}>
+                <SelectTrigger id="ai-agent-model" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {models.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.providerName} · {model.displayName}
+                      {model.isActive ? "" : ` (${t("common.inactive")})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-1.5">
@@ -351,6 +363,7 @@ function AgentFormDialog({
                 maxLength={20_000}
                 placeholder={t("agents.systemPromptPlaceholder")}
                 className="min-h-40 resize-y"
+                data-lenis-prevent
               />
               <p className="text-muted-foreground text-xs">
                 {t("agents.systemPromptHint")}

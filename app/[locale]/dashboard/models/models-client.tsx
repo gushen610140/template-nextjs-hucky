@@ -19,6 +19,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -26,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TooltipButton } from "@/components/ui/tooltip-button";
 import {
   AI_MODALITIES,
   type AiModelRow,
@@ -174,35 +182,38 @@ export function ModelsClient({ models, providers }: ModelsClientProps) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => handleTest(model)}
-                        disabled={pending && testingId === model.id}
-                        aria-label={t("models.test")}
-                        title={t("models.test")}
-                      >
-                        <Play />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setFormTarget(model)}
-                        aria-label={t("common.edit")}
-                        title={t("common.edit")}
-                      >
-                        <Pencil />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-destructive"
-                        onClick={() => setDeleteTarget(model)}
-                        aria-label={t("common.delete")}
-                        title={t("common.delete")}
-                      >
-                        <Trash2 />
-                      </Button>
+                      <TooltipButton label={t("models.test")}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleTest(model)}
+                          disabled={pending && testingId === model.id}
+                          aria-label={t("models.test")}
+                        >
+                          <Play />
+                        </Button>
+                      </TooltipButton>
+                      <TooltipButton label={t("common.edit")}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setFormTarget(model)}
+                          aria-label={t("common.edit")}
+                        >
+                          <Pencil />
+                        </Button>
+                      </TooltipButton>
+                      <TooltipButton label={t("common.delete")}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive"
+                          onClick={() => setDeleteTarget(model)}
+                          aria-label={t("common.delete")}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </TooltipButton>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -349,7 +360,7 @@ function ModelFormDialog({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <form onSubmit={handleSubmit} className="grid gap-5">
           <DialogHeader>
             <DialogTitle>
@@ -361,19 +372,18 @@ function ModelFormDialog({
           <div className="grid gap-4">
             <div className="grid gap-1.5">
               <Label htmlFor="ai-model-provider">{t("models.provider")}</Label>
-              <select
-                id="ai-model-provider"
-                value={providerId}
-                onChange={(event) => setProviderId(event.target.value)}
-                required
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-              >
-                {providers.map((provider) => (
-                  <option key={provider.id} value={provider.id}>
-                    {provider.name}
-                  </option>
-                ))}
-              </select>
+              <Select value={providerId} onValueChange={setProviderId}>
+                <SelectTrigger id="ai-model-provider" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {providers.map((provider) => (
+                    <SelectItem key={provider.id} value={provider.id}>
+                      {provider.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-1.5">
@@ -404,17 +414,22 @@ function ModelFormDialog({
 
             <div className="grid gap-1.5">
               <Label htmlFor="ai-model-kind">{t("models.kind")}</Label>
-              <select
-                id="ai-model-kind"
+              <Select
                 value={kind}
-                onChange={(event) =>
-                  handleKindChange(event.target.value as AiModelKind)
+                onValueChange={(value) =>
+                  handleKindChange(value as AiModelKind)
                 }
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
               >
-                <option value="CHAT">{t("modelKinds.CHAT")}</option>
-                <option value="EMBEDDING">{t("modelKinds.EMBEDDING")}</option>
-              </select>
+                <SelectTrigger id="ai-model-kind" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CHAT">{t("modelKinds.CHAT")}</SelectItem>
+                  <SelectItem value="EMBEDDING">
+                    {t("modelKinds.EMBEDDING")}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-1.5">
