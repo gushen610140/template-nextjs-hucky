@@ -65,6 +65,7 @@ dotenv.config({ path: envFile, quiet: true });
 | `QDRANT_URL` | Qdrant 服务地址 | RAG 功能使用；例如 `https://qdrant.example.com`，由服务端访问 |
 | `QDRANT_API_KEY` | Qdrant API Key | 仅服务端使用；未开启鉴权的实例可以留空 |
 | `QDRANT_COLLECTION` | RAG 向量集合名 | 建议显式填写；集合不存在时由 RAG 初始化逻辑创建 |
+| `QDRANT_VECTOR_SIZE` | RAG 向量维度 | 必须与 embedding 模型输出一致；当前单集合固定值，建好后不能直接修改 |
 | `ONLYOFFICE_DS_URL` | Document Server 地址 | 浏览器和 DS 都能访问；例如 `https://office.example.com` |
 | `ONLYOFFICE_JWT_SECRET` | OnlyOffice JWT 密钥 | 必须与 DS 的 `JWT_SECRET` 完全一致 |
 | `ONLYOFFICE_SAVE_CALLBACK_URL` | 保存回调地址（可选） | 生产环境填项目部署服务器的公网可访问地址；留空或填 loopback 时编辑器可打开但无法保存 |
@@ -109,6 +110,7 @@ AI_SECRET_KEY=
 QDRANT_URL=
 QDRANT_API_KEY=
 QDRANT_COLLECTION=
+QDRANT_VECTOR_SIZE=
 
 ONLYOFFICE_DS_URL=
 ONLYOFFICE_JWT_SECRET=

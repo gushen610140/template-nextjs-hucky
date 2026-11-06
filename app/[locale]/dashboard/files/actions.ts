@@ -316,6 +316,14 @@ export async function deleteFile(id: string): Promise<FileActionResult> {
   // 幂等: 已软删除直接成功
   if (file.status === "DELETED") return { ok: true };
 
+  const ragReference = await prisma.ragLibraryFile.findFirst({
+    where: { fileId: file.id },
+    select: { id: true },
+  });
+  if (ragReference) {
+    return { ok: false, error: "file_in_rag" };
+  }
+
   try {
     await softDelete(file.id);
   } catch (error) {
@@ -462,6 +470,16 @@ export async function deleteFolder(id: string): Promise<FileActionResult> {
     where: { folderId: { in: folderIds }, status: "READY" },
     select: { id: true, key: true },
   });
+
+  if (files.length > 0) {
+    const ragReference = await prisma.ragLibraryFile.findFirst({
+      where: { fileId: { in: files.map((file) => file.id) } },
+      select: { id: true },
+    });
+    if (ragReference) {
+      return { ok: false, error: "file_in_rag" };
+    }
+  }
 
   try {
     await prisma.$transaction(async (tx) => {

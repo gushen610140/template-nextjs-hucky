@@ -65,6 +65,7 @@ Setting `NODE_ENV=production` inside `.env.development` puts the file-loading lo
 | `QDRANT_URL` | Qdrant service URL | Used by RAG, e.g. `https://qdrant.example.com`; accessed from the server |
 | `QDRANT_API_KEY` | Qdrant API key | Server-side only; may be empty for instances without authentication |
 | `QDRANT_COLLECTION` | RAG vector collection name | Set it explicitly; the collection is created by the RAG initializer when missing |
+| `QDRANT_VECTOR_SIZE` | RAG vector dimension | Must match the embedding model output; fixed for the single collection and cannot be changed in place |
 | `ONLYOFFICE_DS_URL` | Document Server URL | Reachable by both the browser and DS, e.g. `https://office.example.com` |
 | `ONLYOFFICE_JWT_SECRET` | OnlyOffice JWT secret | Must match the DS `JWT_SECRET` exactly |
 | `ONLYOFFICE_SAVE_CALLBACK_URL` | Save callback URL (optional) | In production use a publicly reachable deployment address; empty or loopback still opens the editor but disables saving |
@@ -109,6 +110,7 @@ AI_SECRET_KEY=
 QDRANT_URL=
 QDRANT_API_KEY=
 QDRANT_COLLECTION=
+QDRANT_VECTOR_SIZE=
 
 ONLYOFFICE_DS_URL=
 ONLYOFFICE_JWT_SECRET=
