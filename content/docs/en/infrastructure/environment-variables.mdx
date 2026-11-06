@@ -61,11 +61,14 @@ Setting `NODE_ENV=production` inside `.env.development` puts the file-loading lo
 | `RUSTFS_ACCESS_KEY` | RustFS access key | Server-side only; never prefix with `NEXT_PUBLIC_` |
 | `RUSTFS_SECRET_KEY` | RustFS secret key | Server-side only; leaking it grants bucket write access |
 | `RUSTFS_BUCKET` | Private bucket name | Create it beforehand and configure CORS for `PUT`, `GET`, `HEAD` on the frontend origin |
+| `AI_SECRET_KEY` | Encryption passphrase for AI provider keys | Any length, server-side only; derives the encryption key, do not change it after deployment or existing ciphertext cannot be decrypted |
 | `ONLYOFFICE_DS_URL` | Document Server URL | Reachable by both the browser and DS, e.g. `https://office.example.com` |
 | `ONLYOFFICE_JWT_SECRET` | OnlyOffice JWT secret | Must match the DS `JWT_SECRET` exactly |
 | `ONLYOFFICE_SAVE_CALLBACK_URL` | Save callback URL (optional) | In production use a publicly reachable deployment address; empty or loopback still opens the editor but disables saving |
 
 The region is fixed to `us-east-1` and presign expiry to 15 minutes, both in `lib/storage/client.ts` rather than environment variables. The app still boots without `RUSTFS_*`; only upload, confirm, and download fail. See [File storage](/en/docs/files) for the full module guide.
+
+`AI_SECRET_KEY` is optional at boot, but creating or updating an AI provider fails without it; see [AI](/en/docs/ai) for details.
 
 The Prisma CLI prefers `MIGRATE_DATABASE_URL` and falls back to `DATABASE_URL`; the application runtime only reads `DATABASE_URL`. This lets production use a direct connection for migrations and a pooled connection for runtime.
 
@@ -95,6 +98,8 @@ RUSTFS_ENDPOINT=
 RUSTFS_ACCESS_KEY=
 RUSTFS_SECRET_KEY=
 RUSTFS_BUCKET=
+
+AI_SECRET_KEY=
 
 ONLYOFFICE_DS_URL=
 ONLYOFFICE_JWT_SECRET=
