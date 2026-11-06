@@ -13,6 +13,7 @@ import { estimateTokens, RAG_EMBED_BATCH_SIZE, splitIntoChunks } from "./chunk";
 import { ensureQdrantCollection, getQdrantClient } from "./client";
 import { getQdrantConfig } from "./config";
 import { extractFileText } from "./extract";
+import { isRagFileSupported } from "./supported";
 
 const NAME_MAX_LENGTH = 80;
 const DESCRIPTION_MAX_LENGTH = 300;
@@ -365,12 +366,17 @@ export async function addFilesToLibrary(
       ownerId,
       status: "READY",
     },
-    select: { id: true },
+    select: { id: true, name: true, mimeType: true },
   });
   if (files.length === 0) throw new Error("no_files");
 
+  const supported = files.filter((file) =>
+    isRagFileSupported(file.name, file.mimeType),
+  );
+  if (supported.length === 0) throw new Error("unsupported_files");
+
   const result = await prisma.ragLibraryFile.createMany({
-    data: files.map((file) => ({ libraryId, fileId: file.id })),
+    data: supported.map((file) => ({ libraryId, fileId: file.id })),
     skipDuplicates: true,
   });
   return result.count;

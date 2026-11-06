@@ -28,6 +28,7 @@ function toResult(error: unknown): AiActionResult {
     "embedding_model_unavailable",
     "dimension_mismatch",
     "library_locked",
+    "unsupported_files",
     "name_taken",
   ]);
   if (known.has(message)) return { ok: false, error: message };

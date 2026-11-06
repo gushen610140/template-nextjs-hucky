@@ -1,48 +1,17 @@
 import mammoth from "mammoth";
 import { extractText as extractPdfText } from "unpdf";
+import {
+  getFileExtension,
+  isDocxRagFile,
+  isPdfRagFile,
+  isRagFileSupported,
+  isTextLikeRagFile,
+} from "@/lib/ai/rag/supported";
 import { readObjectBytes } from "@/lib/storage/objects";
 
 /** 单个文件解析上限; 超过上限让管理员先拆分或压缩。 */
 export const MAX_RAG_FILE_BYTES = 25 * 1024 * 1024;
 const MAX_EXTRACTED_CHARS = 2_000_000;
-
-const TEXT_MIME_TYPES = new Set([
-  "application/json",
-  "application/xml",
-  "application/x-yaml",
-  "application/yaml",
-  "text/xml",
-]);
-
-const TEXT_EXTENSIONS = new Set([
-  "txt",
-  "md",
-  "markdown",
-  "csv",
-  "tsv",
-  "json",
-  "xml",
-  "yaml",
-  "yml",
-  "html",
-  "htm",
-  "log",
-  "ini",
-  "toml",
-]);
-
-function fileExtension(name: string): string {
-  return name.split(".").pop()?.toLowerCase() ?? "";
-}
-
-function isTextFile(name: string, mimeType: string): boolean {
-  if (mimeType.startsWith("text/")) return true;
-  if (TEXT_MIME_TYPES.has(mimeType)) return true;
-  if (mimeType === "application/octet-stream") {
-    return TEXT_EXTENSIONS.has(fileExtension(name));
-  }
-  return false;
-}
 
 function normalizeText(raw: string): string {
   return raw
@@ -87,22 +56,22 @@ export async function extractFileText(file: {
 
   const bytes = await readObjectBytes(file.key, MAX_RAG_FILE_BYTES);
   const mimeType = file.mimeType.toLowerCase();
-  const extension = fileExtension(file.name);
+  const extension = getFileExtension(file.name);
+
+  if (!isRagFileSupported(file.name, mimeType)) {
+    throw new Error("unsupported_file_type");
+  }
 
   let text: string;
-  if (mimeType === "application/pdf" || extension === "pdf") {
+  if (isPdfRagFile(file.name, mimeType)) {
     const result = await extractPdfText(bytes, { mergePages: true });
     text = result.text;
-  } else if (
-    mimeType ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-    extension === "docx"
-  ) {
+  } else if (isDocxRagFile(file.name, mimeType)) {
     const result = await mammoth.extractRawText({
       buffer: Buffer.from(bytes),
     });
     text = result.value;
-  } else if (isTextFile(file.name, mimeType)) {
+  } else if (isTextLikeRagFile(file.name, mimeType)) {
     text = decodeText(bytes);
     if (
       mimeType === "text/html" ||

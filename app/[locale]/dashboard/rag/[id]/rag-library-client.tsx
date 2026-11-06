@@ -40,12 +40,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TooltipButton } from "@/components/ui/tooltip-button";
+import { isRagFileSupported } from "@/lib/ai/rag/supported";
 import type {
   RagFileCandidate,
   RagFolderCandidate,
   RagLibraryFileRow,
 } from "@/lib/ai/types";
 import { formatBytes } from "@/lib/files/format";
+import { cn } from "@/lib/utils";
 import {
   addLibraryFiles,
   removeLibraryFile,
@@ -262,30 +265,32 @@ export function RagLibraryClient({
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => handleVectorize(file)}
-                        disabled={
-                          pending ||
-                          file.status === "PROCESSING" ||
-                          file.status === "QUEUED"
-                        }
-                        aria-label={t("vectorize")}
-                        title={t("vectorize")}
-                      >
-                        <Play />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-destructive"
-                        onClick={() => setRemoveTarget(file)}
-                        aria-label={t("remove")}
-                        title={t("remove")}
-                      >
-                        <Trash2 />
-                      </Button>
+                      <TooltipButton label={t("vectorize")}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleVectorize(file)}
+                          disabled={
+                            pending ||
+                            file.status === "PROCESSING" ||
+                            file.status === "QUEUED"
+                          }
+                          aria-label={t("vectorize")}
+                        >
+                          <Play />
+                        </Button>
+                      </TooltipButton>
+                      <TooltipButton label={t("remove")}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive"
+                          onClick={() => setRemoveTarget(file)}
+                          aria-label={t("remove")}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </TooltipButton>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -511,7 +516,10 @@ function FilePickerDialog({
             </span>
           </div>
 
-          <div className="max-h-80 overflow-y-auto rounded-lg border">
+          <div
+            className="max-h-80 overflow-y-auto rounded-lg border"
+            data-lenis-prevent
+          >
             {visibleFolders.map((folder) => (
               <button
                 key={folder.id}
@@ -534,6 +542,7 @@ function FilePickerDialog({
             ) : (
               visibleFiles.map((file) => {
                 const exists = existingFileIds.has(file.id);
+                const supported = isRagFileSupported(file.name, file.mimeType);
                 return (
                   <div
                     key={file.id}
@@ -542,7 +551,7 @@ function FilePickerDialog({
                     <Checkbox
                       id={`rag-picker-${file.id}`}
                       checked={exists || selected.has(file.id)}
-                      disabled={exists}
+                      disabled={exists || !supported}
                       onCheckedChange={(checked) =>
                         toggle(file.id, checked === true)
                       }
@@ -550,14 +559,20 @@ function FilePickerDialog({
                     <FileText className="size-4 text-muted-foreground" />
                     <Label
                       htmlFor={`rag-picker-${file.id}`}
-                      className="min-w-0 flex-1 cursor-pointer truncate font-normal"
+                      className={cn(
+                        "min-w-0 flex-1 cursor-pointer truncate font-normal",
+                        !supported && "text-muted-foreground",
+                        exists && "cursor-default",
+                      )}
                     >
                       {file.name}
                     </Label>
                     <span className="text-muted-foreground text-xs">
                       {exists
                         ? t("alreadyAdded")
-                        : formatBytes(file.size, locale)}
+                        : !supported
+                          ? t("unsupported")
+                          : formatBytes(file.size, locale)}
                     </span>
                   </div>
                 );
