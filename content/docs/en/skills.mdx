@@ -21,11 +21,12 @@ A fresh clone therefore has no `.agents/skills/`; restore it from `skills-lock.j
 
 ## Skills included in this project
 
-The lock file currently pins 11 skills:
+The lock file currently pins 12 skills:
 
 | Skill | Source | Purpose |
 | --- | --- | --- |
 | `caveman-commit` | `juliusbrussee/caveman` | Compressed Conventional Commits messages |
+| `grill-me` | `mattpocock/skills` | Relentless interview to sharpen a plan or design |
 | `prisma-cli` | `prisma/skills` | Prisma CLI commands, migrations, Studio, debugging |
 | `prisma-client-api` | `prisma/skills` | Prisma Client queries, filters, transactions |
 | `prisma-compute` | `prisma/skills` | Prisma Compute deployment (reference only, unused here) |
@@ -38,6 +39,16 @@ The lock file currently pins 11 skills:
 | `shadcn` | `shadcn/ui` | shadcn/ui components, registry, and styling |
 
 Skills marked "reference only" ship with the Prisma skill pack. The project may not use them today, but they help when upgrading or switching databases.
+
+## Using grill-me for complex problems
+
+`grill-me` is an interview-style skill: instead of producing a plan immediately, it questions assumptions, constraints, and edge cases until the design is sharp. Invoke it for architecture decisions, cross-module refactors, and ambiguous requirements. Skip it for small, well-defined changes.
+
+```text
+Use the grill-me skill to challenge this design before implementation.
+```
+
+The project's `AGENTS.md` asks the agent to invoke this skill for complex tasks.
 
 ## Installing skills
 
@@ -72,7 +83,7 @@ This reads `skills-lock.json` and restores skills into `.agents/skills/`. It doe
 bunx skills list
 ```
 
-You should see the 11 skills listed above. OpenCode loads `.agents/skills/` automatically; no extra copying is required.
+You should see the 12 skills listed above. OpenCode loads `.agents/skills/` automatically; no extra copying is required.
 
 </Step>
 
@@ -84,6 +95,7 @@ You should see the 11 skills listed above. OpenCode loads `.agents/skills/` auto
 bunx skills add prisma/skills --skill '*' -a opencode -y
 bunx skills add shadcn/ui --skill shadcn -a opencode -y
 bunx skills add juliusbrussee/caveman --skill caveman-commit -a opencode -y
+bunx skills add mattpocock/skills --skill grill-me -a opencode -y
 ```
 
 ## Updates and maintenance
