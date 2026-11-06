@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type {
   ChatAgentOption,
+  ChatCitation,
   ChatConversationDetail,
   ChatConversationSummary,
   ChatMessageRow,
@@ -45,6 +46,7 @@ type StreamStartPayload = {
   userMessageId: string;
   assistantMessageId: string;
   title: string;
+  citations?: ChatCitation[] | null;
 };
 
 function nowIso() {
@@ -299,6 +301,7 @@ export function ChatShell({
       modelName: null,
       inputTokens: null,
       outputTokens: null,
+      citations: null,
       createdAt: timestamp,
     };
     const assistantMessage: ChatMessageRow = {
@@ -311,6 +314,7 @@ export function ChatShell({
       modelName: currentAgent?.modelName ?? conversation.modelName,
       inputTokens: null,
       outputTokens: null,
+      citations: null,
       createdAt: timestamp,
     };
 
@@ -381,6 +385,7 @@ export function ChatShell({
                     ...message,
                     id: start.assistantMessageId,
                     modelName: message.modelName,
+                    citations: start.citations ?? message.citations,
                   };
                 }
                 if (message.id === userMessage.id) {
@@ -603,6 +608,30 @@ export function ChatShell({
                         {message.status === "ABORTED" && ` · ${t("aborted")}`}
                       </div>
                     )}
+                    {message.role === "ASSISTANT" &&
+                      message.citations &&
+                      message.citations.length > 0 && (
+                        <div className="mt-2 border-t pt-2">
+                          <p className="text-muted-foreground text-xs">
+                            {t("sources")}
+                          </p>
+                          <ul className="mt-1 grid gap-1">
+                            {message.citations.map((citation, index) => (
+                              <li
+                                key={`${citation.fileId}-${citation.chunkIndex}-${index}`}
+                                className="flex items-center justify-between gap-2 text-xs"
+                              >
+                                <span className="truncate text-muted-foreground">
+                                  {citation.libraryName} / {citation.fileName}
+                                </span>
+                                <span className="shrink-0 tabular-nums text-muted-foreground">
+                                  {citation.score.toFixed(3)}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                   </div>
                   {message.role === "USER" && (
                     <div className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full border bg-muted">

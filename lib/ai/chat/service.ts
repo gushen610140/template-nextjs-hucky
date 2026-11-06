@@ -1,9 +1,11 @@
 import { resolveAgentRuntime } from "@/lib/ai/agents/service";
 import type {
+  ChatCitation,
   ChatConversationDetail,
   ChatConversationSummary,
   ChatMessageRow,
 } from "@/lib/ai/types";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isUniqueConstraintError } from "@/lib/prisma-errors";
 
@@ -60,10 +62,14 @@ function mapMessage(row: {
   modelName: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
+  citations: unknown;
   createdAt: Date;
 }): ChatMessageRow {
   return {
     ...row,
+    citations: Array.isArray(row.citations)
+      ? (row.citations as ChatCitation[])
+      : null,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -117,6 +123,7 @@ export async function getConversation(
       modelName: true,
       inputTokens: true,
       outputTokens: true,
+      citations: true,
       createdAt: true,
     },
   });
@@ -289,6 +296,7 @@ export async function appendUserMessage(
             modelName: true,
             inputTokens: true,
             outputTokens: true,
+            citations: true,
             createdAt: true,
           },
         });
@@ -354,6 +362,7 @@ export async function finishAssistantMessage(
     status: "COMPLETED" | "FAILED" | "ABORTED";
     inputTokens?: number | null;
     outputTokens?: number | null;
+    citations?: ChatCitation[] | null;
   },
 ): Promise<void> {
   await prisma.aiMessage.update({
@@ -363,6 +372,14 @@ export async function finishAssistantMessage(
       status: input.status,
       inputTokens: input.inputTokens ?? null,
       outputTokens: input.outputTokens ?? null,
+      ...(input.citations === undefined
+        ? {}
+        : {
+            citations:
+              input.citations === null
+                ? Prisma.DbNull
+                : (input.citations as Prisma.InputJsonValue),
+          }),
     },
   });
 }
@@ -390,6 +407,7 @@ export async function getConversationHistory(
       modelName: true,
       inputTokens: true,
       outputTokens: true,
+      citations: true,
       createdAt: true,
     },
   });

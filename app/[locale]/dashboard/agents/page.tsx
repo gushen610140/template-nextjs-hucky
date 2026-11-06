@@ -1,4 +1,9 @@
-import type { AiAgentRow, AiModelOption } from "@/lib/ai/types";
+import { listRagLibraries } from "@/lib/ai/rag/service";
+import type {
+  AiAgentRow,
+  AiModelOption,
+  RagLibraryOption,
+} from "@/lib/ai/types";
 import { requirePermission } from "@/lib/authz";
 import { PERMISSIONS } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
@@ -7,7 +12,7 @@ import { AgentsClient } from "./agents-client";
 export default async function AgentsPage() {
   await requirePermission(PERMISSIONS.aiManage);
 
-  const [agents, models] = await Promise.all([
+  const [agents, models, libraries] = await Promise.all([
     prisma.aiAgent.findMany({
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       select: {
@@ -26,9 +31,11 @@ export default async function AgentsPage() {
             provider: { select: { name: true } },
           },
         },
+        knowledgeBases: { select: { libraryId: true } },
       },
     }),
     prisma.aiModel.findMany({
+      where: { kind: "CHAT" },
       orderBy: [
         { provider: { sortOrder: "asc" } },
         { sortOrder: "asc" },
@@ -38,9 +45,14 @@ export default async function AgentsPage() {
         id: true,
         displayName: true,
         isActive: true,
+        kind: true,
+        inputModalities: true,
+        outputModalities: true,
+        embeddingDimension: true,
         provider: { select: { name: true } },
       },
     }),
+    listRagLibraries(),
   ]);
 
   const agentRows: AiAgentRow[] = agents.map((agent) => ({
@@ -51,6 +63,7 @@ export default async function AgentsPage() {
     modelName: agent.model.displayName,
     providerName: agent.model.provider.name,
     systemPrompt: agent.systemPrompt,
+    knowledgeBaseIds: agent.knowledgeBases.map((item) => item.libraryId),
     isActive: agent.isActive,
     sortOrder: agent.sortOrder,
     createdAt: agent.createdAt.toISOString(),
@@ -62,7 +75,24 @@ export default async function AgentsPage() {
     displayName: model.displayName,
     providerName: model.provider.name,
     isActive: model.isActive,
+    kind: model.kind,
+    inputModalities: model.inputModalities,
+    outputModalities: model.outputModalities,
+    embeddingDimension: model.embeddingDimension,
   }));
 
-  return <AgentsClient agents={agentRows} models={modelOptions} />;
+  const libraryOptions: RagLibraryOption[] = libraries.map((library) => ({
+    id: library.id,
+    name: library.name,
+    embeddingModelName: library.embeddingModelName,
+    readyFileCount: library.readyFileCount,
+  }));
+
+  return (
+    <AgentsClient
+      agents={agentRows}
+      models={modelOptions}
+      libraries={libraryOptions}
+    />
+  );
 }

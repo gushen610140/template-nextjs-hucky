@@ -15,6 +15,7 @@ type AgentInput = {
   description: string;
   modelId: string;
   systemPrompt: string;
+  knowledgeBaseIds: string[];
   isActive: boolean;
   sortOrder: number;
 };
@@ -49,6 +50,7 @@ async function validateInput(input: AgentInput): Promise<
         description: string | null;
         modelId: string;
         systemPrompt: string;
+        knowledgeBaseIds: string[];
         isActive: boolean;
         sortOrder: number;
       };
@@ -70,9 +72,24 @@ async function validateInput(input: AgentInput): Promise<
 
   const model = await prisma.aiModel.findUnique({
     where: { id: input.modelId },
-    select: { id: true },
+    select: { id: true, kind: true },
   });
-  if (!model) return { ok: false, error: "invalid_model" };
+  if (!model || model.kind !== "CHAT") {
+    return { ok: false, error: "invalid_model" };
+  }
+
+  const knowledgeBaseIds = [...new Set(input.knowledgeBaseIds)].filter(
+    (id): id is string => typeof id === "string" && id.length > 0,
+  );
+  if (knowledgeBaseIds.length > 0) {
+    const libraries = await prisma.ragLibrary.findMany({
+      where: { id: { in: knowledgeBaseIds } },
+      select: { id: true },
+    });
+    if (libraries.length !== knowledgeBaseIds.length) {
+      return { ok: false, error: "invalid_library" };
+    }
+  }
 
   return {
     ok: true,
@@ -81,6 +98,7 @@ async function validateInput(input: AgentInput): Promise<
       description,
       modelId: model.id,
       systemPrompt,
+      knowledgeBaseIds,
       isActive: Boolean(input.isActive),
       sortOrder: Number.isFinite(input.sortOrder) ? input.sortOrder : 0,
     },
@@ -94,8 +112,21 @@ export async function createAgent(input: AgentInput): Promise<AiActionResult> {
   const validated = await validateInput(input);
   if (!validated.ok) return validated;
 
+  const { knowledgeBaseIds, ...data } = validated.data;
+
   try {
-    await prisma.aiAgent.create({ data: validated.data });
+    await prisma.$transaction(async (tx) => {
+      const agent = await tx.aiAgent.create({ data });
+      if (knowledgeBaseIds.length > 0) {
+        await tx.aiAgentKnowledgeBase.createMany({
+          data: knowledgeBaseIds.map((libraryId, index) => ({
+            agentId: agent.id,
+            libraryId,
+            sortOrder: index,
+          })),
+        });
+      }
+    });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       return { ok: false, error: "name_taken" };
@@ -123,10 +154,26 @@ export async function updateAgent(
   const validated = await validateInput(input);
   if (!validated.ok) return validated;
 
+  const { knowledgeBaseIds, ...data } = validated.data;
+
   try {
-    await prisma.aiAgent.update({
-      where: { id: target.id },
-      data: validated.data,
+    await prisma.$transaction(async (tx) => {
+      await tx.aiAgent.update({
+        where: { id: target.id },
+        data,
+      });
+      await tx.aiAgentKnowledgeBase.deleteMany({
+        where: { agentId: target.id },
+      });
+      if (knowledgeBaseIds.length > 0) {
+        await tx.aiAgentKnowledgeBase.createMany({
+          data: knowledgeBaseIds.map((libraryId, index) => ({
+            agentId: target.id,
+            libraryId,
+            sortOrder: index,
+          })),
+        });
+      }
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {

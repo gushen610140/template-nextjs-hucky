@@ -3,14 +3,14 @@ title: AI Chat
 description: Provider and model management plus LangChain / LangGraph chat integration
 ---
 
-The AI module separates two permission lines: administrators configure providers and models, while regular users only pick from the enabled catalog and chat. Users never receive provider API keys.
+The AI module separates two permission lines: administrators configure providers, models, agents, and knowledge bases, while regular users pick an enabled agent and chat. Users never receive provider API keys.
 
 ## Permissions and entry points
 
 | Permission | Capability | Entry |
 | --- | --- | --- |
-| `ai:manage` | Create, edit, delete, and test providers and models | `/[locale]/dashboard/providers`, `/[locale]/dashboard/models` |
-| `ai:own` | Chat with admin-configured models and manage own conversations | `/[locale]/dashboard/chat` |
+| `ai:manage` | Create, edit, delete, and test providers, models, agents, and RAG libraries | `/[locale]/dashboard/providers`, `/[locale]/dashboard/models`, `/[locale]/dashboard/agents`, `/[locale]/dashboard/rag` |
+| `ai:own` | Chat with admin-configured agents and manage own conversations | `/[locale]/dashboard/chat` |
 
 The built-in `user` role gets `ai:own` during seeding; `admin` has every permission. Pages and APIs enforce permissions on the server; the sidebar only hides unavailable entries.
 
@@ -64,5 +64,6 @@ OpenAI / Anthropic / Google / OpenAI-compatible service
 ## Next
 
 - [Providers and models](/en/docs/ai/providers-models): fields, key storage, and a DeepSeek example.
-- [Conversations and messages](/en/docs/ai/chat): data model, SSE protocol, model switching, and context trimming.
+- [Conversations and messages](/en/docs/ai/chat): data model, SSE protocol, agent switching, and context trimming.
+- [RAG libraries](/en/docs/ai/rag): embedding models, file vectorization, Qdrant, and agent retrieval.
 - [AI response policy](/en/docs/ai/response-policy): the repo-level `AGENTS.md` rules for tone and length.

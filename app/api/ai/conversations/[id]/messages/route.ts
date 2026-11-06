@@ -10,6 +10,8 @@ import {
   touchConversation,
 } from "@/lib/ai/chat/service";
 import { type ResolvedChatModel, resolveChatModel } from "@/lib/ai/models";
+import { retrieveKnowledge } from "@/lib/ai/rag/service";
+import type { ChatCitation } from "@/lib/ai/types";
 import { withPermission } from "@/lib/authz";
 import { PERMISSIONS } from "@/lib/permissions";
 
@@ -51,6 +53,7 @@ export const POST = withPermission<RouteContext>(
     // 没有 agentId 的历史会话回退到会话上的模型快照。
     let resolved: ResolvedChatModel | null = null;
     let systemPrompt = "";
+    let citations: ChatCitation[] = [];
 
     if (conversation.agentId) {
       const agent = await resolveAgentRuntime(conversation.agentId);
@@ -61,7 +64,32 @@ export const POST = withPermission<RouteContext>(
         );
       }
       resolved = agent.model;
-      systemPrompt = agent.systemPrompt;
+
+      if (agent.knowledgeBaseIds.length > 0) {
+        try {
+          const knowledge = await retrieveKnowledge(
+            agent.knowledgeBaseIds,
+            content,
+          );
+          citations = knowledge.citations;
+          if (knowledge.context) {
+            systemPrompt = [
+              agent.systemPrompt,
+              "以下是从知识库检索到的资料。回答时优先使用这些资料；资料不足时明确说明，不要编造。\n\n" +
+                knowledge.context,
+            ]
+              .filter(Boolean)
+              .join("\n\n");
+          } else {
+            systemPrompt = agent.systemPrompt;
+          }
+        } catch (error) {
+          console.error("knowledge retrieval failed:", error);
+          systemPrompt = agent.systemPrompt;
+        }
+      } else {
+        systemPrompt = agent.systemPrompt;
+      }
     } else if (conversation.modelId) {
       resolved = await resolveChatModel(conversation.modelId);
       if (!resolved) {
@@ -107,6 +135,7 @@ export const POST = withPermission<RouteContext>(
           title: appended.title,
           modelName: resolved.modelName,
           providerName: resolved.providerName,
+          citations,
         });
 
         let text = "";
@@ -135,6 +164,7 @@ export const POST = withPermission<RouteContext>(
             status,
             inputTokens,
             outputTokens,
+            citations,
           });
           await touchConversation(id);
 
@@ -143,6 +173,7 @@ export const POST = withPermission<RouteContext>(
             title: appended.title,
             status,
             usage: { inputTokens, outputTokens },
+            citations,
           });
         } catch (error) {
           const aborted =
@@ -155,6 +186,7 @@ export const POST = withPermission<RouteContext>(
               status: aborted ? "ABORTED" : "FAILED",
               inputTokens,
               outputTokens,
+              citations,
             });
           } catch (persistError) {
             console.error("persist assistant message failed:", persistError);

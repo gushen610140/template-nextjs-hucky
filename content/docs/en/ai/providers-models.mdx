@@ -47,6 +47,10 @@ Type mapping:
 | `providerId` | Parent provider |
 | `modelId` | Provider-facing model name, for example `gpt-4.1-mini` |
 | `displayName` | Name shown in the user picker |
+| `kind` | `CHAT` or `EMBEDDING`; each type is filtered out of the other's pickers |
+| `inputModalities` | Input modalities: text, image, audio, video |
+| `outputModalities` | Output modalities; `TEXT` for chat, `VECTOR` for embeddings |
+| `embeddingDimension` | Required for embeddings; must match the Qdrant collection |
 | `contextWindow` | Context window used to trim history |
 | `maxTokens` | Maximum output tokens; also part of the context budget |
 | `temperature` | Sampling temperature, 0–2 |
@@ -55,7 +59,7 @@ Type mapping:
 | `isDefault` | At most one default per provider; saving clears the previous default |
 | `sortOrder` | Model ordering |
 
-`modelId` is unique per provider. Deleting a provider cascades to its models; deleting a model sets `modelId` on referencing conversations to null, while message-level name snapshots remain.
+`modelId` is unique per provider. Deleting a provider cascades to its models; deleting a model sets `modelId` on referencing conversations to null, while message-level name snapshots remain. A model used by an agent or knowledge base cannot be deleted; a model used by a knowledge base also cannot change type or dimension.
 
 ## Key storage
 
