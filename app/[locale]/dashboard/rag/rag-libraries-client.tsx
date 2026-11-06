@@ -156,7 +156,10 @@ export function RagLibrariesClient({
                       </Badge>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell
+                    className="text-right"
+                    onDoubleClick={(event) => event.stopPropagation()}
+                  >
                     <div className="flex justify-end gap-1">
                       <TooltipButton label={t("open")}>
                         <Button variant="ghost" size="icon-sm" asChild>
