@@ -5,7 +5,10 @@ import { guardAiAction } from "@/lib/ai/action-guard";
 import { invalidateModelCache, resolveChatModel } from "@/lib/ai/models";
 import type { AiActionResult } from "@/lib/ai/types";
 import { prisma } from "@/lib/prisma";
-import { isUniqueConstraintError } from "@/lib/prisma-errors";
+import {
+  isForeignKeyConstraintError,
+  isUniqueConstraintError,
+} from "@/lib/prisma-errors";
 
 const ID_MAX_LENGTH = 160;
 const NAME_MAX_LENGTH = 120;
@@ -202,6 +205,9 @@ export async function deleteModel(id: string): Promise<AiActionResult> {
   try {
     await prisma.aiModel.delete({ where: { id: target.id } });
   } catch (error) {
+    if (isForeignKeyConstraintError(error)) {
+      return { ok: false, error: "model_in_use" };
+    }
     console.error("deleteModel failed:", error);
     return { ok: false, error: "unknown" };
   }
