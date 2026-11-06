@@ -3,7 +3,7 @@ import {
   deleteConversation,
   getConversation,
   renameConversation,
-  updateConversationModel,
+  updateConversationAgent,
 } from "@/lib/ai/chat/service";
 import { withPermission } from "@/lib/authz";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -30,13 +30,13 @@ export const PATCH = withPermission<RouteContext>(
     const { id } = await context.params;
     const body = (await request.json().catch(() => null)) as {
       title?: unknown;
-      modelId?: unknown;
+      agentId?: unknown;
     } | null;
 
     const title = typeof body?.title === "string" ? body.title : null;
-    const modelId = typeof body?.modelId === "string" ? body.modelId : null;
+    const agentId = typeof body?.agentId === "string" ? body.agentId : null;
 
-    if (!title && !modelId) {
+    if (!title && !agentId) {
       return NextResponse.json({ error: "invalid_input" }, { status: 400 });
     }
 
@@ -45,11 +45,11 @@ export const PATCH = withPermission<RouteContext>(
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
 
-    if (modelId) {
-      const updated = await updateConversationModel(user.id, id, modelId);
+    if (agentId) {
+      const updated = await updateConversationAgent(user.id, id, agentId);
       if (!updated) {
         return NextResponse.json(
-          { error: "model_unavailable" },
+          { error: "agent_unavailable" },
           { status: 400 },
         );
       }

@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { resolveAgentRuntime } from "@/lib/ai/agents/service";
 import { streamChat } from "@/lib/ai/chat/graph";
 import {
   appendUserMessage,
@@ -8,7 +9,7 @@ import {
   getSendContext,
   touchConversation,
 } from "@/lib/ai/chat/service";
-import { resolveChatModel } from "@/lib/ai/models";
+import { type ResolvedChatModel, resolveChatModel } from "@/lib/ai/models";
 import { withPermission } from "@/lib/authz";
 import { PERMISSIONS } from "@/lib/permissions";
 
@@ -45,13 +46,34 @@ export const POST = withPermission<RouteContext>(
     if (!conversation) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
-    if (!conversation.modelId) {
-      return NextResponse.json({ error: "model_required" }, { status: 400 });
+
+    // 智能体会话每次发送都重新解析, 管理端改提示词或换模型后立即生效。
+    // 没有 agentId 的历史会话回退到会话上的模型快照。
+    let resolved: ResolvedChatModel | null = null;
+    let systemPrompt = "";
+
+    if (conversation.agentId) {
+      const agent = await resolveAgentRuntime(conversation.agentId);
+      if (!agent) {
+        return NextResponse.json(
+          { error: "agent_unavailable" },
+          { status: 400 },
+        );
+      }
+      resolved = agent.model;
+      systemPrompt = agent.systemPrompt;
+    } else if (conversation.modelId) {
+      resolved = await resolveChatModel(conversation.modelId);
+      if (!resolved) {
+        return NextResponse.json(
+          { error: "model_unavailable" },
+          { status: 400 },
+        );
+      }
     }
 
-    const resolved = await resolveChatModel(conversation.modelId);
     if (!resolved) {
-      return NextResponse.json({ error: "model_unavailable" }, { status: 400 });
+      return NextResponse.json({ error: "agent_required" }, { status: 400 });
     }
 
     const appended = await appendUserMessage(user.id, id, content);
@@ -95,6 +117,7 @@ export const POST = withPermission<RouteContext>(
           for await (const chunk of streamChat({
             model: resolved,
             history,
+            systemPrompt,
             signal: request.signal,
           })) {
             if (chunk.type === "text") {

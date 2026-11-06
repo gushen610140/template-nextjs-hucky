@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { ChatShell } from "@/components/chat/chat-shell";
+import { getActiveAgents } from "@/lib/ai/agents/service";
 import { getConversation, listConversations } from "@/lib/ai/chat/service";
-import { getActiveCatalog } from "@/lib/ai/models";
 import { requirePermission } from "@/lib/authz";
 import { PERMISSIONS } from "@/lib/permissions";
 
@@ -13,8 +13,8 @@ export default async function ChatConversationPage({
   const { id } = await params;
   const user = await requirePermission(PERMISSIONS.aiOwn);
 
-  const [catalog, conversations, active] = await Promise.all([
-    getActiveCatalog(),
+  const [agents, conversations, active] = await Promise.all([
+    getActiveAgents(),
     listConversations(user.id),
     getConversation(user.id, id),
   ]);
@@ -24,7 +24,7 @@ export default async function ChatConversationPage({
   return (
     <ChatShell
       key={active.id}
-      catalog={catalog}
+      agents={agents}
       conversations={conversations}
       active={active}
     />
