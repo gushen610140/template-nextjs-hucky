@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { guardAiAction } from "@/lib/ai/action-guard";
 import { encryptSecret } from "@/lib/ai/crypto";
+import { invalidateEmbeddingCache } from "@/lib/ai/embeddings";
 import { invalidateModelCache } from "@/lib/ai/models";
 import type { AiActionResult } from "@/lib/ai/types";
 import type { AiProviderType } from "@/lib/generated/prisma/enums";
@@ -155,6 +156,7 @@ export async function updateProvider(input: {
   }
 
   invalidateModelCache();
+  invalidateEmbeddingCache();
   revalidateAiPages();
   return { ok: true };
 }
@@ -180,6 +182,7 @@ export async function deleteProvider(id: string): Promise<AiActionResult> {
   }
 
   invalidateModelCache();
+  invalidateEmbeddingCache();
   revalidateAiPages();
   return { ok: true };
 }

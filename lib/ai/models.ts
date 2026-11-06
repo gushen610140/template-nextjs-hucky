@@ -42,7 +42,7 @@ export async function getActiveCatalog(): Promise<AiCatalog> {
   const providers = await prisma.aiProvider.findMany({
     where: {
       isActive: true,
-      models: { some: { isActive: true } },
+      models: { some: { isActive: true, kind: "CHAT" } },
     },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     select: {
@@ -50,7 +50,7 @@ export async function getActiveCatalog(): Promise<AiCatalog> {
       name: true,
       type: true,
       models: {
-        where: { isActive: true },
+        where: { isActive: true, kind: "CHAT" },
         orderBy: [
           { isDefault: "desc" },
           { sortOrder: "asc" },
@@ -91,6 +91,7 @@ export async function resolveChatModel(
   const model = await prisma.aiModel.findFirst({
     where: {
       id: modelId,
+      kind: "CHAT",
       isActive: true,
       provider: { isActive: true },
     },

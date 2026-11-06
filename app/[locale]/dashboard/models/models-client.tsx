@@ -26,7 +26,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { AiModelRow, AiProviderRow } from "@/lib/ai/types";
+import {
+  AI_MODALITIES,
+  type AiModelRow,
+  type AiProviderRow,
+} from "@/lib/ai/types";
+import type { AiModality, AiModelKind } from "@/lib/generated/prisma/enums";
 import { createModel, deleteModel, testModel, updateModel } from "./actions";
 
 type ModelsClientProps = {
@@ -35,6 +40,11 @@ type ModelsClientProps = {
 };
 
 type TestState = { ok: boolean; modelId: string } | null;
+
+const INPUT_MODALITIES = AI_MODALITIES.filter(
+  (modality): modality is Exclude<AiModality, "VECTOR"> =>
+    modality !== "VECTOR",
+);
 
 export function ModelsClient({ models, providers }: ModelsClientProps) {
   const t = useTranslations("Ai");
@@ -126,6 +136,12 @@ export function ModelsClient({ models, providers }: ModelsClientProps) {
                       <span className="font-medium">{model.displayName}</span>
                       <span className="text-muted-foreground text-xs">
                         {model.modelId}
+                      </span>
+                      <span className="text-muted-foreground text-xs">
+                        {t(`modelKinds.${model.kind}`)}
+                        {model.kind === "EMBEDDING" &&
+                          model.embeddingDimension &&
+                          ` · ${model.embeddingDimension}d`}
                       </span>
                     </div>
                   </TableCell>
@@ -246,6 +262,13 @@ function ModelFormDialog({
   );
   const [modelId, setModelId] = useState(model?.modelId ?? "");
   const [displayName, setDisplayName] = useState(model?.displayName ?? "");
+  const [kind, setKind] = useState<AiModelKind>(model?.kind ?? "CHAT");
+  const [inputModalities, setInputModalities] = useState<string[]>(
+    model?.inputModalities ?? ["TEXT"],
+  );
+  const [embeddingDimension, setEmbeddingDimension] = useState(
+    model?.embeddingDimension?.toString() ?? "",
+  );
   const [contextWindow, setContextWindow] = useState(
     model?.contextWindow?.toString() ?? "",
   );
@@ -266,6 +289,25 @@ function ModelFormDialog({
     return t.has(key) ? t(key) : t("errors.unknown");
   }
 
+  function handleKindChange(next: AiModelKind) {
+    setKind(next);
+    if (next === "EMBEDDING") {
+      setInputModalities((current) =>
+        current.length > 0 ? current : ["TEXT"],
+      );
+      return;
+    }
+    setEmbeddingDimension("");
+  }
+
+  function toggleInputModality(modality: string, checked: boolean) {
+    setInputModalities((current) =>
+      checked
+        ? [...new Set([...current, modality])]
+        : current.filter((item) => item !== modality),
+    );
+  }
+
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -274,6 +316,10 @@ function ModelFormDialog({
       providerId,
       modelId,
       displayName,
+      kind,
+      inputModalities,
+      outputModalities: kind === "EMBEDDING" ? ["VECTOR"] : ["TEXT"],
+      embeddingDimension,
       contextWindow,
       maxTokens,
       temperature,
@@ -356,7 +402,82 @@ function ModelFormDialog({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="ai-model-kind">{t("models.kind")}</Label>
+              <select
+                id="ai-model-kind"
+                value={kind}
+                onChange={(event) =>
+                  handleKindChange(event.target.value as AiModelKind)
+                }
+                className="h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+              >
+                <option value="CHAT">{t("modelKinds.CHAT")}</option>
+                <option value="EMBEDDING">{t("modelKinds.EMBEDDING")}</option>
+              </select>
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label>{t("models.inputModalities")}</Label>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {INPUT_MODALITIES.map((modality) => (
+                  <div key={modality} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`ai-model-input-${modality}`}
+                      checked={inputModalities.includes(modality)}
+                      onCheckedChange={(checked) =>
+                        toggleInputModality(modality, checked === true)
+                      }
+                    />
+                    <Label
+                      htmlFor={`ai-model-input-${modality}`}
+                      className="font-normal"
+                    >
+                      {t(`modalities.${modality}`)}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label>{t("models.outputModalities")}</Label>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">
+                  {kind === "EMBEDDING"
+                    ? t("modalities.VECTOR")
+                    : t("modalities.TEXT")}
+                </Badge>
+              </div>
+            </div>
+
+            {kind === "EMBEDDING" && (
+              <div className="grid gap-1.5">
+                <Label htmlFor="ai-model-dimension">
+                  {t("models.embeddingDimension")}
+                </Label>
+                <Input
+                  id="ai-model-dimension"
+                  type="number"
+                  min={1}
+                  value={embeddingDimension}
+                  onChange={(event) =>
+                    setEmbeddingDimension(event.target.value)
+                  }
+                  placeholder="1024"
+                  required
+                />
+                <p className="text-muted-foreground text-xs">
+                  {t("models.embeddingDimensionHint")}
+                </p>
+              </div>
+            )}
+
+            <div
+              className={
+                kind === "CHAT" ? "grid grid-cols-2 gap-3" : "grid gap-3"
+              }
+            >
               <div className="grid gap-1.5">
                 <Label htmlFor="ai-model-context">
                   {t("models.contextWindow")}
@@ -370,35 +491,43 @@ function ModelFormDialog({
                   placeholder="128000"
                 />
               </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="ai-model-max-tokens">
-                  {t("models.maxTokens")}
-                </Label>
-                <Input
-                  id="ai-model-max-tokens"
-                  type="number"
-                  min={1}
-                  value={maxTokens}
-                  onChange={(event) => setMaxTokens(event.target.value)}
-                />
-              </div>
+              {kind === "CHAT" && (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="ai-model-max-tokens">
+                    {t("models.maxTokens")}
+                  </Label>
+                  <Input
+                    id="ai-model-max-tokens"
+                    type="number"
+                    min={1}
+                    value={maxTokens}
+                    onChange={(event) => setMaxTokens(event.target.value)}
+                  />
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-1.5">
-                <Label htmlFor="ai-model-temperature">
-                  {t("models.temperature")}
-                </Label>
-                <Input
-                  id="ai-model-temperature"
-                  type="number"
-                  min={0}
-                  max={2}
-                  step={0.1}
-                  value={temperature}
-                  onChange={(event) => setTemperature(event.target.value)}
-                />
-              </div>
+            <div
+              className={
+                kind === "CHAT" ? "grid grid-cols-2 gap-3" : "grid gap-3"
+              }
+            >
+              {kind === "CHAT" && (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="ai-model-temperature">
+                    {t("models.temperature")}
+                  </Label>
+                  <Input
+                    id="ai-model-temperature"
+                    type="number"
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    value={temperature}
+                    onChange={(event) => setTemperature(event.target.value)}
+                  />
+                </div>
+              )}
               <div className="grid gap-1.5">
                 <Label htmlFor="ai-model-sort">{t("common.sortOrder")}</Label>
                 <Input

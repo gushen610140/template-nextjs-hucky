@@ -2,8 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { guardAiAction } from "@/lib/ai/action-guard";
+import {
+  invalidateEmbeddingCache,
+  resolveEmbeddingModel,
+} from "@/lib/ai/embeddings";
 import { invalidateModelCache, resolveChatModel } from "@/lib/ai/models";
 import type { AiActionResult } from "@/lib/ai/types";
+import type { AiModality, AiModelKind } from "@/lib/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
 import {
   isForeignKeyConstraintError,
@@ -13,10 +18,23 @@ import {
 const ID_MAX_LENGTH = 160;
 const NAME_MAX_LENGTH = 120;
 
+const MODEL_KINDS = new Set<AiModelKind>(["CHAT", "EMBEDDING"]);
+const MODALITIES = new Set<AiModality>([
+  "TEXT",
+  "IMAGE",
+  "AUDIO",
+  "VIDEO",
+  "VECTOR",
+]);
+
 type ModelInput = {
   providerId: string;
   modelId: string;
   displayName: string;
+  kind: AiModelKind;
+  inputModalities: string[];
+  outputModalities: string[];
+  embeddingDimension: string;
   contextWindow: string;
   maxTokens: string;
   temperature: string;
@@ -59,6 +77,10 @@ async function validateInput(input: ModelInput): Promise<
       data: {
         modelId: string;
         displayName: string;
+        kind: AiModelKind;
+        inputModalities: AiModality[];
+        outputModalities: AiModality[];
+        embeddingDimension: number | null;
         contextWindow: number | null;
         maxTokens: number | null;
         temperature: number | null;
@@ -81,6 +103,44 @@ async function validateInput(input: ModelInput): Promise<
   const displayName = normalizeText(input.displayName, NAME_MAX_LENGTH);
   if (!displayName) return { ok: false, error: "invalid_display_name" };
 
+  if (!MODEL_KINDS.has(input.kind)) {
+    return { ok: false, error: "invalid_kind" };
+  }
+
+  const inputModalities = [...new Set(input.inputModalities)]
+    .filter((value): value is AiModality => MODALITIES.has(value as AiModality))
+    .filter((value) => value !== "VECTOR");
+  if (inputModalities.length === 0) {
+    return { ok: false, error: "invalid_modalities" };
+  }
+
+  const outputModalities = [...new Set(input.outputModalities)].filter(
+    (value): value is AiModality => MODALITIES.has(value as AiModality),
+  );
+
+  // 当前对话只支持文本输出; 向量模型必须输出 VECTOR。
+  if (input.kind === "CHAT") {
+    if (outputModalities.length !== 1 || outputModalities[0] !== "TEXT") {
+      return { ok: false, error: "invalid_modalities" };
+    }
+  } else if (
+    outputModalities.length !== 1 ||
+    outputModalities[0] !== "VECTOR"
+  ) {
+    return { ok: false, error: "invalid_modalities" };
+  }
+
+  const embeddingDimension =
+    input.kind === "EMBEDDING"
+      ? parseOptionalInt(input.embeddingDimension, 1)
+      : null;
+  if (
+    embeddingDimension === "invalid" ||
+    (input.kind === "EMBEDDING" && !embeddingDimension)
+  ) {
+    return { ok: false, error: "invalid_embedding_dimension" };
+  }
+
   const contextWindow = parseOptionalInt(input.contextWindow, 1);
   if (contextWindow === "invalid") {
     return { ok: false, error: "invalid_context_window" };
@@ -101,6 +161,10 @@ async function validateInput(input: ModelInput): Promise<
     data: {
       modelId,
       displayName,
+      kind: input.kind,
+      inputModalities,
+      outputModalities,
+      embeddingDimension,
       contextWindow,
       maxTokens,
       temperature,
@@ -139,6 +203,7 @@ export async function createModel(input: ModelInput): Promise<AiActionResult> {
   }
 
   invalidateModelCache();
+  invalidateEmbeddingCache();
   revalidateAiPages();
   return { ok: true };
 }
@@ -153,12 +218,26 @@ export async function updateModel(
 
   const target = await prisma.aiModel.findUnique({
     where: { id: input.id },
-    select: { id: true },
+    select: {
+      id: true,
+      kind: true,
+      embeddingDimension: true,
+      _count: { select: { ragLibraries: true } },
+    },
   });
   if (!target) return { ok: false, error: "not_found" };
 
   const validated = await validateInput(input);
   if (!validated.ok) return validated;
+
+  // 知识库绑定的是模型维度; 已有知识库引用时不允许改类型或维度。
+  if (
+    target._count.ragLibraries > 0 &&
+    (target.kind !== validated.data.kind ||
+      target.embeddingDimension !== validated.data.embeddingDimension)
+  ) {
+    return { ok: false, error: "model_rag_locked" };
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -188,6 +267,7 @@ export async function updateModel(
   }
 
   invalidateModelCache(target.id);
+  invalidateEmbeddingCache(target.id);
   revalidateAiPages();
   return { ok: true };
 }
@@ -213,6 +293,7 @@ export async function deleteModel(id: string): Promise<AiActionResult> {
   }
 
   invalidateModelCache(target.id);
+  invalidateEmbeddingCache(target.id);
   revalidateAiPages();
   return { ok: true };
 }
@@ -222,13 +303,27 @@ export async function testModel(id: string): Promise<AiActionResult> {
   const guard = await guardAiAction();
   if (!guard.ok) return guard;
 
-  const resolved = await resolveChatModel(id);
-  if (!resolved) return { ok: false, error: "not_found" };
+  const model = await prisma.aiModel.findUnique({
+    where: { id },
+    select: { kind: true },
+  });
+  if (!model) return { ok: false, error: "not_found" };
 
   try {
-    await resolved.chatModel.invoke("Reply with the single word OK.", {
-      signal: AbortSignal.timeout(20_000),
-    });
+    if (model.kind === "EMBEDDING") {
+      const resolved = await resolveEmbeddingModel(id);
+      if (!resolved) return { ok: false, error: "not_found" };
+      const vector = await resolved.embeddings.embedQuery("ping");
+      if (vector.length !== resolved.dimension) {
+        return { ok: false, error: "dimension_mismatch" };
+      }
+    } else {
+      const resolved = await resolveChatModel(id);
+      if (!resolved) return { ok: false, error: "not_found" };
+      await resolved.chatModel.invoke("Reply with the single word OK.", {
+        signal: AbortSignal.timeout(20_000),
+      });
+    }
   } catch (error) {
     console.error("testModel failed:", error);
     return { ok: false, error: "test_failed" };
