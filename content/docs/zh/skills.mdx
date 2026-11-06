@@ -21,11 +21,12 @@ Skills 和 `node_modules` 一样属于“安装产物”，因此 **`.agents/` �
 
 ## 项目内置的 Skills
 
-当前锁定了 11 个 Skill：
+当前锁定了 12 个 Skill：
 
 | Skill | 来源 | 用途 |
 | --- | --- | --- |
 | `caveman-commit` | `juliusbrussee/caveman` | 生成压缩到意图的 Conventional Commits 提交信息 |
+| `grill-me` | `mattpocock/skills` | 通过连续追问打磨方案或设计 |
 | `prisma-cli` | `prisma/skills` | Prisma CLI 命令、迁移、Studio、调试 |
 | `prisma-client-api` | `prisma/skills` | Prisma Client 查询、过滤、事务 |
 | `prisma-compute` | `prisma/skills` | Prisma Compute 部署（备查，本项目未使用） |
@@ -38,6 +39,16 @@ Skills 和 `node_modules` 一样属于“安装产物”，因此 **`.agents/` �
 | `shadcn` | `shadcn/ui` | shadcn/ui 组件、registry 与样式规范 |
 
 其中标记“备查”的技能随 Prisma 技能包一起锁定，当前项目不一定直接用到，但升级或切换数据库时会派上用场。
+
+## 用 grill-me 处理复杂问题
+
+`grill-me` 是访谈式 Skill：不会直接给出方案，而是先追问目标、约束和边界，把模糊需求打磨清楚。适合架构决策、跨模块重构和需求不明确的场景；小而明确的改动不需要使用。
+
+```text
+使用 grill-me skill 在实现前挑战这个设计。
+```
+
+项目的 `AGENTS.md` 要求 Agent 在复杂任务中主动调用该 Skill。
 
 ## 安装 Skills
 
@@ -72,7 +83,7 @@ bunx skills experimental_install
 bunx skills list
 ```
 
-应该能看到上表中的 11 个 Skill。OpenCode 会自动加载 `.agents/skills/`，不需要再复制到其他目录。
+应该能看到上表中的 12 个 Skill。OpenCode 会自动加载 `.agents/skills/`，不需要再复制到其他目录。
 
 </Step>
 
@@ -84,6 +95,7 @@ bunx skills list
 bunx skills add prisma/skills --skill '*' -a opencode -y
 bunx skills add shadcn/ui --skill shadcn -a opencode -y
 bunx skills add juliusbrussee/caveman --skill caveman-commit -a opencode -y
+bunx skills add mattpocock/skills --skill grill-me -a opencode -y
 ```
 
 ## 更新与维护
