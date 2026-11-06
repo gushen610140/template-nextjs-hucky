@@ -201,10 +201,30 @@ model AiModel {
   updatedAt     DateTime @updatedAt
 
   provider      AiProvider       @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  agents        AiAgent[]
   conversations AiConversation[]
 
   @@unique([providerId, modelId])
   @@index([providerId, isActive, sortOrder])
+}
+
+/// 管理员配置的智能体。用户只选择智能体, 由智能体决定模型与系统提示词。
+/// RAG、skills 等能力后续通过独立关联表接入, 聊天路径只依赖 AiAgent。
+model AiAgent {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String?
+  modelId      String
+  systemPrompt String   @default("")
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  model         AiModel          @relation(fields: [modelId], references: [id], onDelete: Restrict)
+  conversations AiConversation[]
+
+  @@index([isActive, sortOrder])
 }
 
 // ─── AI 对话 ──────────────────────────────────────────
@@ -230,6 +250,8 @@ model AiConversation {
   id            String   @id @default(cuid())
   userId        String
   title         String
+  agentId       String?
+  agentName     String?
   providerId    String?
   modelId       String?
   providerName  String?
@@ -239,6 +261,7 @@ model AiConversation {
   updatedAt     DateTime @updatedAt
 
   user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agent    AiAgent?    @relation(fields: [agentId], references: [id], onDelete: SetNull)
   provider AiProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
   model    AiModel?    @relation(fields: [modelId], references: [id], onDelete: SetNull)
   messages AiMessage[]
