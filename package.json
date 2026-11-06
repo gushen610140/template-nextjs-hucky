@@ -32,6 +32,8 @@
     "@langchain/google-genai": "^2.3.4",
     "@langchain/langgraph": "^1.7.0",
     "@langchain/openai": "^1.8.0",
+    "@langchain/qdrant": "^1.0.3",
+    "@langchain/textsplitters": "^1.0.2",
     "@logto/next": "^5.0.2",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.0",
