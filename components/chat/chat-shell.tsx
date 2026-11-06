@@ -434,9 +434,9 @@ export function ChatShell({
   const composerDisabled = options.length === 0 || streaming;
 
   return (
-    <div className="flex h-[calc(100svh-5rem)] min-h-0 flex-1 overflow-hidden border-t">
+    <div className="flex h-[calc(100dvh-4rem)] min-h-0 shrink-0 overflow-hidden border-t md:h-[calc(100dvh-5rem)]">
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
+        <header className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-3">
           <div className="mr-auto min-w-0">
             <h1 className="truncate font-medium">
               {active?.title ?? t("newChatTitle")}
@@ -495,7 +495,7 @@ export function ChatShell({
         </header>
 
         {options.length === 0 && (
-          <div className="p-4">
+          <div className="shrink-0 p-4">
             <Alert>
               <AlertDescription>{t("noAgents")}</AlertDescription>
             </Alert>
@@ -503,7 +503,7 @@ export function ChatShell({
         )}
 
         {error && (
-          <div className="px-4 pt-4">
+          <div className="shrink-0 px-4 pt-4">
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
@@ -595,7 +595,7 @@ export function ChatShell({
           )}
         </div>
 
-        <div className="border-t p-4">
+        <div className="shrink-0 border-t p-4">
           <div className="mx-auto flex max-w-3xl items-end gap-2">
             <Textarea
               value={input}
