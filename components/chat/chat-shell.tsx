@@ -28,7 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type {
-  AiCatalog,
+  ChatAgentOption,
   ChatConversationDetail,
   ChatConversationSummary,
   ChatMessageRow,
@@ -36,7 +36,7 @@ import type {
 import { cn } from "@/lib/utils";
 
 type ChatShellProps = {
-  catalog: AiCatalog;
+  agents: ChatAgentOption[];
   conversations: ChatConversationSummary[];
   active: ChatConversationDetail | null;
 };
@@ -52,7 +52,7 @@ function nowIso() {
 }
 
 export function ChatShell({
-  catalog,
+  agents,
   conversations: initialConversations,
   active: initialActive,
 }: ChatShellProps) {
@@ -60,13 +60,8 @@ export function ChatShell({
   const locale = useLocale();
   const router = useRouter();
 
-  const options = catalog.providers.flatMap((provider) =>
-    provider.models.map((model) => ({
-      ...model,
-      providerName: provider.name,
-    })),
-  );
-  const firstModelId = options[0]?.id ?? null;
+  const options = agents;
+  const firstAgentId = options[0]?.id ?? null;
 
   const [conversations, setConversations] =
     useState<ChatConversationSummary[]>(initialConversations);
@@ -76,10 +71,10 @@ export function ChatShell({
   const [messages, setMessages] = useState<ChatMessageRow[]>(
     initialActive?.messages ?? [],
   );
-  const [modelId, setModelId] = useState<string | null>(
-    options.some((option) => option.id === initialActive?.modelId)
-      ? (initialActive?.modelId ?? firstModelId)
-      : firstModelId,
+  const [agentId, setAgentId] = useState<string | null>(
+    options.some((option) => option.id === initialActive?.agentId)
+      ? (initialActive?.agentId ?? firstAgentId)
+      : firstAgentId,
   );
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -108,7 +103,7 @@ export function ChatShell({
   }
 
   async function handleNewChat() {
-    if (!modelId || creating) return;
+    if (!agentId || creating) return;
     setCreating(true);
     setError(null);
 
@@ -116,7 +111,7 @@ export function ChatShell({
       const response = await fetch("/api/ai/conversations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelId, title: t("newChatTitle") }),
+        body: JSON.stringify({ agentId, title: t("newChatTitle") }),
       });
       const data = (await response.json().catch(() => null)) as {
         conversation?: ChatConversationSummary;
@@ -140,15 +135,15 @@ export function ChatShell({
     }
   }
 
-  async function handleModelChange(nextModelId: string) {
-    setModelId(nextModelId);
-    if (!active || nextModelId === active.modelId) return;
+  async function handleAgentChange(nextAgentId: string) {
+    setAgentId(nextAgentId);
+    if (!active || nextAgentId === active.agentId) return;
 
     try {
       const response = await fetch(`/api/ai/conversations/${active.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelId: nextModelId }),
+        body: JSON.stringify({ agentId: nextAgentId }),
       });
       const data = (await response.json().catch(() => null)) as {
         conversation?: ChatConversationSummary;
@@ -226,7 +221,7 @@ export function ChatShell({
 
   async function handleSend() {
     const content = input.trim();
-    if (!content || streaming || !modelId) return;
+    if (!content || streaming || !agentId) return;
 
     setError(null);
 
@@ -236,7 +231,7 @@ export function ChatShell({
         const response = await fetch("/api/ai/conversations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ modelId, title: t("newChatTitle") }),
+          body: JSON.stringify({ agentId, title: t("newChatTitle") }),
         });
         const data = (await response.json().catch(() => null)) as {
           conversation?: ChatConversationSummary;
@@ -263,14 +258,14 @@ export function ChatShell({
         setError(t("errors.unknown"));
         return;
       }
-    } else if (conversation.modelId !== modelId) {
+    } else if (conversation.agentId !== agentId) {
       try {
         const response = await fetch(
           `/api/ai/conversations/${conversation.id}`,
           {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ modelId }),
+            body: JSON.stringify({ agentId }),
           },
         );
         const data = (await response.json().catch(() => null)) as {
@@ -292,7 +287,7 @@ export function ChatShell({
       }
     }
 
-    const currentModel = options.find((option) => option.id === modelId);
+    const currentAgent = options.find((option) => option.id === agentId);
     const timestamp = nowIso();
     const userMessage: ChatMessageRow = {
       id: `local-user-${Date.now()}`,
@@ -312,8 +307,8 @@ export function ChatShell({
       role: "ASSISTANT",
       content: "",
       status: "STREAMING",
-      providerName: currentModel?.providerName ?? conversation.providerName,
-      modelName: currentModel?.displayName ?? conversation.modelName,
+      providerName: currentAgent?.providerName ?? conversation.providerName,
+      modelName: currentAgent?.modelName ?? conversation.modelName,
       inputTokens: null,
       outputTokens: null,
       createdAt: timestamp,
@@ -459,7 +454,7 @@ export function ChatShell({
           <Button
             className="w-full"
             onClick={handleNewChat}
-            disabled={!modelId || creating}
+            disabled={!agentId || creating}
           >
             <Plus />
             {t("newChat")}
@@ -488,7 +483,7 @@ export function ChatShell({
                     {conversation.title}
                   </span>
                   <span className="truncate text-muted-foreground text-xs">
-                    {conversation.modelName ?? t("noModel")}
+                    {conversation.agentName ?? t("noAgent")}
                   </span>
                 </button>
               ))}
@@ -504,27 +499,23 @@ export function ChatShell({
               {active?.title ?? t("newChatTitle")}
             </h1>
             <p className="truncate text-muted-foreground text-xs">
-              {active?.providerName
-                ? `${active.providerName} · ${active.modelName ?? ""}`
-                : t("modelHint")}
+              {active?.agentName
+                ? `${active.agentName} · ${active.modelName ?? ""}`
+                : t("agentHint")}
             </p>
           </div>
 
           <select
-            value={modelId ?? ""}
-            onChange={(event) => handleModelChange(event.target.value)}
+            value={agentId ?? ""}
+            onChange={(event) => handleAgentChange(event.target.value)}
             disabled={options.length === 0 || streaming}
-            aria-label={t("model")}
+            aria-label={t("agent")}
             className="h-8 max-w-56 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
           >
-            {catalog.providers.map((provider) => (
-              <optgroup key={provider.id} label={provider.name}>
-                {provider.models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.displayName}
-                  </option>
-                ))}
-              </optgroup>
+            {options.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
+              </option>
             ))}
           </select>
 
@@ -556,7 +547,7 @@ export function ChatShell({
         {options.length === 0 && (
           <div className="p-4">
             <Alert>
-              <AlertDescription>{t("noModels")}</AlertDescription>
+              <AlertDescription>{t("noAgents")}</AlertDescription>
             </Alert>
           </div>
         )}
@@ -654,7 +645,7 @@ export function ChatShell({
             ) : (
               <Button
                 onClick={() => void handleSend()}
-                disabled={!input.trim() || !modelId || composerDisabled}
+                disabled={!input.trim() || !agentId || composerDisabled}
                 aria-label={t("send")}
                 title={t("send")}
               >

@@ -18,20 +18,20 @@ export const POST = withPermission(
   PERMISSIONS.aiOwn,
   async (request: NextRequest, _context: unknown, user) => {
     const body = (await request.json().catch(() => null)) as {
-      modelId?: unknown;
+      agentId?: unknown;
       title?: unknown;
     } | null;
 
-    const modelId = typeof body?.modelId === "string" ? body.modelId : "";
+    const agentId = typeof body?.agentId === "string" ? body.agentId : "";
     const title = typeof body?.title === "string" ? body.title : undefined;
 
-    if (!modelId) {
-      return NextResponse.json({ error: "model_required" }, { status: 400 });
+    if (!agentId) {
+      return NextResponse.json({ error: "agent_required" }, { status: 400 });
     }
 
-    const conversation = await createConversation(user.id, { modelId, title });
+    const conversation = await createConversation(user.id, { agentId, title });
     if (!conversation) {
-      return NextResponse.json({ error: "model_unavailable" }, { status: 400 });
+      return NextResponse.json({ error: "agent_unavailable" }, { status: 400 });
     }
 
     return NextResponse.json({ conversation }, { status: 201 });

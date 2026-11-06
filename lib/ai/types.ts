@@ -61,9 +61,43 @@ export type AiCatalog = {
   providers: AiCatalogProvider[];
 };
 
+/** 管理端智能体列表行。 */
+export type AiAgentRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  modelId: string;
+  modelName: string;
+  providerName: string;
+  systemPrompt: string;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** 智能体表单里的模型选项。 */
+export type AiModelOption = {
+  id: string;
+  displayName: string;
+  providerName: string;
+  isActive: boolean;
+};
+
+/** 对话页可选的已启用智能体; 模型与供应商只用于展示。 */
+export type ChatAgentOption = {
+  id: string;
+  name: string;
+  description: string | null;
+  providerName: string;
+  modelName: string;
+};
+
 export type ChatConversationSummary = {
   id: string;
   title: string;
+  agentId: string | null;
+  agentName: string | null;
   providerId: string | null;
   modelId: string | null;
   providerName: string | null;

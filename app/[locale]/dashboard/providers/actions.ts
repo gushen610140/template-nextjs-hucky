@@ -7,7 +7,10 @@ import { invalidateModelCache } from "@/lib/ai/models";
 import type { AiActionResult } from "@/lib/ai/types";
 import type { AiProviderType } from "@/lib/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
-import { isUniqueConstraintError } from "@/lib/prisma-errors";
+import {
+  isForeignKeyConstraintError,
+  isUniqueConstraintError,
+} from "@/lib/prisma-errors";
 
 const NAME_MAX_LENGTH = 80;
 const BASE_URL_MAX_LENGTH = 500;
@@ -169,6 +172,9 @@ export async function deleteProvider(id: string): Promise<AiActionResult> {
   try {
     await prisma.aiProvider.delete({ where: { id: target.id } });
   } catch (error) {
+    if (isForeignKeyConstraintError(error)) {
+      return { ok: false, error: "provider_in_use" };
+    }
     console.error("deleteProvider failed:", error);
     return { ok: false, error: "unknown" };
   }

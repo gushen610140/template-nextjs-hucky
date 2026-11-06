@@ -110,8 +110,8 @@ export function AppSidebar({
     });
   }
 
-  // 对话入口只要求 ai:own; 供应商 / 模型是管理功能, 只对 ai:manage 展示。
-  // agents / RAG 暂未接入, 保留原有占位入口。
+  // 对话入口只要求 ai:own; 模型 / 供应商 / 智能体 / RAG 都是管理功能,
+  // 只对 ai:manage 展示。
   const aiItems: NavItem[] = [];
   if (canUseAi) {
     aiItems.push({
@@ -132,20 +132,18 @@ export function AppSidebar({
         url: `/${locale}/dashboard/providers`,
         icon: <Server />,
       },
+      {
+        title: t("agents"),
+        url: `/${locale}/dashboard/agents`,
+        icon: <Sparkles />,
+      },
+      {
+        title: t("rag"),
+        url: `/${locale}/dashboard/rag`,
+        icon: <Database />,
+      },
     );
   }
-  aiItems.push(
-    {
-      title: t("agents"),
-      url: `/${locale}/dashboard/agents`,
-      icon: <Sparkles />,
-    },
-    {
-      title: t("rag"),
-      url: `/${locale}/dashboard/rag`,
-      icon: <Database />,
-    },
-  );
 
   navGroups.push(
     {

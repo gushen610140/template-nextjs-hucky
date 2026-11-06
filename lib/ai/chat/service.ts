@@ -1,3 +1,4 @@
+import { resolveAgentRuntime } from "@/lib/ai/agents/service";
 import type {
   ChatConversationDetail,
   ChatConversationSummary,
@@ -13,6 +14,8 @@ const DEFAULT_HISTORY_LIMIT = 200;
 const conversationSelect = {
   id: true,
   title: true,
+  agentId: true,
+  agentName: true,
   providerId: true,
   modelId: true,
   providerName: true,
@@ -24,6 +27,8 @@ const conversationSelect = {
 function mapConversation(row: {
   id: string;
   title: string;
+  agentId: string | null;
+  agentName: string | null;
   providerId: string | null;
   modelId: string | null;
   providerName: string | null;
@@ -34,6 +39,8 @@ function mapConversation(row: {
   return {
     id: row.id,
     title: row.title,
+    agentId: row.agentId,
+    agentName: row.agentName,
     providerId: row.providerId,
     modelId: row.modelId,
     providerName: row.providerName,
@@ -125,6 +132,7 @@ export async function getSendContext(userId: string, id: string) {
     where: { id, userId },
     select: {
       id: true,
+      agentId: true,
       modelId: true,
       providerId: true,
       providerName: true,
@@ -135,21 +143,10 @@ export async function getSendContext(userId: string, id: string) {
 
 export async function createConversation(
   userId: string,
-  input: { modelId: string; title?: string },
+  input: { agentId: string; title?: string },
 ): Promise<ChatConversationSummary | null> {
-  const model = await prisma.aiModel.findFirst({
-    where: {
-      id: input.modelId,
-      isActive: true,
-      provider: { isActive: true },
-    },
-    select: {
-      id: true,
-      displayName: true,
-      provider: { select: { id: true, name: true } },
-    },
-  });
-  if (!model) return null;
+  const agent = await resolveAgentRuntime(input.agentId);
+  if (!agent) return null;
 
   const title = normalizeTitle(input.title ?? "") ?? "New chat";
 
@@ -157,10 +154,12 @@ export async function createConversation(
     data: {
       userId,
       title,
-      providerId: model.provider.id,
-      modelId: model.id,
-      providerName: model.provider.name,
-      modelName: model.displayName,
+      agentId: agent.id,
+      agentName: agent.name,
+      providerId: agent.model.providerId,
+      modelId: agent.model.modelId,
+      providerName: agent.model.providerName,
+      modelName: agent.model.modelName,
     },
     select: conversationSelect,
   });
@@ -191,39 +190,30 @@ export async function renameConversation(
   return mapConversation(conversation);
 }
 
-export async function updateConversationModel(
+export async function updateConversationAgent(
   userId: string,
   id: string,
-  modelId: string,
+  agentId: string,
 ): Promise<ChatConversationSummary | null> {
-  const [existing, model] = await Promise.all([
+  const [existing, agent] = await Promise.all([
     prisma.aiConversation.findFirst({
       where: { id, userId },
       select: { id: true },
     }),
-    prisma.aiModel.findFirst({
-      where: {
-        id: modelId,
-        isActive: true,
-        provider: { isActive: true },
-      },
-      select: {
-        id: true,
-        displayName: true,
-        provider: { select: { id: true, name: true } },
-      },
-    }),
+    resolveAgentRuntime(agentId),
   ]);
 
-  if (!existing || !model) return null;
+  if (!existing || !agent) return null;
 
   const conversation = await prisma.aiConversation.update({
     where: { id },
     data: {
-      providerId: model.provider.id,
-      modelId: model.id,
-      providerName: model.provider.name,
-      modelName: model.displayName,
+      agentId: agent.id,
+      agentName: agent.name,
+      providerId: agent.model.providerId,
+      modelId: agent.model.modelId,
+      providerName: agent.model.providerName,
+      modelName: agent.model.modelName,
     },
     select: conversationSelect,
   });
