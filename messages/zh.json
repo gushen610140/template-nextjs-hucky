@@ -654,6 +654,7 @@
     "pickerSearch": "搜索当前目录的文件名",
     "pickerEmpty": "当前目录没有可添加的文件。",
     "alreadyAdded": "已添加",
+    "unsupported": "不支持",
     "addSelected": "添加 {count} 个文件",
     "errors": {
       "invalid_name": "名称不能为空且长度不能超过 80 个字符。",
@@ -661,6 +662,7 @@
       "name_taken": "该知识库名称已存在。",
       "not_found": "知识库或文件不存在。",
       "no_files": "所选文件不存在、已删除或不属于你。",
+      "unsupported_files": "所选文件格式暂不支持向量化，仅支持文本、PDF 和 DOCX。",
       "embedding_model_unavailable": "向量模型不可用，请检查模型和供应商配置。",
       "dimension_mismatch": "模型维度与当前 Qdrant collection 不一致。",
       "library_locked": "知识库已有向量，不能切换模型。",
@@ -672,6 +674,8 @@
   "Chat": {
     "newChat": "新建对话",
     "newChatTitle": "新对话",
+    "conversations": "对话",
+    "backToMain": "返回",
     "emptyConversations": "还没有对话。",
     "noAgent": "未选择智能体",
     "agentHint": "选择智能体后开始对话",

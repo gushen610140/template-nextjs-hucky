@@ -18,8 +18,14 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import type * as React from "react";
+import { useState } from "react";
+import {
+  AiSubSidebar,
+  type AiSubSidebarMode,
+} from "@/components/ai-sub-sidebar";
 import { type NavGroup, type NavItem, NavMain } from "@/components/nav-main";
 import { NavSecondary } from "@/components/nav-secondary";
 import { NavUser } from "@/components/nav-user";
@@ -59,6 +65,23 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const t = useTranslations("Sidebar");
   const locale = useLocale();
+  const pathname = usePathname();
+  const [hiddenSub, setHiddenSub] = useState<AiSubSidebarMode | null>(null);
+
+  const subSection: AiSubSidebarMode | null = pathname.includes(
+    `/${locale}/dashboard/chat`,
+  )
+    ? "chat"
+    : pathname.includes(`/${locale}/dashboard/rag`)
+      ? "rag"
+      : null;
+  const subMode =
+    subSection &&
+    hiddenSub !== subSection &&
+    ((subSection === "chat" && canUseAi) ||
+      (subSection === "rag" && canManageAi))
+      ? subSection
+      : null;
 
   const navGroups: NavGroup[] = [];
 
@@ -118,6 +141,7 @@ export function AppSidebar({
       title: t("chat"),
       url: `/${locale}/dashboard/chat`,
       icon: <MessageSquare />,
+      onClick: () => setHiddenSub(null),
     });
   }
   if (canManageAi) {
@@ -141,6 +165,7 @@ export function AppSidebar({
         title: t("rag"),
         url: `/${locale}/dashboard/rag`,
         icon: <Database />,
+        onClick: () => setHiddenSub(null),
       },
     );
   }
@@ -180,30 +205,36 @@ export function AppSidebar({
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent>
-        <NavMain groups={navGroups} />
-        <NavSecondary
-          className="mt-auto"
-          items={[
-            {
-              title: t("support"),
-              url: "https://sunway.icu",
-              icon: <LifeBuoy />,
-              external: true,
-            },
-            {
-              title: t("feedback"),
-              url: "mailto:support@sunway.icu",
-              icon: <Send />,
-            },
-            {
-              title: t("documentation"),
-              url: `/${locale}/docs`,
-              icon: <BookOpen />,
-              newTab: true,
-            },
-          ]}
-        />
+      <SidebarContent data-lenis-prevent>
+        {subMode ? (
+          <AiSubSidebar mode={subMode} onBack={() => setHiddenSub(subMode)} />
+        ) : (
+          <>
+            <NavMain groups={navGroups} />
+            <NavSecondary
+              className="mt-auto"
+              items={[
+                {
+                  title: t("support"),
+                  url: "https://sunway.icu",
+                  icon: <LifeBuoy />,
+                  external: true,
+                },
+                {
+                  title: t("feedback"),
+                  url: "mailto:support@sunway.icu",
+                  icon: <Send />,
+                },
+                {
+                  title: t("documentation"),
+                  url: `/${locale}/docs`,
+                  icon: <BookOpen />,
+                  newTab: true,
+                },
+              ]}
+            />
+          </>
+        )}
       </SidebarContent>
       <SidebarFooter>
         <NavUser logtoEndpoint={logtoEndpoint} />

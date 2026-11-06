@@ -2,8 +2,9 @@
 
 import { ArrowRight, Database, Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { ConfirmDeleteDialog } from "@/components/rbac/confirm-delete-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -27,6 +35,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { TooltipButton } from "@/components/ui/tooltip-button";
 import type { AiModelOption, RagLibraryRow } from "@/lib/ai/types";
 import { createLibrary, deleteLibrary, updateLibrary } from "./actions";
 
@@ -34,15 +43,28 @@ type Props = {
   libraries: RagLibraryRow[];
   models: AiModelOption[];
   vectorSize: number;
+  initialCreate: boolean;
 };
 
-export function RagLibrariesClient({ libraries, models, vectorSize }: Props) {
+export function RagLibrariesClient({
+  libraries,
+  models,
+  vectorSize,
+  initialCreate,
+}: Props) {
   const t = useTranslations("Rag");
   const locale = useLocale();
+  const router = useRouter();
   const [formTarget, setFormTarget] = useState<RagLibraryRow | "create" | null>(
-    null,
+    initialCreate ? "create" : null,
   );
   const [deleteTarget, setDeleteTarget] = useState<RagLibraryRow | null>(null);
+
+  useEffect(() => {
+    if (!initialCreate) return;
+    setFormTarget("create");
+    router.replace(`/${locale}/dashboard/rag`);
+  }, [initialCreate, locale, router]);
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
@@ -96,7 +118,13 @@ export function RagLibrariesClient({ libraries, models, vectorSize }: Props) {
               </TableRow>
             ) : (
               libraries.map((library) => (
-                <TableRow key={library.id}>
+                <TableRow
+                  key={library.id}
+                  className="cursor-pointer"
+                  onDoubleClick={() =>
+                    router.push(`/${locale}/dashboard/rag/${library.id}`)
+                  }
+                >
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Database className="size-4 text-muted-foreground" />
@@ -130,34 +158,37 @@ export function RagLibrariesClient({ libraries, models, vectorSize }: Props) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon-sm" asChild>
-                        <Link
-                          href={`/${locale}/dashboard/rag/${library.id}`}
-                          aria-label={t("open")}
-                          title={t("open")}
+                      <TooltipButton label={t("open")}>
+                        <Button variant="ghost" size="icon-sm" asChild>
+                          <Link
+                            href={`/${locale}/dashboard/rag/${library.id}`}
+                            aria-label={t("open")}
+                          >
+                            <ArrowRight />
+                          </Link>
+                        </Button>
+                      </TooltipButton>
+                      <TooltipButton label={t("edit")}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setFormTarget(library)}
+                          aria-label={t("edit")}
                         >
-                          <ArrowRight />
-                        </Link>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setFormTarget(library)}
-                        aria-label={t("edit")}
-                        title={t("edit")}
-                      >
-                        <Pencil />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-destructive"
-                        onClick={() => setDeleteTarget(library)}
-                        aria-label={t("delete")}
-                        title={t("delete")}
-                      >
-                        <Trash2 />
-                      </Button>
+                          <Pencil />
+                        </Button>
+                      </TooltipButton>
+                      <TooltipButton label={t("delete")}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive"
+                          onClick={() => setDeleteTarget(library)}
+                          aria-label={t("delete")}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </TooltipButton>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -189,6 +220,9 @@ export function RagLibrariesClient({ libraries, models, vectorSize }: Props) {
           pendingLabel={t("deleting")}
           onConfirm={async () => {
             const result = await deleteLibrary(deleteTarget.id);
+            if (result.ok) {
+              window.dispatchEvent(new Event("ai-rag-libraries-changed"));
+            }
             return result.ok
               ? result
               : { ok: false, error: t(`errors.${result.error}`) };
@@ -237,6 +271,7 @@ function LibraryFormDialog({
         setError(errorText(result.error));
         return;
       }
+      window.dispatchEvent(new Event("ai-rag-libraries-changed"));
       onClose();
     });
   }
@@ -248,7 +283,7 @@ function LibraryFormDialog({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <form onSubmit={handleSubmit} className="grid gap-5">
           <DialogHeader>
             <DialogTitle>
@@ -285,21 +320,23 @@ function LibraryFormDialog({
 
             <div className="grid gap-1.5">
               <Label htmlFor="rag-library-model">{t("embeddingModel")}</Label>
-              <select
-                id="rag-library-model"
+              <Select
                 value={embeddingModelId}
-                onChange={(event) => setEmbeddingModelId(event.target.value)}
+                onValueChange={setEmbeddingModelId}
                 disabled={modelLocked}
-                required
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
               >
-                {models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.providerName} · {model.displayName} ·{" "}
-                    {model.embeddingDimension}d
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="rag-library-model" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {models.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.providerName} · {model.displayName} ·{" "}
+                      {model.embeddingDimension}d
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {modelLocked && (
                 <p className="text-muted-foreground text-xs">
                   {t("modelLockedHint")}

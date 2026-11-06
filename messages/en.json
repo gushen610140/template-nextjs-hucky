@@ -654,6 +654,7 @@
     "pickerSearch": "Search files in the current folder",
     "pickerEmpty": "No files available in this folder.",
     "alreadyAdded": "Added",
+    "unsupported": "Unsupported",
     "addSelected": "Add {count} files",
     "errors": {
       "invalid_name": "Name cannot be empty or longer than 80 characters.",
@@ -661,6 +662,7 @@
       "name_taken": "That library name already exists.",
       "not_found": "The library or file does not exist.",
       "no_files": "The selected files do not exist, were deleted, or are not yours.",
+      "unsupported_files": "The selected file types cannot be vectorized. Only text, PDF, and DOCX are supported.",
       "embedding_model_unavailable": "The embedding model is unavailable. Check the model and provider.",
       "dimension_mismatch": "The model dimension does not match the current Qdrant collection.",
       "library_locked": "This library already has vectors and its model cannot change.",
@@ -672,6 +674,8 @@
   "Chat": {
     "newChat": "New chat",
     "newChatTitle": "New chat",
+    "conversations": "Conversations",
+    "backToMain": "Back",
     "emptyConversations": "No conversations yet.",
     "noAgent": "No agent selected",
     "agentHint": "Select an agent to start chatting",

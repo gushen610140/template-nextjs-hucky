@@ -14,6 +14,7 @@ export type NavItem = {
   title: string;
   url: string;
   icon: React.ReactNode;
+  onClick?: () => void;
 };
 
 export type NavGroup = {
@@ -54,7 +55,7 @@ export function NavMain({ groups }: Readonly<{ groups: NavGroup[] }>) {
                   tooltip={item.title}
                   isActive={isActivePath(pathname, item.url, allUrls)}
                 >
-                  <Link href={item.url}>
+                  <Link href={item.url} onClick={item.onClick}>
                     {item.icon}
                     <span>{item.title}</span>
                   </Link>

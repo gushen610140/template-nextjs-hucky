@@ -2,9 +2,9 @@
 
 import {
   Bot,
+  ChevronDown,
   MessageSquare,
   Pencil,
-  Plus,
   Send,
   Square,
   Trash2,
@@ -26,7 +26,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { TooltipButton } from "@/components/ui/tooltip-button";
 import type {
   ChatAgentOption,
   ChatCitation,
@@ -80,7 +88,6 @@ export function ChatShell({
   );
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -104,37 +111,8 @@ export function ChatShell({
     });
   }
 
-  async function handleNewChat() {
-    if (!agentId || creating) return;
-    setCreating(true);
-    setError(null);
-
-    try {
-      const response = await fetch("/api/ai/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentId, title: t("newChatTitle") }),
-      });
-      const data = (await response.json().catch(() => null)) as {
-        conversation?: ChatConversationSummary;
-        error?: string;
-      } | null;
-
-      if (!response.ok || !data?.conversation) {
-        setError(errorText(data?.error ?? "unknown"));
-        return;
-      }
-
-      setConversations((current) => [
-        data.conversation as ChatConversationSummary,
-        ...current,
-      ]);
-      router.push(`/${locale}/dashboard/chat/${data.conversation.id}`);
-    } catch {
-      setError(t("errors.unknown"));
-    } finally {
-      setCreating(false);
-    }
+  function notifyConversationsChanged() {
+    window.dispatchEvent(new Event("ai-conversations-changed"));
   }
 
   async function handleAgentChange(nextAgentId: string) {
@@ -186,6 +164,7 @@ export function ChatShell({
     const next = data.conversation;
     setActive((current) => (current ? { ...current, ...next } : current));
     updateConversation(next);
+    notifyConversationsChanged();
     return true;
   }
 
@@ -202,6 +181,7 @@ export function ChatShell({
 
     const remaining = conversations.filter((item) => item.id !== active.id);
     setConversations(remaining);
+    notifyConversationsChanged();
     router.push(
       remaining[0]
         ? `/${locale}/dashboard/chat/${remaining[0].id}`
@@ -251,6 +231,7 @@ export function ChatShell({
           data.conversation as ChatConversationSummary,
           ...current,
         ]);
+        notifyConversationsChanged();
         window.history.replaceState(
           null,
           "",
@@ -453,50 +434,7 @@ export function ChatShell({
   const composerDisabled = options.length === 0 || streaming;
 
   return (
-    <div className="flex min-h-0 flex-1 border-t">
-      <aside className="hidden w-64 shrink-0 flex-col border-r bg-sidebar/40 md:flex">
-        <div className="p-3">
-          <Button
-            className="w-full"
-            onClick={handleNewChat}
-            disabled={!agentId || creating}
-          >
-            <Plus />
-            {t("newChat")}
-          </Button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-          {conversations.length === 0 ? (
-            <p className="px-2 py-6 text-center text-muted-foreground text-sm">
-              {t("emptyConversations")}
-            </p>
-          ) : (
-            <div className="grid gap-1">
-              {conversations.map((conversation) => (
-                <button
-                  key={conversation.id}
-                  type="button"
-                  onClick={() =>
-                    router.push(`/${locale}/dashboard/chat/${conversation.id}`)
-                  }
-                  className={cn(
-                    "grid w-full gap-0.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-sidebar-accent",
-                    active?.id === conversation.id && "bg-sidebar-accent",
-                  )}
-                >
-                  <span className="truncate font-medium">
-                    {conversation.title}
-                  </span>
-                  <span className="truncate text-muted-foreground text-xs">
-                    {conversation.agentName ?? t("noAgent")}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </aside>
-
+    <div className="flex h-[calc(100svh-5rem)] min-h-0 flex-1 overflow-hidden border-t">
       <section className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
           <div className="mr-auto min-w-0">
@@ -504,47 +442,54 @@ export function ChatShell({
               {active?.title ?? t("newChatTitle")}
             </h1>
             <p className="truncate text-muted-foreground text-xs">
-              {active?.agentName
-                ? `${active.agentName} · ${active.modelName ?? ""}`
-                : t("agentHint")}
+              {active?.agentName ?? t("agentHint")}
             </p>
           </div>
 
-          <select
+          <Select
             value={agentId ?? ""}
-            onChange={(event) => handleAgentChange(event.target.value)}
+            onValueChange={handleAgentChange}
             disabled={options.length === 0 || streaming}
-            aria-label={t("agent")}
-            className="h-8 max-w-56 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30"
           >
-            {options.map((agent) => (
-              <option key={agent.id} value={agent.id}>
-                {agent.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger
+              size="sm"
+              className="max-w-56"
+              aria-label={t("agent")}
+            >
+              <SelectValue placeholder={t("agentHint")} />
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((agent) => (
+                <SelectItem key={agent.id} value={agent.id}>
+                  {agent.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {active && (
             <>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setRenameOpen(true)}
-                aria-label={t("rename")}
-                title={t("rename")}
-              >
-                <Pencil />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="text-destructive"
-                onClick={() => setDeleteOpen(true)}
-                aria-label={t("delete")}
-                title={t("delete")}
-              >
-                <Trash2 />
-              </Button>
+              <TooltipButton label={t("rename")}>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setRenameOpen(true)}
+                  aria-label={t("rename")}
+                >
+                  <Pencil />
+                </Button>
+              </TooltipButton>
+              <TooltipButton label={t("delete")}>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="text-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                  aria-label={t("delete")}
+                >
+                  <Trash2 />
+                </Button>
+              </TooltipButton>
             </>
           )}
         </header>
@@ -565,7 +510,10 @@ export function ChatShell({
           </div>
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto px-4 py-6"
+          data-lenis-prevent
+        >
           {messages.length === 0 ? (
             <div className="mx-auto flex h-full max-w-2xl flex-col items-center justify-center gap-2 text-center">
               <MessageSquare className="size-8 text-muted-foreground" />
@@ -601,21 +549,23 @@ export function ChatShell({
                       {message.content ||
                         (message.status === "STREAMING" ? t("thinking") : "")}
                     </div>
-                    {message.role === "ASSISTANT" && (
-                      <div className="mt-1 text-muted-foreground text-xs">
-                        {message.modelName ?? t("assistant")}
-                        {message.status === "FAILED" && ` · ${t("failed")}`}
-                        {message.status === "ABORTED" && ` · ${t("aborted")}`}
-                      </div>
-                    )}
+                    {message.role === "ASSISTANT" &&
+                      (message.status === "FAILED" ||
+                        message.status === "ABORTED") && (
+                        <div className="mt-1 text-muted-foreground text-xs">
+                          {message.status === "FAILED" && t("failed")}
+                          {message.status === "ABORTED" && t("aborted")}
+                        </div>
+                      )}
                     {message.role === "ASSISTANT" &&
                       message.citations &&
                       message.citations.length > 0 && (
-                        <div className="mt-2 border-t pt-2">
-                          <p className="text-muted-foreground text-xs">
-                            {t("sources")}
-                          </p>
-                          <ul className="mt-1 grid gap-1">
+                        <details className="group mt-2 border-t pt-2">
+                          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-muted-foreground text-xs [&::-webkit-details-marker]:hidden">
+                            <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" />
+                            {t("sources")} ({message.citations.length})
+                          </summary>
+                          <ul className="mt-2 grid gap-1">
                             {message.citations.map((citation, index) => (
                               <li
                                 key={`${citation.fileId}-${citation.chunkIndex}-${index}`}
@@ -630,7 +580,7 @@ export function ChatShell({
                               </li>
                             ))}
                           </ul>
-                        </div>
+                        </details>
                       )}
                   </div>
                   {message.role === "USER" && (
@@ -666,7 +616,6 @@ export function ChatShell({
                 variant="outline"
                 onClick={() => abortRef.current?.abort()}
                 aria-label={t("stop")}
-                title={t("stop")}
               >
                 <Square />
                 {t("stop")}
@@ -676,7 +625,6 @@ export function ChatShell({
                 onClick={() => void handleSend()}
                 disabled={!input.trim() || !agentId || composerDisabled}
                 aria-label={t("send")}
-                title={t("send")}
               >
                 <Send />
                 {t("send")}

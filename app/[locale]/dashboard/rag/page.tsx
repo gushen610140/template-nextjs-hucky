@@ -6,8 +6,13 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { RagLibrariesClient } from "./rag-libraries-client";
 
-export default async function RagPage() {
+export default async function RagPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ create?: string }>;
+}) {
   await requirePermission(PERMISSIONS.aiManage);
+  const { create } = await searchParams;
 
   let vectorSize = 0;
   try {
@@ -61,6 +66,7 @@ export default async function RagPage() {
       libraries={libraries}
       models={modelOptions}
       vectorSize={vectorSize}
+      initialCreate={Boolean(create)}
     />
   );
 }
