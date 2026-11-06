@@ -1,5 +1,5 @@
 {
   "title": "AI Chat",
   "pagesIndex": "index",
-  "pages": ["providers-models", "chat", "response-policy"]
+  "pages": ["providers-models", "chat", "rag", "response-policy"]
 }

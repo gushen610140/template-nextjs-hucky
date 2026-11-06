@@ -19,6 +19,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -26,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TooltipButton } from "@/components/ui/tooltip-button";
 import { AI_PROVIDER_TYPES, type AiProviderRow } from "@/lib/ai/types";
 import type { AiProviderType } from "@/lib/generated/prisma/enums";
 import { createProvider, deleteProvider, updateProvider } from "./actions";
@@ -124,25 +132,27 @@ export function ProvidersClient({ providers }: ProvidersClientProps) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setFormTarget(provider)}
-                        aria-label={t("common.edit")}
-                        title={t("common.edit")}
-                      >
-                        <Pencil />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-destructive"
-                        onClick={() => setDeleteTarget(provider)}
-                        aria-label={t("common.delete")}
-                        title={t("common.delete")}
-                      >
-                        <Trash2 />
-                      </Button>
+                      <TooltipButton label={t("common.edit")}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setFormTarget(provider)}
+                          aria-label={t("common.edit")}
+                        >
+                          <Pencil />
+                        </Button>
+                      </TooltipButton>
+                      <TooltipButton label={t("common.delete")}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive"
+                          onClick={() => setDeleteTarget(provider)}
+                          aria-label={t("common.delete")}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </TooltipButton>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -248,7 +258,7 @@ function ProviderFormDialog({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg" data-lenis-prevent>
         <form onSubmit={handleSubmit} className="grid gap-5">
           <DialogHeader>
             <DialogTitle>
@@ -273,20 +283,21 @@ function ProviderFormDialog({
 
             <div className="grid gap-1.5">
               <Label htmlFor="ai-provider-type">{t("providers.type")}</Label>
-              <select
-                id="ai-provider-type"
+              <Select
                 value={type}
-                onChange={(event) =>
-                  setType(event.target.value as AiProviderType)
-                }
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                onValueChange={(value) => setType(value as AiProviderType)}
               >
-                {AI_PROVIDER_TYPES.map((value) => (
-                  <option key={value} value={value}>
-                    {t(`types.${value}`)}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="ai-provider-type" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {AI_PROVIDER_TYPES.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {t(`types.${value}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-1.5">

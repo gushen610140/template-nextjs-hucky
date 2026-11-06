@@ -1,0 +1,116 @@
+---
+title: RAG libraries
+description: Embedding models, RAG libraries, vectorization, and agent retrieval
+---
+
+RAG lets an agent retrieve selected files before answering. The current implementation uses one collection, 1024 dimensions, and text retrieval. Multimodal and hybrid retrieval have model capability fields reserved but are not wired yet.
+
+## Permissions
+
+| Action | Permission | Entry |
+| --- | --- | --- |
+| Model capabilities | `ai:manage` | `/[locale]/dashboard/models` |
+| RAG libraries and files | `ai:manage` | `/[locale]/dashboard/rag` |
+| Agent knowledge bases | `ai:manage` | `/[locale]/dashboard/agents` |
+| Chat retrieval | `ai:own` | `/[locale]/dashboard/chat` |
+
+RAG libraries are shared globally, but the file picker only lists `FileObject` rows owned by the current administrator. A file referenced by RAG cannot be deleted from My files until it is removed from every library.
+
+## Data model
+
+| Model | Purpose |
+| --- | --- |
+| `AiModel.kind` | `CHAT` / `EMBEDDING`; chat and agents only show `CHAT` |
+| `AiModel.inputModalities` / `outputModalities` | Supported modalities; embedding models must output `VECTOR` |
+| `AiModel.embeddingDimension` | Vector dimension; must match the Qdrant collection |
+| `RagLibrary` | Library bound to one embedding model and its creation-time dimension |
+| `RagLibraryFile` | File reference, vectorization status, ETag snapshot, chunk progress |
+| `RagChunk` | Chunk text; Qdrant stores only vectors and locating payload |
+| `AiAgentKnowledgeBase` | Many-to-many agent/library binding |
+| `AiMessage.citations` | File, chunk, and similarity snapshot for an answer |
+
+The same file can belong to multiple libraries, each with independent chunks and vectors.
+
+## Qdrant configuration
+
+```ini
+QDRANT_URL=https://qdrant.example.com
+QDRANT_API_KEY=
+QDRANT_COLLECTION=template-nextjs-hucky-dev
+QDRANT_VECTOR_SIZE=1024
+```
+
+`QDRANT_VECTOR_SIZE` must match the collection. The current setup uses one collection and Cosine distance. If the collection uses a named vector, the code reads the single vector name automatically, including an empty name.
+
+## Embedding model
+
+When creating a model on the Models page:
+
+1. Set the type to Embedding model.
+2. Select input modalities supported by the provider, such as text.
+3. The output modality is fixed to `VECTOR`.
+4. Set the vector dimension to `1024` to match Qdrant.
+
+For Alibaba Cloud Model Studio through the OpenAI-compatible endpoint:
+
+```text
+Type: OPENAI_COMPATIBLE
+Base URL: https://dashscope.aliyuncs.com/compatible-mode/v1
+Model ID: qwen3.7-text-embedding-flash
+Vector dimension: 1024
+```
+
+Use `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` for the Singapore region. Use the Test button to verify the embedding call and dimension.
+
+## Workflow
+
+1. Create a library on the RAG page and pick a 1024-dimension embedding model.
+2. Open the library and add files from My files.
+3. Click Vectorize for one file, or Vectorize all.
+4. The client polls `/api/ai/rag/worker`; each call processes one batch until the status becomes Vectorized.
+5. Select libraries in the agent editor.
+6. During chat, retrieval runs first, the context is added to the system prompt, and sources with similarity scores are shown below the answer.
+
+## File parsing
+
+The first version supports:
+
+- Text-like files: `txt`, `md`, `csv`, `json`, `xml`, `yaml`, `html`, and similar
+- PDF: text layer extraction; scanned PDFs without text fail
+- DOCX: plain text through `mammoth`
+
+The per-file limit is 25 MB and extracted text is capped at 2 million characters. PPTX, XLSX, audio/video, and OCR are not supported yet.
+
+## Retrieval defaults
+
+Fixed values, not configurable in the UI yet:
+
+| Parameter | Value |
+| --- | --- |
+| topK per library | 5 |
+| Similarity threshold | 0.2 |
+| Max chunks after merge | 10 |
+| Max injected context | 8000 characters |
+| Chunk size / overlap | 800 / 120 characters |
+| Embedding batch size | 16 |
+
+## Code map
+
+| Path | Purpose |
+| --- | --- |
+| `lib/ai/embeddings.ts` | Resolve and cache LangChain embeddings |
+| `lib/ai/rag/config.ts` | Qdrant environment variables |
+| `lib/ai/rag/client.ts` | Qdrant client, collection validation, named-vector support |
+| `lib/ai/rag/extract.ts` | Text / PDF / DOCX extraction |
+| `lib/ai/rag/chunk.ts` | Chunking and token estimation |
+| `lib/ai/rag/service.ts` | Library CRUD, vectorization worker, retrieval |
+| `app/api/ai/rag/worker/route.ts` | Resumable vectorization batch endpoint |
+| `app/[locale]/dashboard/rag/**` | RAG management pages |
+| `components/chat/chat-shell.tsx` | Source rendering under answers |
+
+## Current limitations
+
+- One collection and one dimension. Moving to a 1152-dimension multimodal model requires a new collection and a full rebuild.
+- Vectors from different embedding models cannot share the same collection.
+- Content changes are detected through `etag`; the UI shows Needs re-vectorization.
+- Failures are stored with an error code and can be retried by clicking Vectorize again.

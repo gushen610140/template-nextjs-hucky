@@ -1,0 +1,116 @@
+---
+title: RAG 知识库
+description: 向量模型、RAG 库、文件向量化与智能体检索
+---
+
+RAG 让智能体在回答前检索管理员选定的文件内容。当前实现是单集合、1024 维、文本检索；多模态与混合检索预留了模型能力字段，但尚未接入。
+
+## 权限
+
+| 操作 | 权限 | 入口 |
+| --- | --- | --- |
+| 模型能力配置 | `ai:manage` | `/[locale]/dashboard/models` |
+| RAG 库与文件管理 | `ai:manage` | `/[locale]/dashboard/rag` |
+| 智能体绑定知识库 | `ai:manage` | `/[locale]/dashboard/agents` |
+| 对话检索 | `ai:own` | `/[locale]/dashboard/chat` |
+
+RAG 库全局共享，但文件选择器只列出当前管理员自己上传的 `FileObject`。被 RAG 引用的文件不能从“我的文件”删除，需要先在知识库中移出。
+
+## 数据模型
+
+| 模型 | 作用 |
+| --- | --- |
+| `AiModel.kind` | `CHAT` / `EMBEDDING`；聊天和智能体只显示 `CHAT` |
+| `AiModel.inputModalities` / `outputModalities` | 输入和输出模态；向量模型输出必须包含 `VECTOR` |
+| `AiModel.embeddingDimension` | 向量维度，必须与 Qdrant collection 一致 |
+| `RagLibrary` | 知识库，绑定一个向量模型和创建时的维度 |
+| `RagLibraryFile` | 文件引用 + 向量化状态、ETag 快照、分块进度 |
+| `RagChunk` | 分块文本；Qdrant 只保存向量和定位 payload |
+| `AiAgentKnowledgeBase` | 智能体与知识库的多对多绑定 |
+| `AiMessage.citations` | 回答引用的文件、分块与相似度快照 |
+
+同一文件可以加入多个知识库，每个库独立分块和向量化。
+
+## Qdrant 配置
+
+```ini
+QDRANT_URL=https://qdrant.example.com
+QDRANT_API_KEY=
+QDRANT_COLLECTION=template-nextjs-hucky-dev
+QDRANT_VECTOR_SIZE=1024
+```
+
+`QDRANT_VECTOR_SIZE` 必须与 collection 的向量维度一致。当前使用单个 collection 和 Cosine 距离；如果 collection 使用命名向量，代码会自动读取唯一的向量名，包括空字符串名。
+
+## 向量模型
+
+在“模型”页面新建模型时：
+
+1. 类型选择“向量模型”。
+2. 输入模态按供应商能力勾选，例如文本。
+3. 输出模态固定为 `VECTOR`。
+4. 向量维度填写 `1024`，与 Qdrant 一致。
+
+阿里云百炼的 OpenAI 兼容供应商使用：
+
+```text
+类型: OPENAI_COMPATIBLE
+Base URL: https://dashscope.aliyuncs.com/compatible-mode/v1
+模型标识: qwen3.7-text-embedding-flash
+向量维度: 1024
+```
+
+新加坡区域请换成 `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`。保存后可以用“测试”按钮验证 embedding 调用和维度。
+
+## 使用流程
+
+1. 在 RAG 页面新建知识库，选择 1024 维向量模型。
+2. 进入知识库，从“我的文件”选择文件加入。
+3. 点击单个文件的向量化按钮，或使用“全部向量化”。
+4. 客户端轮询 `/api/ai/rag/worker`，每次处理一批 chunk，直到状态变为“已向量化”。
+5. 在智能体编辑页勾选知识库。
+6. 对话时先检索，再把上下文注入系统提示词，并在回答下方显示来源文件名和相似度。
+
+## 文件解析
+
+首版支持：
+
+- 纯文本类：`txt`、`md`、`csv`、`json`、`xml`、`yaml`、`html` 等
+- PDF：提取文本层，扫描版没有文本层时标记失败
+- DOCX：通过 `mammoth` 提取纯文本
+
+单个文件上限 25 MB，提取文本上限 200 万字符。PPTX、XLSX、音视频和 OCR 尚未支持。
+
+## 检索参数
+
+固定默认值，暂不暴露配置：
+
+| 参数 | 值 |
+| --- | --- |
+| 每个知识库 topK | 5 |
+| 相似度阈值 | 0.2 |
+| 合并后最大分块数 | 10 |
+| 注入上下文最大字符数 | 8000 |
+| 分块大小 / 重叠 | 800 / 120 字符 |
+| 单批 embedding 数量 | 16 |
+
+## 代码位置
+
+| 路径 | 作用 |
+| --- | --- |
+| `lib/ai/embeddings.ts` | 解析向量模型并缓存 LangChain embeddings |
+| `lib/ai/rag/config.ts` | Qdrant 环境变量 |
+| `lib/ai/rag/client.ts` | Qdrant 客户端、collection 校验、命名向量兼容 |
+| `lib/ai/rag/extract.ts` | 文本 / PDF / DOCX 提取 |
+| `lib/ai/rag/chunk.ts` | 分块与 token 估算 |
+| `lib/ai/rag/service.ts` | 知识库 CRUD、向量化 worker、检索 |
+| `app/api/ai/rag/worker/route.ts` | 可恢复向量化批次接口 |
+| `app/[locale]/dashboard/rag/**` | RAG 管理页面 |
+| `components/chat/chat-shell.tsx` | 回答来源展示 |
+
+## 当前限制
+
+- 单 collection、单维度；切换到 1152 维多模态模型需要新 collection 和重建索引。
+- 同一 collection 内不能混合不同 embedding 模型的向量。
+- 文件内容变化通过 `etag` 识别，页面会显示“需重新向量化”。
+- 向量化失败会记录错误码，点击向量化即可重试。

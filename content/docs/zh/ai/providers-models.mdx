@@ -47,6 +47,10 @@ description: 管理供应商、加密保存 API Key，并维护用户可选的�
 | `providerId` | 所属供应商 |
 | `modelId` | 发送给供应商的原始模型名，例如 `gpt-4.1-mini` |
 | `displayName` | 用户在选择器中看到的名称 |
+| `kind` | `CHAT` 对话模型 / `EMBEDDING` 向量模型；两类模型不会互相出现在对方的选择器里 |
+| `inputModalities` | 输入模态：文本、图片、音频、视频 |
+| `outputModalities` | 输出模态；对话固定 `TEXT`，向量模型固定 `VECTOR` |
+| `embeddingDimension` | 向量模型必填，必须与 Qdrant collection 维度一致 |
 | `contextWindow` | 上下文窗口，用于裁剪历史消息 |
 | `maxTokens` | 最大输出 token，同时参与上下文预算计算 |
 | `temperature` | 采样温度，范围 0–2 |
@@ -55,7 +59,7 @@ description: 管理供应商、加密保存 API Key，并维护用户可选的�
 | `isDefault` | 每个供应商最多一个默认模型，保存时会自动取消同供应商的其他默认项 |
 | `sortOrder` | 模型排序 |
 
-同一供应商下 `modelId` 唯一。删除供应商会级联删除其模型；删除模型会把引用它的会话 `modelId` 置空，但历史消息里的模型名称快照仍会保留。
+同一供应商下 `modelId` 唯一。删除供应商会级联删除其模型；删除模型会把引用它的会话 `modelId` 置空，但历史消息里的模型名称快照仍会保留。被智能体或知识库引用的模型不能删除；被知识库引用的模型也不能改类型或向量维度。
 
 ## 密钥存储
 

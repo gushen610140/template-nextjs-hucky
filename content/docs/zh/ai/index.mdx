@@ -3,14 +3,14 @@ title: AI 对话
 description: 供应商、模型管理与 LangChain / LangGraph 聊天接入
 ---
 
-AI 模块把「管理员配置供应商和模型」与「普通用户选择模型对话」拆成两条独立的权限线。模型目录由管理员维护，用户只看到启用中的模型，不能接触 API Key。
+AI 模块把「管理员配置供应商、模型、智能体和知识库」与「普通用户选择智能体对话」拆成两条独立的权限线。模型目录由管理员维护，用户只看到启用中的智能体，不能接触 API Key。
 
 ## 权限与入口
 
 | 权限 | 能力 | 入口 |
 | --- | --- | --- |
-| `ai:manage` | 供应商、模型的增删改查与连通性测试 | `/[locale]/dashboard/providers`、`/[locale]/dashboard/models` |
-| `ai:own` | 使用管理员配置的模型对话、管理自己的会话 | `/[locale]/dashboard/chat` |
+| `ai:manage` | 供应商、模型、智能体、RAG 知识库的增删改查与测试 | `/[locale]/dashboard/providers`、`/[locale]/dashboard/models`、`/[locale]/dashboard/agents`、`/[locale]/dashboard/rag` |
+| `ai:own` | 使用管理员配置的智能体对话、管理自己的会话 | `/[locale]/dashboard/chat` |
 
 内置 `user` 角色在 seed 时获得 `ai:own`；`admin` 拥有全部权限。页面和 API 都会做服务端校验，侧边栏只是按权限隐藏入口。
 
@@ -64,5 +64,6 @@ OpenAI / Anthropic / Google / OpenAI 兼容服务
 ## 接下来
 
 - [供应商与模型](/zh/docs/ai/providers-models)：字段说明、密钥存储、DeepSeek 配置示例。
-- [对话与消息](/zh/docs/ai/chat)：会话数据模型、SSE 协议、切换模型与上下文裁剪。
+- [对话与消息](/zh/docs/ai/chat)：会话数据模型、SSE 协议、智能体切换与上下文裁剪。
+- [RAG 知识库](/zh/docs/ai/rag)：向量模型、文件向量化、Qdrant 与智能体检索。
 - [AI 回答规范](/zh/docs/ai/response-policy)：仓库级 `AGENTS.md` 对回复语气与长度的约束。

@@ -97,6 +97,30 @@ export async function readObjectPrefix(
   });
 }
 
+/**
+ * 读取完整对象, 用于 RAG 文本解析。
+ *
+ * 调用方先通过 `headObject` / 文件记录限制大小, 这里再兜底检查,
+ * 避免异常大文件一次性读进内存。
+ */
+export async function readObjectBytes(
+  key: string,
+  maxBytes: number,
+): Promise<Uint8Array> {
+  return withStorageRetry(async () => {
+    const result = await getS3Client().send(
+      new GetObjectCommand({ Bucket: getStorageBucket(), Key: key }),
+    );
+    const bytes =
+      (await result.Body?.transformToByteArray()) ?? new Uint8Array();
+
+    if (bytes.length > maxBytes) {
+      throw new Error("object_too_large");
+    }
+    return bytes;
+  });
+}
+
 /** 删除对象本体; 数据库侧是软删除, 这里只清存储 */
 export async function deleteObject(key: string): Promise<void> {
   await withStorageRetry(async () => {

@@ -13,6 +13,7 @@ export type AgentRuntime = {
   id: string;
   name: string;
   systemPrompt: string;
+  knowledgeBaseIds: string[];
   model: ResolvedChatModel;
 };
 
@@ -21,13 +22,14 @@ export async function getActiveAgents(): Promise<ChatAgentOption[]> {
   const agents = await prisma.aiAgent.findMany({
     where: {
       isActive: true,
-      model: { isActive: true, provider: { isActive: true } },
+      model: { isActive: true, kind: "CHAT", provider: { isActive: true } },
     },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     select: {
       id: true,
       name: true,
       description: true,
+      _count: { select: { knowledgeBases: true } },
       model: {
         select: {
           displayName: true,
@@ -43,6 +45,7 @@ export async function getActiveAgents(): Promise<ChatAgentOption[]> {
     description: agent.description,
     providerName: agent.model.provider.name,
     modelName: agent.model.displayName,
+    knowledgeBaseCount: agent._count.knowledgeBases,
   }));
 }
 
@@ -62,6 +65,10 @@ export async function resolveAgentRuntime(
       name: true,
       systemPrompt: true,
       modelId: true,
+      knowledgeBases: {
+        select: { libraryId: true },
+        orderBy: { sortOrder: "asc" },
+      },
     },
   });
   if (!agent) return null;
@@ -73,6 +80,7 @@ export async function resolveAgentRuntime(
     id: agent.id,
     name: agent.name,
     systemPrompt: agent.systemPrompt.trim(),
+    knowledgeBaseIds: agent.knowledgeBases.map((item) => item.libraryId),
     model,
   };
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { Fragment } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { ThemeCustomizer } from "@/components/theme-customizer";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -99,6 +99,7 @@ function resolveCrumbs(
   tSidebar: (key: string) => string,
   canUseFiles: boolean,
   canManageFiles: boolean,
+  ragName: string | null,
 ): Crumb[] {
   const segments = pathname.split("/").filter(Boolean);
   const section = segments[2];
@@ -118,6 +119,17 @@ function resolveCrumbs(
     label: t("overview"),
     href: `/${locale}/dashboard`,
   };
+
+  if (section === "rag" && segments[3]) {
+    return [
+      overview,
+      {
+        label: tSidebar("rag"),
+        href: `/${locale}/dashboard/rag`,
+      },
+      { label: ragName ?? "…" },
+    ];
+  }
 
   if (section && section in MODULE_KEYS) {
     return [
@@ -140,6 +152,36 @@ export function DashboardHeader({
   const locale = useLocale();
   const t = useTranslations("Dashboard");
   const tSidebar = useTranslations("Sidebar");
+  const [ragName, setRagName] = useState<string | null>(null);
+
+  const segments = pathname.split("/").filter(Boolean);
+  const ragId = segments[2] === "rag" ? segments[3] : undefined;
+
+  useEffect(() => {
+    if (!ragId) {
+      setRagName(null);
+      return;
+    }
+
+    let cancelled = false;
+    async function load() {
+      const response = await fetch("/api/ai/rag/libraries");
+      const data = (await response.json().catch(() => null)) as {
+        libraries?: Array<{ id: string; name: string }>;
+      } | null;
+      if (!cancelled) {
+        setRagName(
+          data?.libraries?.find((library) => library.id === ragId)?.name ??
+            null,
+        );
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [ragId]);
 
   const crumbs = resolveCrumbs(
     pathname,
@@ -148,6 +190,7 @@ export function DashboardHeader({
     tSidebar,
     canUseFiles,
     canManageFiles,
+    ragName,
   );
 
   return (

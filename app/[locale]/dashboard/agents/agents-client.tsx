@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState, useTransition } from "react";
 import { ConfirmDeleteDialog } from "@/components/rbac/confirm-delete-dialog";
@@ -19,6 +19,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -27,20 +34,27 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import type { AiAgentRow, AiModelOption } from "@/lib/ai/types";
+import { TooltipButton } from "@/components/ui/tooltip-button";
+import type {
+  AiAgentRow,
+  AiModelOption,
+  RagLibraryOption,
+} from "@/lib/ai/types";
 import { createAgent, deleteAgent, updateAgent } from "./actions";
 
 type AgentsClientProps = {
   agents: AiAgentRow[];
   models: AiModelOption[];
+  libraries: RagLibraryOption[];
 };
 
-export function AgentsClient({ agents, models }: AgentsClientProps) {
+export function AgentsClient({ agents, models, libraries }: AgentsClientProps) {
   const t = useTranslations("Ai");
   const [formTarget, setFormTarget] = useState<AiAgentRow | "create" | null>(
     null,
   );
   const [deleteTarget, setDeleteTarget] = useState<AiAgentRow | null>(null);
+  const libraryNames = new Map(libraries.map((item) => [item.id, item.name]));
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
@@ -74,6 +88,7 @@ export function AgentsClient({ agents, models }: AgentsClientProps) {
             <TableRow>
               <TableHead>{t("agents.agent")}</TableHead>
               <TableHead>{t("agents.model")}</TableHead>
+              <TableHead>{t("agents.knowledgeBases")}</TableHead>
               <TableHead>{t("common.status")}</TableHead>
               <TableHead className="text-right">
                 {t("common.actions")}
@@ -84,7 +99,7 @@ export function AgentsClient({ agents, models }: AgentsClientProps) {
             {agents.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={4}
+                  colSpan={5}
                   className="h-24 text-center text-muted-foreground"
                 >
                   {t("common.empty")}
@@ -110,6 +125,25 @@ export function AgentsClient({ agents, models }: AgentsClientProps) {
                     </div>
                   </TableCell>
                   <TableCell>
+                    {agent.knowledgeBaseIds.length === 0 ? (
+                      <span className="text-muted-foreground text-xs">-</span>
+                    ) : (
+                      <div className="grid">
+                        <Badge variant="outline">
+                          {t("agents.libraryCount", {
+                            count: agent.knowledgeBaseIds.length,
+                          })}
+                        </Badge>
+                        <span className="max-w-48 truncate text-muted-foreground text-xs">
+                          {agent.knowledgeBaseIds
+                            .map((id) => libraryNames.get(id))
+                            .filter(Boolean)
+                            .join(", ")}
+                        </span>
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <Badge
                       variant={agent.isActive ? "secondary" : "destructive"}
                     >
@@ -120,25 +154,27 @@ export function AgentsClient({ agents, models }: AgentsClientProps) {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setFormTarget(agent)}
-                        aria-label={t("common.edit")}
-                        title={t("common.edit")}
-                      >
-                        <Pencil />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-destructive"
-                        onClick={() => setDeleteTarget(agent)}
-                        aria-label={t("common.delete")}
-                        title={t("common.delete")}
-                      >
-                        <Trash2 />
-                      </Button>
+                      <TooltipButton label={t("common.edit")}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setFormTarget(agent)}
+                          aria-label={t("common.edit")}
+                        >
+                          <Pencil />
+                        </Button>
+                      </TooltipButton>
+                      <TooltipButton label={t("common.delete")}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive"
+                          onClick={() => setDeleteTarget(agent)}
+                          aria-label={t("common.delete")}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </TooltipButton>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -153,6 +189,7 @@ export function AgentsClient({ agents, models }: AgentsClientProps) {
           key={formTarget === "create" ? "create" : formTarget.id}
           agent={formTarget === "create" ? null : formTarget}
           models={models}
+          libraries={libraries}
           onClose={() => setFormTarget(null)}
         />
       )}
@@ -185,10 +222,12 @@ export function AgentsClient({ agents, models }: AgentsClientProps) {
 function AgentFormDialog({
   agent,
   models,
+  libraries,
   onClose,
 }: {
   agent: AiAgentRow | null;
   models: AiModelOption[];
+  libraries: RagLibraryOption[];
   onClose: () => void;
 }) {
   const t = useTranslations("Ai");
@@ -202,6 +241,9 @@ function AgentFormDialog({
   const [description, setDescription] = useState(agent?.description ?? "");
   const [modelId, setModelId] = useState(initialModelId);
   const [systemPrompt, setSystemPrompt] = useState(agent?.systemPrompt ?? "");
+  const [knowledgeBaseIds, setKnowledgeBaseIds] = useState<string[]>(
+    agent?.knowledgeBaseIds ?? [],
+  );
   const [isActive, setIsActive] = useState(agent?.isActive ?? true);
   const [sortOrder, setSortOrder] = useState(String(agent?.sortOrder ?? 0));
   const [error, setError] = useState<string | null>(null);
@@ -210,6 +252,14 @@ function AgentFormDialog({
   function errorText(code: string) {
     const key = `errors.${code}`;
     return t.has(key) ? t(key) : t("errors.unknown");
+  }
+
+  function toggleKnowledgeBase(id: string, checked: boolean) {
+    setKnowledgeBaseIds((current) =>
+      checked
+        ? [...new Set([...current, id])]
+        : current.filter((item) => item !== id),
+    );
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -221,6 +271,7 @@ function AgentFormDialog({
       description,
       modelId,
       systemPrompt,
+      knowledgeBaseIds,
       isActive,
       sortOrder: Number(sortOrder),
     };
@@ -246,7 +297,10 @@ function AgentFormDialog({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto sm:max-w-xl"
+        data-lenis-prevent
+      >
         <form onSubmit={handleSubmit} className="grid gap-5">
           <DialogHeader>
             <DialogTitle>
@@ -282,20 +336,19 @@ function AgentFormDialog({
 
             <div className="grid gap-1.5">
               <Label htmlFor="ai-agent-model">{t("agents.model")}</Label>
-              <select
-                id="ai-agent-model"
-                value={modelId}
-                onChange={(event) => setModelId(event.target.value)}
-                required
-                className="h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-              >
-                {models.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.providerName} · {model.displayName}
-                    {model.isActive ? "" : ` (${t("common.inactive")})`}
-                  </option>
-                ))}
-              </select>
+              <Select value={modelId} onValueChange={setModelId}>
+                <SelectTrigger id="ai-agent-model" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {models.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.providerName} · {model.displayName}
+                      {model.isActive ? "" : ` (${t("common.inactive")})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-1.5">
@@ -310,25 +363,51 @@ function AgentFormDialog({
                 maxLength={20_000}
                 placeholder={t("agents.systemPromptPlaceholder")}
                 className="min-h-40 resize-y"
+                data-lenis-prevent
               />
               <p className="text-muted-foreground text-xs">
                 {t("agents.systemPromptHint")}
               </p>
             </div>
 
-            <div className="grid gap-2 rounded-lg border border-dashed p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="space-y-0.5">
-                  <p className="font-medium text-sm">{t("agents.ragTitle")}</p>
-                  <p className="text-muted-foreground text-xs">
-                    {t("agents.ragPlaceholder")}
-                  </p>
+            <div className="grid gap-2">
+              <Label>{t("agents.knowledgeBases")}</Label>
+              <p className="text-muted-foreground text-xs">
+                {t("agents.knowledgeBasesHint")}
+              </p>
+              {libraries.length === 0 ? (
+                <Alert>
+                  <AlertDescription>{t("agents.noLibraries")}</AlertDescription>
+                </Alert>
+              ) : (
+                <div className="grid max-h-44 gap-2 overflow-y-auto rounded-lg border p-3">
+                  {libraries.map((library) => (
+                    <div key={library.id} className="flex items-start gap-2">
+                      <Checkbox
+                        id={`ai-agent-library-${library.id}`}
+                        checked={knowledgeBaseIds.includes(library.id)}
+                        onCheckedChange={(checked) =>
+                          toggleKnowledgeBase(library.id, checked === true)
+                        }
+                      />
+                      <div className="grid gap-0.5">
+                        <Label
+                          htmlFor={`ai-agent-library-${library.id}`}
+                          className="font-normal"
+                        >
+                          {library.name}
+                        </Label>
+                        <span className="text-muted-foreground text-xs">
+                          {library.embeddingModelName} ·{" "}
+                          {t("agents.readyFiles", {
+                            count: library.readyFileCount,
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <Badge variant="outline">
-                  <Sparkles />
-                  {t("agents.comingSoon")}
-                </Badge>
-              </div>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-4">
