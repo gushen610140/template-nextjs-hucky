@@ -757,15 +757,35 @@ export default Plugin.define({
         const ext = isImage
           ? mimeExt(headerValue(response?.headers, "content-type"))
           : extname(String(content.file_name ?? "")) || ".bin";
-        const target = join(dir, `${messageId}${ext}`);
+        const safeKey = String(fileKey).replace(/[^A-Za-z0-9._-]/g, "_");
+        const target = join(dir, `${messageId}-${safeKey}${ext}`);
         await response.writeFile(target);
 
         return {
           uri: pathToFileURL(target).href,
           name: isImage
-            ? `image-${messageId}${ext}`
-            : String(content.file_name ?? `file-${messageId}${ext}`),
+            ? `image-${safeKey}${ext}`
+            : String(content.file_name ?? `file-${safeKey}${ext}`),
         };
+      };
+
+      const parsePost = (content: any) => {
+        const texts: string[] = [];
+        const images: string[] = [];
+        const rows = Array.isArray(content?.content) ? content.content : [];
+        for (const row of rows) {
+          if (!Array.isArray(row)) continue;
+          for (const node of row) {
+            if (node?.tag === "text" && node.text) {
+              texts.push(String(node.text));
+            } else if (node?.tag === "a" && node.text) {
+              texts.push(String(node.text));
+            } else if (node?.tag === "img" && node.image_key) {
+              images.push(String(node.image_key));
+            }
+          }
+        }
+        return { text: texts.join(" ").trim(), images };
       };
 
       const findChatBySession = async (sessionID: string) => {
@@ -883,6 +903,30 @@ export default Plugin.define({
               log("attachment FAILED", error);
               const reason = error instanceof Error ? error.message : String(error);
               await sendText(messageId, `附件处理失败: ${reason}`);
+              return;
+            }
+          } else if (messageType === "post") {
+            try {
+              const content = JSON.parse(message?.content ?? "{}");
+              const post = parsePost(content);
+              text = post.text;
+              for (const imageKey of post.images.slice(0, 5)) {
+                const file = await downloadAttachment(messageId, "image", {
+                  image_key: imageKey,
+                });
+                if (file) files.push(file);
+              }
+              if (text.length === 0 && files.length > 0) {
+                text = files.length > 1 ? "请看这些图片" : "请看这张图片";
+              }
+              if (text.length === 0 && files.length === 0) {
+                await sendText(messageId, "暂不支持这种富文本内容");
+                return;
+              }
+            } catch (error) {
+              log("post FAILED", error);
+              const reason = error instanceof Error ? error.message : String(error);
+              await sendText(messageId, `富文本处理失败: ${reason}`);
               return;
             }
           } else {
