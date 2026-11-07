@@ -256,8 +256,19 @@ export default Plugin.define({
       });
     });
 
-    const statusText = () => {
-      const connection = state.ws?.getConnectionStatus?.() as
+    const waitForReady = async (timeoutMs = 5000) => {
+      const started = Date.now();
+      while (Date.now() - started < timeoutMs) {
+        const connection = state.ws?.getConnectionStatus?.() as
+          | { state?: string }
+          | undefined;
+        if ((connection?.state ?? state.wsState) === "connected") return true;
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+      return false;
+    };
+
+    const statusText = () => {      const connection = state.ws?.getConnectionStatus?.() as
         | { state?: string; reconnectAttempts?: number }
         | undefined;
       return [
@@ -291,6 +302,7 @@ export default Plugin.define({
           await ctx.storage.set(ENABLED_KEY, true);
           state.enabled = true;
           await state.controller.start();
+          await waitForReady();
           await say(sessionID, `[feishu] 已开启\n${statusText()}`);
         },
       });
@@ -316,6 +328,7 @@ export default Plugin.define({
           state.enabled = true;
           state.controller.stop();
           await state.controller.start();
+          await waitForReady();
           await say(sessionID, `[feishu] 已重连\n${statusText()}`);
         },
       });
