@@ -1,5 +1,4 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Plugin } from "@opencode/plugin";
@@ -746,7 +745,7 @@ export default Plugin.define({
         const fileKey = isImage ? content.image_key : content.file_key;
         if (!fileKey) return undefined;
 
-        const dir = join(tmpdir(), "opencode", "feishu");
+        const dir = join(ctx.location.directory, ".opencode", "feishu-files");
         mkdirSync(dir, { recursive: true });
 
         const response = await client.im.messageResource.get({

@@ -92,7 +92,7 @@ idle · 4 events
 
 ### 附件、权限、撤回
 
-- 图片/文件：收到 `image` 或 `file` 消息时，用 `im.messageResource.get` 下载到 `%TEMP%\opencode\feishu\`，再以 `file://` 附件传给 `session.prompt`。
+- 图片/文件：收到 `image`、`post` 或 `file` 消息时，用 `im.messageResource.get` 下载到项目内 `.opencode/feishu-files/`（已 git 忽略），再以 `file://` 附件传给 `session.prompt`。
 - 权限：监听 `permission.asked`，找到对应飞书会话后发卡片，按钮为「允许一次 / 始终允许 / 拒绝」，回传 `card.action.trigger` 后调用 `permission.reply`。没有飞书映射的会话（TUI 自己的）会被忽略。
 - 撤回：收到 `im.message.recalled_v1` 时，如果该会话正在跑，调用 `session.interrupt`，并把当前卡片改成「消息已撤回，任务已中断」。
 
