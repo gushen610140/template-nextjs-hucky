@@ -1,0 +1,360 @@
+---
+title: 飞书桥接
+description: 用飞书机器人远程驱动 OpenCode：流式卡片、命令、权限审批、附件和撤回
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+`feishu-bridge` 是一个项目级 OpenCode 插件，把飞书机器人接到本机 OpenCode server。你可以在飞书私聊或群聊里发消息、跑任务、切模型、审批权限，结果以卡片形式流式返回。
+
+它由三部分组成：
+
+- **server 插件**：建立飞书 WebSocket 长连接，接收消息和卡片回调，调用 OpenCode session。
+- **RPC**：把连接状态、事件数、忙碌会话暴露给 TUI。
+- **TUI 插件**：在侧边栏追加一个 `FEISHU` 区块，与 `git-status` 并存。
+
+```text
+飞书用户
+  → 飞书长连接（WebSocket）
+  → feishu-bridge server 插件
+  → OpenCode session.prompt
+  → session 事件流
+  → 卡片节流更新
+  → 飞书
+```
+
+## 目录结构
+
+```text
+.opencode/plugins/feishu-bridge/
+├── index.ts        # server 插件：长连接、消息、卡片、权限、附件
+├── commands.ts     # 飞书侧命令
+├── card.ts         # 卡片 JSON 构造
+├── rpc.ts          # 侧边栏状态 RPC 契约
+├── tui.tsx         # 侧边栏区块
+├── prompts.json    # 注入给模型的提示词文案
+├── package.json
+├── .env            # 凭证，已被 git 忽略
+└── feishu-files/   # 附件下载目录，已被 git 忽略
+```
+
+插件放在 `.opencode/plugins/` 下会被自动发现，不需要修改 `opencode.jsonc`。
+
+## 快速开始
+
+<Steps>
+
+<Step>
+### 创建飞书应用
+
+在飞书开放平台创建「企业自建应用」，开启机器人能力，按下一节配置权限、事件和回调，然后发布版本。
+</Step>
+
+<Step>
+### 填写凭证
+
+编辑 `.opencode/plugins/feishu-bridge/.env`，至少填 `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET`。
+</Step>
+
+<Step>
+### 安装依赖
+
+```powershell
+npm install --prefix .opencode/plugins/feishu-bridge
+```
+</Step>
+
+<Step>
+### 启动连接
+
+插件默认关闭。在 OpenCode TUI 里执行：
+
+```text
+/feishu-on
+```
+</Step>
+
+<Step>
+### 在飞书里发消息
+
+私聊机器人发送任意文本，应出现流式卡片；发 `/help` 查看命令。
+</Step>
+
+</Steps>
+
+## 飞书控制台配置
+
+以下步骤都在飞书开放平台完成，配置完成后必须**创建版本并发布**，否则不生效。
+
+### 1. 应用与机器人
+
+1. 创建「企业自建应用」。
+2. 在「添加应用能力」里开启「机器人」。
+3. 记录「凭证与基础信息」里的 App ID 和 App Secret。
+
+### 2. 权限
+
+在「权限管理」里添加以下权限：
+
+| 权限 | 用途 |
+| --- | --- |
+| `im:message` | 读取消息 |
+| `im:message.p2p_msg:readonly` | 接收私聊消息 |
+| `im:message.group_at_msg:readonly` | 接收群聊 @ 消息 |
+| `im:message:send_as_bot` | 以机器人身份发消息和卡片 |
+| `im:resource` | 下载图片和文件 |
+
+### 3. 事件订阅（长连接）
+
+「事件与回调」→「事件订阅」：
+
+1. 订阅方式选「使用长连接接收事件」。
+2. 添加事件：
+
+| 事件 | 用途 |
+| --- | --- |
+| `im.message.receive_v1` | 接收私聊/群聊消息 |
+| `im.message.recalled_v1` | 用户撤回消息时中断任务 |
+
+长连接模式不需要公网 IP、域名或内网穿透。
+
+### 4. 回调配置（长连接）
+
+卡片按钮依赖回调，注意它在「回调配置」标签，不在「事件订阅」：
+
+1. 切到「事件与回调」→「回调配置」。
+2. 订阅方式选「使用长连接接收回调」。
+3. 添加回调「卡片回传交互」`card.action.trigger`。
+
+<Callout type="warn" title="回调必须在 3 秒内响应">
+飞书要求卡片回调在 3 秒内响应。插件在收到回调后立即调用 `permission.reply`，不会阻塞。
+</Callout>
+
+### 5. 发布
+
+在「版本管理与发布」创建版本并发布。权限、事件、回调的修改都要重新发布才生效。
+
+## 环境变量
+
+配置文件：`.opencode/plugins/feishu-bridge/.env`（已被 git 忽略）。系统环境变量优先级更高。
+
+```bash
+FEISHU_APP_ID=cli_xxxxxxxx
+FEISHU_APP_SECRET=xxxxxxxx
+FEISHU_ALLOWED_OPEN_ID=ou_xxxxxxxx
+FEISHU_DOMAIN=feishu
+FEISHU_CARD_TITLE=OpenCode
+FEISHU_MODEL=
+FEISHU_AGENT=
+```
+
+| 变量 | 必填 | 说明 |
+| --- | --- | --- |
+| `FEISHU_APP_ID` | 是 | 应用 App ID |
+| `FEISHU_APP_SECRET` | 是 | 应用 App Secret |
+| `FEISHU_ALLOWED_OPEN_ID` | 否 | 允许使用机器人的 open_id，逗号分隔；留空表示不限制，日志会告警 |
+| `FEISHU_DOMAIN` | 否 | `feishu` 或 `lark` |
+| `FEISHU_CARD_TITLE` | 否 | 卡片 header 标题，默认 `OpenCode` |
+| `FEISHU_MODEL` | 否 | 固定模型，格式 `providerID/modelID`，例如 `opencode-go/deepseek-v4.1-flash` |
+| `FEISHU_AGENT` | 否 | 固定 agent，例如 `build` 或 `plan` |
+
+拿到自己的 `open_id` 的方法：先不设白名单，发一条消息，`debug.log` 的 `message received` 行会打印 `openId`，再填进 `.env`。
+
+## 启动与停止
+
+连接状态持久化在插件存储的 `bridge/enabled`，默认 `false`。安装或升级后不会自动连接。
+
+在 OpenCode TUI 里使用：
+
+| 命令 | 作用 |
+| --- | --- |
+| `/feishu-on` | 开启长连接，等待握手完成后返回 |
+| `/feishu-off` | 关闭长连接，保留插件 |
+| `/feishu-restart` | 断开并重连 |
+| `/feishu-status` | 连接状态、重连次数、事件数、忙碌会话、最近错误 |
+| `/feishu-log` | 最近 20 行日志 |
+
+<Callout type="warn" title="机器人依赖 OpenCode server 常驻">
+插件运行在 OpenCode server 进程内。关掉 TUI 和 server，机器人就离线。需要长期在线时，用 Windows 计划任务或服务管理器常驻 `opencode serve`。
+</Callout>
+
+要彻底停用插件，在 `opencode.jsonc` 的 `plugins` 里加一项：
+
+```jsonc title="opencode.jsonc"
+{
+  "plugins": ["-hucky.feishu-bridge"]
+}
+```
+
+## 飞书侧命令
+
+| 命令 | 作用 |
+| --- | --- |
+| `/help` | 命令列表 |
+| `/new [目录]` | 新建会话，可同时把会话移动到指定工作目录 |
+| `/model` | 查看当前模型 |
+| `/model <关键词>` | 搜索模型，返回带编号的结果 |
+| `/model #1` | 选择搜索结果 |
+| `/model provider/model` | 直接指定模型 |
+| `/agent` | 查看当前 agent 和可用列表 |
+| `/agent <名称>` | 切换 agent，例如 `build`、`plan` |
+| `/session` | 当前会话和最近 10 个会话 |
+| `/session list` | 最近会话 |
+| `/session #1` | 绑定已有会话 |
+| `/rename <名称>` | 重命名当前会话 |
+| `/cwd` | 查看当前工作目录 |
+| `/compact` | 压缩上下文 |
+| `/stop` | 中断当前任务 |
+| `/status` | 会话、模型、agent、连接状态 |
+
+所有命令回复都是卡片。会话在界面上一律显示为 `#编号 名称`，不打印 session id；编号来自当前 location 最近 10 个会话的排序，会话更新后编号可能变化。
+
+`/model` 和 `/agent` 的选择会写入插件存储，之后每次 prompt 优先使用它；`/new` 或 `/session` 换会话后恢复继承。
+
+## 卡片
+
+卡片由 `card.ts` 生成，结构是 header 加 markdown 正文：
+
+- header 标题来自 `FEISHU_CARD_TITLE`，默认 `OpenCode`。
+- header 副标题显示 `agent · 模型名 (供应商) · 工作目录`。
+- 正文随 `session.text.delta` 增长，最多每 900ms patch 一次，避免触发飞书频控。
+- 底部按工具名汇总调用次数，例如 `shell×3 · read×5 · edit×1`，仍在执行的显示 `(n running)`。
+- 完成时 header 变绿；失败变红。
+- 答案超过 4000 字时，卡片显示摘要，全文另发文本消息。
+
+模型和 agent 的解析顺序：
+
+1. `.env` 的 `FEISHU_MODEL` / `FEISHU_AGENT`。
+2. 本目录最近一个非飞书会话的模型和 agent。
+3. 模型显示名取 `Model.Info.name`，并附上 `providerID`。
+
+每次 prompt 前都会重新解析并调用 `switchModel` / `switchAgent`，所以在 TUI 里切换模型后，下一条飞书消息会跟着变。
+
+## 权限审批
+
+当 OpenCode 的权限规则命中 `ask` 时，会触发 `permission.asked`：
+
+1. 插件按 `sessionID` 找到对应的飞书会话。
+2. 发送一张橙色权限卡片，显示动作、资源和说明。
+3. 按钮为「允许一次」「始终允许」「拒绝」。
+4. 点击后飞书回调 `card.action.trigger`，插件调用 `permission.reply`，并把卡片更新为结果。
+
+没有飞书会话映射的权限请求（例如 TUI 自己的会话）会被忽略，不会打扰飞书。
+
+<Callout type="warn" title="headless 场景优先用 allow/deny">
+无人值守时，权限规则如果一直是 `ask`，任务会停在等待审批。建议对常用操作配置 `allow`，只把高风险操作留给卡片审批。
+</Callout>
+
+## 撤回
+
+用户撤回消息时，飞书推送 `im.message.recalled_v1`。如果对应会话正在执行，插件会：
+
+1. 调用 `session.interrupt` 中断当前任务。
+2. 把当前卡片改成「消息已撤回，任务已中断」。
+
+## 附件
+
+支持三种消息类型：
+
+| 类型 | 处理 |
+| --- | --- |
+| `image` | 下载图片，作为附件传给模型 |
+| `post` | 飞书带文字的图片会走富文本；解析 `text`、`a`、`img` 节点，文本拼成 prompt，图片逐个下载 |
+| `file` | 下载文件，按原文件名传给模型 |
+
+下载目录：`.opencode/plugins/feishu-bridge/feishu-files/`（已被 git 忽略）。文件以 `messageId + file_key` 命名，避免多张图片互相覆盖。
+
+提示词文案放在 `prompts.json`，每次读取，改完下一条消息生效：
+
+```json
+{
+  "prefix": "",
+  "suffix": "",
+  "image": "请看这张图片",
+  "images": "请看这些图片",
+  "file": "请阅读这个文件：{{name}}"
+}
+```
+
+- `prefix` / `suffix` 会包在每条文本消息外，可留空。
+- `image` / `images` 用于无文字图片。
+- `file` 里的 `{{name}}` 会替换成文件名。
+
+## 侧边栏
+
+TUI 插件在 `sidebar.content` 追加一个区块，与 `git-status` 并存：
+
+```text
+FEISHU
+connected
+idle · 12 events
+```
+
+数据通过 plugin RPC `hucky.feishu-bridge.status` 每 1.5 秒拉取，不走日志解析。TUI 部分只在 OpenCode 启动时加载，改完 `tui.tsx` 需要重启 TUI。
+
+## 实现要点
+
+### 插件部件
+
+`package.json` 的 `exports` 同时声明三个入口：
+
+```json
+{
+  "exports": {
+    ".": "./index.ts",
+    "./tui": "./tui.tsx",
+    "./rpc": "./rpc.ts"
+  }
+}
+```
+
+### 事件流
+
+server 插件订阅这些事件：
+
+| 事件 | 用途 |
+| --- | --- |
+| `session.text.delta` | 追加流式文本 |
+| `session.tool.input.started` | 记录工具名 |
+| `session.tool.called` | 标记工具开始执行 |
+| `session.tool.success` / `session.tool.failed` | 标记工具结束 |
+| `permission.asked` | 发权限卡片 |
+
+### 会话映射
+
+飞书 `chat_id` 到 OpenCode `sessionID` 的映射存在 `ctx.storage` 的 `chat/<chat_id>`，同时记录用户选择的模型和 agent。插件重载或 OpenCode 重启后映射不丢。
+
+### 连接生命周期
+
+- 飞书 WS 连接在插件进程内只保留一份，热重载时复用，避免同一应用开多条连接导致重复回复。
+- 关闭时中断事件订阅、清理流式卡片定时器。
+- `/feishu-off` 只关连接，插件和命令仍然可用。
+
+### 去重
+
+飞书在断线重连后可能重投消息。插件用 `message_id` 做 10 分钟去重，避免同一条消息执行两次。
+
+## 排错
+
+日志文件：`.opencode/plugins/feishu-bridge/debug.log`。
+
+| 日志 | 含义 |
+| --- | --- |
+| `missing FEISHU_APP_ID` | `.env` 没填或没读到 |
+| `sdk import FAILED` | SDK 与 Bun 运行时不兼容 |
+| `websocket FAILED` | 凭证错误、应用未发布、未开长连接、出站被拦 |
+| `websocket ready` 但没有 `message received` | 事件订阅没配，或应用版本未发布 |
+| `prompt FAILED` | OpenCode 侧报错，看同一行后面的 message |
+| `card patch failed` | 飞书卡片更新被拒，通常是频控或卡片结构问题 |
+| `permission card FAILED` | 权限卡片发送失败，检查 `im:message:send_as_bot` |
+| `rpc register FAILED` | RPC 契约或注册参数有问题 |
+
+TUI 里也可以用 `/feishu-log` 直接看最近 20 行。
+
+## 限制
+
+- 只支持飞书和 Lark，不支持企业微信、钉钉。
+- 附件只处理 `image`、`post`、`file`；语音、视频、表情等会回复「暂不支持」。
+- 群聊需要 @机器人；插件没有实现群白名单策略，只有用户 `open_id` 白名单。
+- 卡片工具状态是汇总计数，不展示每次调用的输入输出。
+- 机器人依赖 OpenCode server 常驻，TUI 关闭后需要单独保证 server 运行。

@@ -2,6 +2,8 @@
 
 # dependencies
 /node_modules
+.opencode/plugins/**/node_modules/
+.opencode/plugins/feishu-bridge/feishu-files/
 /.pnp
 .pnp.*
 .yarn/*
@@ -29,6 +31,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+.opencode/plugins/feishu-bridge/debug.log
 
 # env files (real values stay local)
 .env
