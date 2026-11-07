@@ -1,8 +1,9 @@
-import { appendFileSync, existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, extname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { Plugin } from "@opencode/plugin";
-import { buildCard, type ToolLine, type ToolStatus } from "./card";
+import { buildCard, buildPermissionCard, type ToolLine, type ToolStatus } from "./card";
 import { createCommandHandler, type StoredChat } from "./commands";
 import { FeishuBridge } from "./rpc";
 
@@ -581,7 +582,12 @@ export default Plugin.define({
         log,
       });
 
-      const handlePrompt = async (chatId: string, messageId: string, text: string) => {
+      const handlePrompt = async (
+        chatId: string,
+        messageId: string,
+        text: string,
+        files?: Array<{ uri: string; name?: string }>,
+      ) => {
         if (state.busyChats.includes(chatId)) {
           await sendText(messageId, "上一条还在处理中，稍等或发 /stop 中断");
           return;
@@ -641,7 +647,11 @@ export default Plugin.define({
           }
 
           const started = Date.now();
-          await ctx.session.prompt({ sessionID, text });
+          await ctx.session.prompt({
+            sessionID,
+            text,
+            ...(files && files.length > 0 ? { files } : {}),
+          });
 
           if (stream) {
             stream.meta = await readMeta(sessionID);
@@ -710,6 +720,106 @@ export default Plugin.define({
         }
       };
 
+      const headerValue = (headers: any, name: string) => {
+        if (!headers) return "";
+        if (typeof headers.get === "function") {
+          return String(headers.get(name) ?? "");
+        }
+        return String(headers[name] ?? headers[name.toLowerCase()] ?? "");
+      };
+
+      const mimeExt = (contentType: string) => {
+        const type = contentType.toLowerCase();
+        if (type.includes("jpeg") || type.includes("jpg")) return ".jpg";
+        if (type.includes("gif")) return ".gif";
+        if (type.includes("webp")) return ".webp";
+        if (type.includes("bmp")) return ".bmp";
+        return ".png";
+      };
+
+      const downloadAttachment = async (
+        messageId: string,
+        messageType: string,
+        content: Record<string, any>,
+      ) => {
+        const isImage = messageType === "image";
+        const fileKey = isImage ? content.image_key : content.file_key;
+        if (!fileKey) return undefined;
+
+        const dir = join(tmpdir(), "opencode", "feishu");
+        mkdirSync(dir, { recursive: true });
+
+        const response = await client.im.messageResource.get({
+          path: { message_id: messageId, file_key: fileKey },
+          params: { type: isImage ? "image" : "file" },
+        });
+
+        const ext = isImage
+          ? mimeExt(headerValue(response?.headers, "content-type"))
+          : extname(String(content.file_name ?? "")) || ".bin";
+        const target = join(dir, `${messageId}${ext}`);
+        await response.writeFile(target);
+
+        return {
+          uri: pathToFileURL(target).href,
+          name: isImage
+            ? `image-${messageId}${ext}`
+            : String(content.file_name ?? `file-${messageId}${ext}`),
+        };
+      };
+
+      const findChatBySession = async (sessionID: string) => {
+        try {
+          const page = await ctx.storage.scan({ prefix: "chat/", limit: 100 });
+          for (const entry of page.entries) {
+            const value = entry.value as StoredChat | undefined;
+            if (value?.sessionID === sessionID) {
+              return entry.key.slice("chat/".length);
+            }
+          }
+        } catch (error) {
+          log("scan chats failed", error);
+        }
+        return undefined;
+      };
+
+      const handlePermission = async (request: any) => {
+        const chatId = await findChatBySession(String(request?.sessionID ?? ""));
+        if (!chatId) {
+          log("permission ignored, no chat mapping", {
+            sessionID: request?.sessionID,
+          });
+          return;
+        }
+        try {
+          const result = await client.im.message.create({
+            params: { receive_id_type: "chat_id" },
+            data: {
+              receive_id: chatId,
+              msg_type: "interactive",
+              content: JSON.stringify(
+                buildPermissionCard({
+                  action: String(request?.action ?? "permission"),
+                  resources: Array.isArray(request?.resources)
+                    ? request.resources.map(String)
+                    : [],
+                  message: request?.message ? String(request.message) : undefined,
+                  requestID: String(request?.id ?? ""),
+                  sessionID: String(request?.sessionID ?? ""),
+                }),
+              ),
+            },
+          });
+          log("permission card sent", {
+            requestID: request?.id,
+            chatId,
+            messageId: result?.data?.message_id,
+          });
+        } catch (error) {
+          log("permission card FAILED", error);
+        }
+      };
+
       const dispatcher = new Lark.EventDispatcher({}).register({
         "im.message.receive_v1": async (data: FeishuMessageEvent) => {
           state.lastEventAt = new Date().toISOString();
@@ -747,19 +857,40 @@ export default Plugin.define({
             return;
           }
 
-          if (messageType !== "text") {
-            await sendText(messageId, `暂只支持文本，收到 ${messageType}`);
+          let text = "";
+          let files: Array<{ uri: string; name?: string }> = [];
+
+          if (messageType === "text") {
+            try {
+              text = stripMentions(String(JSON.parse(message?.content ?? "{}").text ?? ""));
+            } catch (error) {
+              log("parse content failed", error);
+            }
+          } else if (messageType === "image" || messageType === "file") {
+            try {
+              const content = JSON.parse(message?.content ?? "{}");
+              const file = await downloadAttachment(messageId, messageType, content);
+              if (!file) {
+                await sendText(messageId, "附件下载失败：缺少 file_key");
+                return;
+              }
+              files = [file];
+              text =
+                messageType === "image"
+                  ? "请看这张图片"
+                  : `请阅读这个文件：${content.file_name ?? file.name}`;
+            } catch (error) {
+              log("attachment FAILED", error);
+              const reason = error instanceof Error ? error.message : String(error);
+              await sendText(messageId, `附件处理失败: ${reason}`);
+              return;
+            }
+          } else {
+            await sendText(messageId, `暂不支持 ${messageType}`);
             return;
           }
 
-          let text = "";
-          try {
-            text = stripMentions(String(JSON.parse(message?.content ?? "{}").text ?? ""));
-          } catch (error) {
-            log("parse content failed", error);
-          }
-
-          if (text.length === 0) {
+          if (text.length === 0 && files.length === 0) {
             await sendText(messageId, "空消息");
             return;
           }
@@ -767,12 +898,90 @@ export default Plugin.define({
           // 长任务不阻塞事件循环，否则 /stop 也收不到
           void (async () => {
             try {
-              if (await handleCommand(chatId, messageId, text)) return;
-              await handlePrompt(chatId, messageId, text);
+              if (messageType === "text" && (await handleCommand(chatId, messageId, text))) {
+                return;
+              }
+              await handlePrompt(chatId, messageId, text, files);
             } catch (error) {
               log("handler FAILED", error);
             }
           })();
+        },
+
+        "im.message.recalled_v1": async (data: any) => {
+          const chatId = data?.chat_id ?? data?.event?.chat_id;
+          const recalledId = data?.message_id ?? data?.event?.message_id;
+          if (!chatId) return;
+
+          const stored = await readChat(chatId);
+          if (!stored?.sessionID) return;
+
+          log("message recalled", { chatId, messageId: recalledId });
+
+          if (!state.busyChats.includes(chatId)) return;
+
+          try {
+            await ctx.session.interrupt({ sessionID: stored.sessionID, resume: false });
+          } catch (error) {
+            log("recall interrupt failed", error);
+          }
+
+          const stream = state.streams.get(stored.sessionID);
+          if (stream) {
+            finishStream(stream);
+            await patchCard(
+              stream.messageId,
+              buildCard({
+                text: "消息已撤回，任务已中断",
+                tools: toolLines(stream),
+                status: "error",
+                meta: stream.meta,
+              }),
+            );
+          }
+        },
+
+        "card.action.trigger": async (data: any) => {
+          const value = data?.action?.value;
+          if (!value || value.kind !== "feishu-permission") return;
+
+          const openId = data?.operator?.open_id ?? data?.operator?.operator_id?.open_id;
+          if (allowed.length > 0 && (!openId || !allowed.includes(openId))) {
+            log("permission action blocked", { openId });
+            return;
+          }
+
+          const decision = value.decision as "once" | "always" | "reject";
+          if (!["once", "always", "reject"].includes(decision)) return;
+
+          try {
+            await ctx.permission.reply({
+              sessionID: value.sessionID,
+              requestID: value.requestID,
+              decision,
+            });
+            log("permission replied", {
+              requestID: value.requestID,
+              decision,
+              openId,
+            });
+          } catch (error) {
+            log("permission reply FAILED", error);
+          }
+
+          const cardMessageId = data?.context?.open_message_id;
+          if (cardMessageId) {
+            const label =
+              decision === "reject" ? "已拒绝" : decision === "always" ? "已始终允许" : "已允许一次";
+            await patchCard(
+              cardMessageId,
+              buildCard({
+                text: `权限请求: ${label}`,
+                tools: [],
+                status: decision === "reject" ? "error" : "done",
+              }),
+            );
+          }
         },
       });
 
@@ -794,8 +1003,14 @@ export default Plugin.define({
                 "session.tool.called",
                 "session.tool.success",
                 "session.tool.failed",
+                "permission.asked",
               ],
             })) {
+              if (event.type === "permission.asked") {
+                void handlePermission(event.data);
+                continue;
+              }
+
               const data = event.data as {
                 sessionID?: string;
                 delta?: string;

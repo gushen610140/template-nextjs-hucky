@@ -21,8 +21,9 @@ FEISHU_DOMAIN=feishu
 
 1. 创建「企业自建应用」，添加「机器人」能力。
 2. 权限：`im:message`、`im:message.p2p_msg:readonly`、`im:message.group_at_msg:readonly`、`im:message:send_as_bot`、`im:resource`。
-3. 事件与回调 → 长连接 → 订阅 `im.message.receive_v1`。
-4. 创建版本并发布。
+3. 事件与回调 → 长连接 → 订阅 `im.message.receive_v1`、`im.message.recalled_v1`。
+4. 事件与回调 → 卡片回传交互 → 订阅 `card.action.trigger`（权限卡片按钮需要）。
+5. 创建版本并发布。
 
 ## 3. 依赖
 
@@ -88,6 +89,12 @@ idle · 4 events
 | `/status` | 会话、模型、agent、连接状态 |
 
 `/model` 和 `/agent` 的选择会写入 `ctx.storage`，之后每次 prompt 优先使用它，不再跟随 TUI 的当前选择；`/new` 或 `/session` 换会话后恢复继承。
+
+### 附件、权限、撤回
+
+- 图片/文件：收到 `image` 或 `file` 消息时，用 `im.messageResource.get` 下载到 `%TEMP%\opencode\feishu\`，再以 `file://` 附件传给 `session.prompt`。
+- 权限：监听 `permission.asked`，找到对应飞书会话后发卡片，按钮为「允许一次 / 始终允许 / 拒绝」，回传 `card.action.trigger` 后调用 `permission.reply`。没有飞书映射的会话（TUI 自己的）会被忽略。
+- 撤回：收到 `im.message.recalled_v1` 时，如果该会话正在跑，调用 `session.interrupt`，并把当前卡片改成「消息已撤回，任务已中断」。
 
 ## 8. 验证
 

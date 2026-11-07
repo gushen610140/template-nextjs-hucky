@@ -71,3 +71,60 @@ export function buildCard(input: {
     elements,
   };
 }
+
+export function buildPermissionCard(input: {
+  action: string;
+  resources: string[];
+  message?: string;
+  requestID: string;
+  sessionID: string;
+}) {
+  const value = (decision: "once" | "always" | "reject") => ({
+    kind: "feishu-permission",
+    requestID: input.requestID,
+    sessionID: input.sessionID,
+    decision,
+  });
+
+  const body = [
+    `**${input.action}**`,
+    ...input.resources.map((item) => `- ${item}`),
+    input.message ? `\n${input.message}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return {
+    config: { wide_screen_mode: true },
+    header: {
+      title: { tag: "plain_text", content: "OpenCode 权限请求" },
+      template: "orange",
+    },
+    elements: [
+      { tag: "div", text: { tag: "lark_md", content: body } },
+      {
+        tag: "action",
+        actions: [
+          {
+            tag: "button",
+            text: { tag: "plain_text", content: "允许一次" },
+            type: "primary",
+            value: value("once"),
+          },
+          {
+            tag: "button",
+            text: { tag: "plain_text", content: "始终允许" },
+            type: "default",
+            value: value("always"),
+          },
+          {
+            tag: "button",
+            text: { tag: "plain_text", content: "拒绝" },
+            type: "danger",
+            value: value("reject"),
+          },
+        ],
+      },
+    ],
+  };
+}
