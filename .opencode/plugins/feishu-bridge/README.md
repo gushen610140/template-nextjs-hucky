@@ -84,7 +84,7 @@ idle · 4 events
 | `/agent <名称>` | 切换 agent（build / plan 等） |
 | `/session` | 当前会话 + 最近会话 |
 | `/session list` | 最近会话 |
-| `/session <编号\|id>` | 绑定已有会话 |
+| `/session <编号>` | 绑定已有会话（也兼容直接传 id，但界面不显示 id） |
 | `/cwd` | 工作目录 |
 | `/compact` | 压缩上下文 |
 | `/stop` | 中断当前任务 |
@@ -92,7 +92,7 @@ idle · 4 events
 
 `/model` 和 `/agent` 的选择会写入 `ctx.storage`，之后每次 prompt 优先使用它，不再跟随 TUI 的当前选择；`/new` 或 `/session` 换会话后恢复继承。
 
-所有命令回复都以卡片形式返回。
+所有命令回复都以卡片形式返回。会话一律显示为 `#编号 名称`，`/session` 和 `/status` 都不打印 session id。
 
 ### 附件、权限、撤回
 

@@ -214,38 +214,60 @@ export function createCommandHandler(deps: Deps) {
     await sendText(messageId, `已切换 agent: ${arg}`);
   };
 
+  const recentSessions = async () => {
+    const page = await ctx.session.list({
+      directory: ctx.location.directory,
+      limit: 10,
+      order: "desc",
+    });
+    return page.data as Array<{ id: string; title?: string }>;
+  };
+
+  const sessionLabel = async (
+    sessionID: string,
+    sessions?: Array<{ id: string; title?: string }>,
+  ) => {
+    const list = sessions ?? (await recentSessions());
+    const index = list.findIndex((item) => item.id === sessionID);
+    let title = index >= 0 ? list[index]?.title : undefined;
+    if (!title) {
+      try {
+        title = (await ctx.session.get({ sessionID })).title;
+      } catch {
+        title = undefined;
+      }
+    }
+    const name = title || "未命名会话";
+    return index >= 0 ? `#${index + 1} ${name}` : name;
+  };
+
   const handleSession = async (chatId: string, messageId: string, arg: string) => {
     if (arg === "list" || arg === "") {
-      const page = await ctx.session.list({
-        directory: ctx.location.directory,
-        limit: 10,
-        order: "desc",
-      });
-      const sessions = page.data as Array<{ id: string; title?: string; time?: { updated?: number } }>;
+      const sessions = await recentSessions();
       const stored = await readChat(chatId);
+      const current = stored?.sessionID
+        ? await sessionLabel(stored.sessionID, sessions)
+        : "未绑定";
       await sendText(
         messageId,
         [
-          stored?.sessionID ? `当前: ${stored.sessionID}` : "当前: 未绑定",
+          `当前: ${current}`,
           "最近会话:",
           ...sessions.map(
-            (item, index) => `#${index + 1} ${item.id} ${item.title ?? ""}`.trim(),
+            (item, index) => `#${index + 1} ${item.title ?? "未命名会话"}`,
           ),
-          "用 /session #1 或 /session <id> 绑定",
+          "用 /session #1 绑定",
         ].join("\n"),
       );
       return;
     }
 
     let targetID = arg;
+    let sessions: Array<{ id: string; title?: string }> | undefined;
+
     if (arg.startsWith("#")) {
+      sessions = await recentSessions();
       const index = Number(arg.slice(1)) - 1;
-      const page = await ctx.session.list({
-        directory: ctx.location.directory,
-        limit: 10,
-        order: "desc",
-      });
-      const sessions = page.data as Array<{ id: string }>;
       const picked = sessions[index];
       if (!picked) {
         await sendText(messageId, `没有 #${index + 1}`);
@@ -255,15 +277,16 @@ export function createCommandHandler(deps: Deps) {
     }
 
     try {
-      const session = await ctx.session.get({ sessionID: targetID });
+      await ctx.session.get({ sessionID: targetID });
       await writeChat(chatId, {
-        sessionID: session.id,
+        sessionID: targetID,
         model: undefined,
         agent: undefined,
       });
-      await sendText(messageId, `已绑定会话\n${session.id}\n${session.title ?? ""}`.trim());
+      const label = await sessionLabel(targetID, sessions);
+      await sendText(messageId, `已绑定会话\n${label}`);
     } catch {
-      await sendText(messageId, `会话不存在: ${targetID}`);
+      await sendText(messageId, "会话不存在");
     }
   };
 
@@ -281,14 +304,14 @@ export function createCommandHandler(deps: Deps) {
       if (arg.length > 0) {
         try {
           await ctx.session.move({ sessionID, directory: arg });
-          await sendText(messageId, `已新建会话并切到 ${arg}\n${sessionID}`);
+          await sendText(messageId, `已新建会话并切到 ${arg}`);
         } catch (error) {
           log("move session failed", error);
           const reason = error instanceof Error ? error.message : String(error);
-          await sendText(messageId, `已新建会话 ${sessionID}\n切目录失败: ${reason}`);
+          await sendText(messageId, `已新建会话\n切目录失败: ${reason}`);
         }
       } else {
-        await sendText(messageId, `已新建会话\n${sessionID}`);
+        await sendText(messageId, "已新建会话");
       }
       return true;
     }
@@ -343,7 +366,7 @@ export function createCommandHandler(deps: Deps) {
       await sendText(
         messageId,
         [
-          `session: ${stored?.sessionID ?? "未绑定"}`,
+          `session: ${stored?.sessionID ? await sessionLabel(stored.sessionID) : "未绑定"}`,
           `meta: ${meta}`,
           `busy: ${state.busyChats.includes(chatId)}`,
           `ws: ${state.wsState}`,
