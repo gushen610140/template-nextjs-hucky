@@ -30,7 +30,7 @@ git status -sb
 The sidebar shows output such as:
 
 ```text
-git status -sb
+GIT STATUS
 ## feat/git-status...origin/feat/git-status
  M content/docs/en/opencode/meta.json
 ?? .opencode/plugins/git-status/
@@ -50,7 +50,12 @@ The plugin inserts content into the TUI sidebar slot:
 ```tsx
 context.ui.slot({
   append: "sidebar.content",
-  render: () => <text>{`git status -sb\n${state.text}`}</text>,
+  render: () => (
+    <box flexDirection="column">
+      <text fg={context.theme.text.muted}>{"GIT STATUS"}</text>
+      <text fg={context.theme.text.base}>{state.text}</text>
+    </box>
+  ),
 })
 ```
 

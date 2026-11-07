@@ -73,9 +73,10 @@ export default Plugin.define({
     const unregister = context.ui.slot({
       append: "sidebar.content",
       render: () => (
-        <text
-          fg={context.theme.text.base}
-        >{`git status -sb\n${state.text}`}</text>
+        <box flexDirection="column">
+          <text fg={context.theme.text.muted}>{"GIT STATUS"}</text>
+          <text fg={context.theme.text.base}>{state.text}</text>
+        </box>
       ),
     });
 
