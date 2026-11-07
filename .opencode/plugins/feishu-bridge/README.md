@@ -53,6 +53,7 @@ idle · 4 events
 - 优先用 `.env` 的 `FEISHU_MODEL`（`providerID/modelID`）和 `FEISHU_AGENT`
 - 未设置时，继承本目录最近一个非飞书会话的模型和 agent
 - 每次 prompt 前重新应用，所以在 TUI 里切换模型/agent 后，下一条飞书消息会跟着变
+- 卡片底部按工具名汇总调用次数，例如 `shell×3 · read×5 · edit×1`；有正在执行时显示 `(n running)`
 
 ## 6. OpenCode 控制命令
 

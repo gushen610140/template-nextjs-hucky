@@ -90,6 +90,7 @@ type StreamState = {
   messageId: string;
   text: string;
   meta: string;
+  tools: Map<string, { name: string; status: "running" | "done" | "error" }>;
   lastPatchAt: number;
   timer?: ReturnType<typeof setTimeout>;
   finished: boolean;
@@ -421,8 +422,24 @@ export default Plugin.define({
         });
       };
 
-      const parseModel = (value: string) => {
-        const index = value.indexOf("/");
+      const summarizeTools = (stream: StreamState) => {
+        const counts = new Map<string, { count: number; running: number }>();
+        for (const tool of stream.tools.values()) {
+          const entry = counts.get(tool.name) ?? { count: 0, running: 0 };
+          entry.count += 1;
+          if (tool.status === "running") entry.running += 1;
+          counts.set(tool.name, entry);
+        }
+        return [...counts.entries()]
+          .sort((left, right) => right[1].count - left[1].count)
+          .map(([name, entry]) => ({
+            name,
+            count: entry.count,
+            running: entry.running,
+          }));
+      };
+
+      const parseModel = (value: string) => {        const index = value.indexOf("/");
         if (index <= 0 || index === value.length - 1) return undefined;
         return {
           providerID: value.slice(0, index),
@@ -558,6 +575,7 @@ export default Plugin.define({
               text: stream.text,
               status: "running",
               meta: stream.meta,
+              tools: summarizeTools(stream),
             }),
           );
         }, delay);
@@ -688,6 +706,7 @@ export default Plugin.define({
               messageId: cardId,
               text: "",
               meta,
+              tools: new Map(),
               lastPatchAt: Date.now(),
               finished: false,
             };
@@ -732,6 +751,7 @@ export default Plugin.define({
                   text: answer.length > 0 ? answer : "（本轮没有返回文本）",
                   status: "done",
                   meta: stream.meta,
+                  tools: summarizeTools(stream),
                 }),
               );
             } else {
@@ -742,6 +762,7 @@ export default Plugin.define({
                   text: `已完成，全文见下方（${answer.length} 字）`,
                   status: "done",
                   meta: stream.meta,
+                  tools: summarizeTools(stream),
                 }),
               );
               await sendText(messageId, answer);
@@ -761,6 +782,7 @@ export default Plugin.define({
                 text: `出错：${message}`,
                 status: "error",
                 meta: stream.meta,
+                tools: summarizeTools(stream),
               }),
             );
           } else {
@@ -1040,6 +1062,7 @@ export default Plugin.define({
                 text: "消息已撤回，任务已中断",
                 status: "error",
                 meta: stream.meta,
+                tools: summarizeTools(stream),
               }),
             );
           }
@@ -1101,7 +1124,14 @@ export default Plugin.define({
           try {
             for await (const event of ctx.event.subscribe({
               signal,
-              types: ["session.text.delta", "permission.asked"],
+              types: [
+                "session.text.delta",
+                "session.tool.input.started",
+                "session.tool.called",
+                "session.tool.success",
+                "session.tool.failed",
+                "permission.asked",
+              ],
             })) {
               if (event.type === "permission.asked") {
                 void handlePermission(event.data);
@@ -1111,6 +1141,8 @@ export default Plugin.define({
               const data = event.data as {
                 sessionID?: string;
                 delta?: string;
+                id?: string;
+                name?: string;
               };
               const stream = data.sessionID
                 ? state.streams.get(data.sessionID)
@@ -1119,6 +1151,23 @@ export default Plugin.define({
 
               if (event.type === "session.text.delta") {
                 stream.text += data.delta ?? "";
+                schedulePatch(stream);
+              } else if (event.type === "session.tool.input.started") {
+                if (data.id && data.name) {
+                  stream.tools.set(data.id, { name: data.name, status: "running" });
+                }
+                schedulePatch(stream);
+              } else if (event.type === "session.tool.called") {
+                const tool = data.id ? stream.tools.get(data.id) : undefined;
+                if (tool) tool.status = "running";
+                schedulePatch(stream);
+              } else if (event.type === "session.tool.success") {
+                const tool = data.id ? stream.tools.get(data.id) : undefined;
+                if (tool) tool.status = "done";
+                schedulePatch(stream);
+              } else if (event.type === "session.tool.failed") {
+                const tool = data.id ? stream.tools.get(data.id) : undefined;
+                if (tool) tool.status = "error";
                 schedulePatch(stream);
               }
             }

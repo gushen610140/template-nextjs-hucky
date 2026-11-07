@@ -18,7 +18,35 @@ export function buildCard(input: {
   meta?: string;
   text: string;
   status: CardStatus;
+  tools?: Array<{ name: string; count: number; running: number }>;
 }) {
+  const elements: Record<string, unknown>[] = [
+    {
+      tag: "div",
+      text: {
+        tag: "lark_md",
+        content: clip(input.text.trim() || "处理中…"),
+      },
+    },
+  ];
+
+  if (input.tools && input.tools.length > 0) {
+    elements.push({
+      tag: "note",
+      elements: [
+        {
+          tag: "plain_text",
+          content: input.tools
+            .map(
+              (tool) =>
+                `${tool.name}×${tool.count}${tool.running > 0 ? ` (${tool.running} running)` : ""}`,
+            )
+            .join(" · "),
+        },
+      ],
+    });
+  }
+
   return {
     config: { wide_screen_mode: true },
     header: {
@@ -28,15 +56,7 @@ export function buildCard(input: {
         : {}),
       template: template(input.status),
     },
-    elements: [
-      {
-        tag: "div",
-        text: {
-          tag: "lark_md",
-          content: clip(input.text.trim() || "处理中…"),
-        },
-      },
-    ],
+    elements,
   };
 }
 
