@@ -2,7 +2,12 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Plugin } from "@opencode/plugin";
-import { buildCard, buildPermissionCard, type ToolLine, type ToolStatus } from "./card";
+import {
+  buildCard,
+  buildMessageCard,
+  buildPermissionCard,
+  type CardStatus,
+} from "./card";
 import { createCommandHandler, type StoredChat } from "./commands";
 import { FeishuBridge } from "./rpc";
 
@@ -18,10 +23,27 @@ import { FeishuBridge } from "./rpc";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const LOG_FILE = join(HERE, "debug.log");
 const ENV_FILE = join(HERE, ".env");
+const PROMPTS_FILE = join(HERE, "prompts.json");
 const GLOBAL_KEY = "__hucky_feishu_bridge__";
 const ENABLED_KEY = "bridge/enabled";
 const MAX_CHUNK = 3500;
 const DEDUPE_TTL = 10 * 60 * 1000;
+
+type Prompts = {
+  prefix: string;
+  suffix: string;
+  image: string;
+  images: string;
+  file: string;
+};
+
+const DEFAULT_PROMPTS: Prompts = {
+  prefix: "",
+  suffix: "",
+  image: "请看这张图片",
+  images: "请看这些图片",
+  file: "请阅读这个文件：{{name}}",
+};
 
 type BridgeState = {
   started: boolean;
@@ -68,7 +90,6 @@ type StreamState = {
   messageId: string;
   text: string;
   meta: string;
-  tools: Map<string, { name: string; status: ToolStatus }>;
   lastPatchAt: number;
   timer?: ReturnType<typeof setTimeout>;
   finished: boolean;
@@ -112,13 +133,24 @@ function loadEnvFile() {
   }
 }
 
+function loadPrompts(): Prompts {
+  try {
+    if (!existsSync(PROMPTS_FILE)) return DEFAULT_PROMPTS;
+    const parsed = JSON.parse(readFileSync(PROMPTS_FILE, "utf8")) as Partial<Prompts>;
+    return { ...DEFAULT_PROMPTS, ...parsed };
+  } catch (error) {
+    log("prompts.json load failed, using defaults", error);
+    return DEFAULT_PROMPTS;
+  }
+}
+
 function getState(): BridgeState {
   const holder = globalThis as Record<string, unknown>;
   const existing = holder[GLOBAL_KEY] as Partial<BridgeState> | undefined;
   const state: BridgeState = {
     started: false,
     sdkLoaded: false,
-    enabled: true,
+    enabled: false,
     wsState: "idle",
     messageCount: 0,
     busyChats: [],
@@ -351,6 +383,7 @@ export default Plugin.define({
       }
 
       const client = new Lark.Client({ appId, appSecret });
+      const cardTitle = process.env.FEISHU_CARD_TITLE?.trim() || "OpenCode";
       const seen = new Map<string, number>();
 
       const sendText = async (messageId: string, text: string) => {
@@ -365,11 +398,15 @@ export default Plugin.define({
         }
       };
 
-      const toolLines = (stream: StreamState): ToolLine[] =>
-        [...stream.tools.values()].map((tool) => ({
-          name: tool.name,
-          status: tool.status,
-        }));
+      const sendCardText = async (messageId: string, text: string) => {
+        await client.im.message.reply({
+          path: { message_id: messageId },
+          data: {
+            msg_type: "interactive",
+            content: JSON.stringify(buildMessageCard({ title: cardTitle, text })),
+          },
+        });
+      };
 
       const parseModel = (value: string) => {
         const index = value.indexOf("/");
@@ -451,14 +488,16 @@ export default Plugin.define({
                   item.providerID === model!.providerID &&
                   (item.modelID === model!.id || item.id === model!.id),
               );
-              label = found?.name ?? `${model.providerID}/${model.id}`;
+              label = `${found?.name ?? model.id} (${model.providerID})`;
             } catch {
-              label = `${model.providerID}/${model.id}`;
+              label = `${model.id} (${model.providerID})`;
             }
           } else {
             try {
               const fallback = await ctx.model.default();
-              label = fallback.data?.name ?? "unknown";
+              label = fallback.data
+                ? `${fallback.data.name} (${fallback.data.providerID})`
+                : "unknown";
             } catch {
               label = "unknown";
             }
@@ -502,8 +541,8 @@ export default Plugin.define({
           void patchCard(
             stream.messageId,
             buildCard({
+              title: cardTitle,
               text: stream.text,
-              tools: toolLines(stream),
               status: "running",
               meta: stream.meta,
             }),
@@ -573,7 +612,7 @@ export default Plugin.define({
       const handleCommand = createCommandHandler({
         ctx,
         state,
-        sendText,
+        sendText: sendCardText,
         readChat,
         writeChat,
         newSession,
@@ -628,7 +667,7 @@ export default Plugin.define({
 
           const cardId = await sendCard(
             messageId,
-            buildCard({ text: "", tools: [], status: "running", meta }),
+            buildCard({ title: cardTitle, text: "", status: "running", meta }),
           );
           if (cardId) {
             stream = {
@@ -636,7 +675,6 @@ export default Plugin.define({
               messageId: cardId,
               text: "",
               meta,
-              tools: new Map(),
               lastPatchAt: Date.now(),
               finished: false,
             };
@@ -645,10 +683,13 @@ export default Plugin.define({
             await sendText(messageId, "收到，处理中…");
           }
 
+          const prompts = loadPrompts();
+          const promptText = `${prompts.prefix}${text}${prompts.suffix}`;
+
           const started = Date.now();
           await ctx.session.prompt({
             sessionID,
-            text,
+            text: promptText,
             ...(files && files.length > 0 ? { files } : {}),
           });
 
@@ -660,7 +701,7 @@ export default Plugin.define({
           await ctx.session.wait({ sessionID });
 
           const messages = (await ctx.session.context({ sessionID })) as AnyMessage[];
-          const answer = extractAnswer(messages, text);
+          const answer = extractAnswer(messages, promptText);
           log("prompt done", {
             chatId,
             sessionID,
@@ -670,13 +711,12 @@ export default Plugin.define({
 
           if (stream) {
             finishStream(stream);
-            const tools = toolLines(stream);
             if (answer.length <= 4000) {
               await patchCard(
                 stream.messageId,
                 buildCard({
+                  title: cardTitle,
                   text: answer.length > 0 ? answer : "（本轮没有返回文本）",
-                  tools,
                   status: "done",
                   meta: stream.meta,
                 }),
@@ -685,8 +725,8 @@ export default Plugin.define({
               await patchCard(
                 stream.messageId,
                 buildCard({
+                  title: cardTitle,
                   text: `已完成，全文见下方（${answer.length} 字）`,
-                  tools,
                   status: "done",
                   meta: stream.meta,
                 }),
@@ -704,8 +744,8 @@ export default Plugin.define({
             await patchCard(
               stream.messageId,
               buildCard({
+                title: cardTitle,
                 text: `出错：${message}`,
-                tools: toolLines(stream),
                 status: "error",
                 meta: stream.meta,
               }),
@@ -745,7 +785,13 @@ export default Plugin.define({
         const fileKey = isImage ? content.image_key : content.file_key;
         if (!fileKey) return undefined;
 
-        const dir = join(ctx.location.directory, ".opencode", "feishu-files");
+        const dir = join(
+          ctx.location.directory,
+          ".opencode",
+          "plugins",
+          "feishu-bridge",
+          "feishu-files",
+        );
         mkdirSync(dir, { recursive: true });
 
         const response = await client.im.messageResource.get({
@@ -818,6 +864,7 @@ export default Plugin.define({
               msg_type: "interactive",
               content: JSON.stringify(
                 buildPermissionCard({
+                  title: cardTitle,
                   action: String(request?.action ?? "permission"),
                   resources: Array.isArray(request?.resources)
                     ? request.resources.map(String)
@@ -878,6 +925,7 @@ export default Plugin.define({
 
           let text = "";
           let files: Array<{ uri: string; name?: string }> = [];
+          const prompts = loadPrompts();
 
           if (messageType === "text") {
             try {
@@ -896,8 +944,8 @@ export default Plugin.define({
               files = [file];
               text =
                 messageType === "image"
-                  ? "请看这张图片"
-                  : `请阅读这个文件：${content.file_name ?? file.name}`;
+                  ? prompts.image
+                  : prompts.file.replace("{{name}}", String(content.file_name ?? file.name));
             } catch (error) {
               log("attachment FAILED", error);
               const reason = error instanceof Error ? error.message : String(error);
@@ -916,7 +964,7 @@ export default Plugin.define({
                 if (file) files.push(file);
               }
               if (text.length === 0 && files.length > 0) {
-                text = files.length > 1 ? "请看这些图片" : "请看这张图片";
+                text = files.length > 1 ? prompts.images : prompts.image;
               }
               if (text.length === 0 && files.length === 0) {
                 await sendText(messageId, "暂不支持这种富文本内容");
@@ -975,8 +1023,8 @@ export default Plugin.define({
             await patchCard(
               stream.messageId,
               buildCard({
+                title: cardTitle,
                 text: "消息已撤回，任务已中断",
-                tools: toolLines(stream),
                 status: "error",
                 meta: stream.meta,
               }),
@@ -1019,8 +1067,8 @@ export default Plugin.define({
             await patchCard(
               cardMessageId,
               buildCard({
+                title: cardTitle,
                 text: `权限请求: ${label}`,
-                tools: [],
                 status: decision === "reject" ? "error" : "done",
               }),
             );
@@ -1040,14 +1088,7 @@ export default Plugin.define({
           try {
             for await (const event of ctx.event.subscribe({
               signal,
-              types: [
-                "session.text.delta",
-                "session.tool.input.started",
-                "session.tool.called",
-                "session.tool.success",
-                "session.tool.failed",
-                "permission.asked",
-              ],
+              types: ["session.text.delta", "permission.asked"],
             })) {
               if (event.type === "permission.asked") {
                 void handlePermission(event.data);
@@ -1057,8 +1098,6 @@ export default Plugin.define({
               const data = event.data as {
                 sessionID?: string;
                 delta?: string;
-                id?: string;
-                name?: string;
               };
               const stream = data.sessionID
                 ? state.streams.get(data.sessionID)
@@ -1067,23 +1106,6 @@ export default Plugin.define({
 
               if (event.type === "session.text.delta") {
                 stream.text += data.delta ?? "";
-                schedulePatch(stream);
-              } else if (event.type === "session.tool.input.started") {
-                if (data.id && data.name) {
-                  stream.tools.set(data.id, { name: data.name, status: "running" });
-                }
-                schedulePatch(stream);
-              } else if (event.type === "session.tool.called") {
-                const tool = data.id ? stream.tools.get(data.id) : undefined;
-                if (tool) tool.status = "running";
-                schedulePatch(stream);
-              } else if (event.type === "session.tool.success") {
-                const tool = data.id ? stream.tools.get(data.id) : undefined;
-                if (tool) tool.status = "done";
-                schedulePatch(stream);
-              } else if (event.type === "session.tool.failed") {
-                const tool = data.id ? stream.tools.get(data.id) : undefined;
-                if (tool) tool.status = "error";
                 schedulePatch(stream);
               }
             }
@@ -1151,13 +1173,20 @@ export default Plugin.define({
       state.controller = { start, stop };
       state.started = true;
 
-      const enabledStored = await ctx.storage.get(ENABLED_KEY);
-      state.enabled = enabledStored !== false;
+      const initialized = await ctx.storage.get("bridge/initialized");
+      if (initialized !== true) {
+        // 首次升级：默认关闭，避免升级后自动连上
+        await ctx.storage.set("bridge/initialized", true);
+        await ctx.storage.set(ENABLED_KEY, false);
+        state.enabled = false;
+      } else {
+        state.enabled = (await ctx.storage.get(ENABLED_KEY)) === true;
+      }
 
       if (state.enabled) {
         await start();
       } else {
-        log("bridge disabled by /feishu-off, not connecting");
+        log("bridge disabled, use /feishu-on in TUI to start");
       }
     };
 

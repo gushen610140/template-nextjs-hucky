@@ -1,6 +1,6 @@
 # feishu-bridge
 
-飞书机器人 ↔ OpenCode。当前阶段 M1.5：文本对话 + 会话映射 + TUI 控制命令 + 侧边栏状态。
+飞书机器人 ↔ OpenCode。当前阶段 M4：文本/附件对话 + 流式卡片 + 命令 + 权限 + 撤回。
 
 ## 1. 凭证
 
@@ -11,6 +11,9 @@ FEISHU_APP_ID=cli_xxxxxxxx
 FEISHU_APP_SECRET=xxxxxxxx
 FEISHU_ALLOWED_OPEN_ID=ou_xxxxxxxx
 FEISHU_DOMAIN=feishu
+FEISHU_CARD_TITLE=OpenCode
+FEISHU_MODEL=
+FEISHU_AGENT=
 ```
 
 - `.env` 已被 git 忽略。
@@ -43,14 +46,13 @@ idle · 4 events
 
 数据通过 plugin RPC `hucky.feishu-bridge.status` 每 1.5s 拉取，不走日志解析。TUI 部分改动后需要重启 OpenCode TUI 才会加载。
 
-## 5. 卡片 meta
+## 5. 卡片
 
-卡片顶部显示 `agent · 模型名 · 工作目录`。
-
+- header 标题由 `FEISHU_CARD_TITLE` 控制，默认 `OpenCode`
+- header 副标题显示 `agent · 模型名 (供应商) · 工作目录`
 - 优先用 `.env` 的 `FEISHU_MODEL`（`providerID/modelID`）和 `FEISHU_AGENT`
 - 未设置时，继承本目录最近一个非飞书会话的模型和 agent
 - 每次 prompt 前重新应用，所以在 TUI 里切换模型/agent 后，下一条飞书消息会跟着变
-- 模型显示 `Model.Info.name`，不再出现 `default`
 
 ## 6. OpenCode 控制命令
 
@@ -64,7 +66,7 @@ idle · 4 events
 | `/feishu-restart` | 断开重连 |
 | `/feishu-log` | 最近 20 行日志 |
 
-开启/关闭状态存在 `ctx.storage` 的 `bridge/enabled`，插件重载或 OpenCode 重启后保持。
+开启/关闭状态存在 `ctx.storage` 的 `bridge/enabled`，插件重载或 OpenCode 重启后保持。**默认关闭**：安装或升级后不会自动连接，先在 TUI 执行 `/feishu-on`。
 
 也可以在 `opencode.jsonc` 的 `plugins` 里用 `-hucky.feishu-bridge` 彻底停用插件。
 
@@ -90,17 +92,37 @@ idle · 4 events
 
 `/model` 和 `/agent` 的选择会写入 `ctx.storage`，之后每次 prompt 优先使用它，不再跟随 TUI 的当前选择；`/new` 或 `/session` 换会话后恢复继承。
 
+所有命令回复都以卡片形式返回。
+
 ### 附件、权限、撤回
 
-- 图片/文件：收到 `image`、`post` 或 `file` 消息时，用 `im.messageResource.get` 下载到项目内 `.opencode/feishu-files/`（已 git 忽略），再以 `file://` 附件传给 `session.prompt`。
+- 图片/文件：收到 `image`、`post` 或 `file` 消息时，用 `im.messageResource.get` 下载到 `.opencode/plugins/feishu-bridge/feishu-files/`（已 git 忽略），再以 `file://` 附件传给 `session.prompt`。
 - 权限：监听 `permission.asked`，找到对应飞书会话后发卡片，按钮为「允许一次 / 始终允许 / 拒绝」，回传 `card.action.trigger` 后调用 `permission.reply`。没有飞书映射的会话（TUI 自己的）会被忽略。
 - 撤回：收到 `im.message.recalled_v1` 时，如果该会话正在跑，调用 `session.interrupt`，并把当前卡片改成「消息已撤回，任务已中断」。
 
-## 8. 验证
+## 8. 提示词
 
-1. `debug.log` 出现 `websocket ready`。
-2. TUI 执行 `/feishu-status`。
-3. 飞书私聊发消息，应回「收到，处理中…」，随后回最终答案。
+`prompts.json` 控制飞书侧注入的提示词，改完下一条消息生效（每次读取文件）：
+
+```json
+{
+  "prefix": "",
+  "suffix": "",
+  "image": "请看这张图片",
+  "images": "请看这些图片",
+  "file": "请阅读这个文件：{{name}}"
+}
+```
+
+- `prefix` / `suffix` 会包在每条文本消息外，可留空
+- `image` / `images` 用于无文字图片
+- `file` 里的 `{{name}}` 会替换成文件名
+
+## 9. 验证
+
+1. TUI 执行 `/feishu-on`。
+2. `debug.log` 出现 `websocket ready`。
+3. 飞书私聊发消息，应出现卡片并流式更新。
 
 ## 排错
 

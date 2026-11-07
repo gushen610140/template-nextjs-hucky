@@ -1,5 +1,4 @@
-export type ToolStatus = "running" | "done" | "error";
-export type ToolLine = { name: string; status: ToolStatus };
+export type CardStatus = "running" | "done" | "error";
 
 const TEXT_LIMIT = 6000;
 
@@ -8,71 +7,57 @@ function clip(text: string) {
   return `…（前略）\n${text.slice(-TEXT_LIMIT)}`;
 }
 
-function marker(status: ToolStatus) {
-  if (status === "running") return "▸";
-  if (status === "done") return "✓";
-  return "✗";
+function template(status: CardStatus) {
+  if (status === "done") return "green";
+  if (status === "error") return "red";
+  return "blue";
 }
 
 export function buildCard(input: {
-  text: string;
-  tools: ToolLine[];
-  status: "running" | "done" | "error";
+  title: string;
   meta?: string;
-  note?: string;
+  text: string;
+  status: CardStatus;
 }) {
-  const template =
-    input.status === "done" ? "green" : input.status === "error" ? "red" : "blue";
-
-  const elements: Record<string, unknown>[] = [];
-
-  if (input.meta) {
-    elements.push({
-      tag: "note",
-      elements: [{ tag: "plain_text", content: input.meta }],
-    });
-  }
-
-  elements.push({
-    tag: "div",
-    text: {
-      tag: "lark_md",
-      content: clip(input.text.trim() || "处理中…"),
-    },
-  });
-
-  if (input.tools.length > 0) {
-    elements.push({ tag: "hr" });
-    elements.push({
-      tag: "div",
-      text: {
-        tag: "lark_md",
-        content: input.tools
-          .slice(-8)
-          .map((tool) => `${marker(tool.status)} ${tool.name}`)
-          .join("\n"),
-      },
-    });
-  }
-
-  if (input.note) {
-    elements.push({
-      tag: "note",
-      elements: [{ tag: "plain_text", content: input.note }],
-    });
-  }
-
   return {
     config: { wide_screen_mode: true },
     header: {
-      title: { tag: "plain_text", content: "OpenCode" },
-      template,
+      title: { tag: "plain_text", content: input.title },
+      ...(input.meta
+        ? { subtitle: { tag: "plain_text", content: input.meta } }
+        : {}),
+      template: template(input.status),
     },
-    elements,
+    elements: [
+      {
+        tag: "div",
+        text: {
+          tag: "lark_md",
+          content: clip(input.text.trim() || "处理中…"),
+        },
+      },
+    ],
+  };
+}
+
+export function buildMessageCard(input: { title: string; text: string }) {
+  return {
+    config: { wide_screen_mode: true },
+    header: {
+      title: { tag: "plain_text", content: input.title },
+      template: "blue",
+    },
+    elements: [
+      {
+        tag: "div",
+        text: { tag: "lark_md", content: clip(input.text) },
+      },
+    ],
   };
 }
 
 export function buildPermissionCard(input: {
+  title: string;
   action: string;
   resources: string[];
   message?: string;
@@ -97,7 +82,7 @@ export function buildPermissionCard(input: {
   return {
     config: { wide_screen_mode: true },
     header: {
-      title: { tag: "plain_text", content: "OpenCode 权限请求" },
+      title: { tag: "plain_text", content: `${input.title} 权限请求` },
       template: "orange",
     },
     elements: [
