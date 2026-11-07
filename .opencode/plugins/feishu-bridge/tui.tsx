@@ -3,6 +3,23 @@ import { FeishuBridge, type FeishuStatus } from "./rpc";
 
 const REFRESH_MS = 1_500;
 
+function describeError(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null) {
+    const detail = error as { message?: unknown; type?: unknown };
+    if (typeof detail.message === "string" && detail.message.length > 0) {
+      return detail.message;
+    }
+    if (typeof detail.type === "string") return detail.type;
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return "unknown error";
+    }
+  }
+  return String(error);
+}
+
 export default Plugin.define({
   id: "hucky.feishu-bridge-tui",
 
@@ -14,18 +31,21 @@ export default Plugin.define({
       },
     });
 
+    const location = () =>
+      context.location ?? context.data.location.default();
+
     const refresh = async () => {
       try {
         const data = (await context.client
           .rpc(FeishuBridge)
-          .status({})) as FeishuStatus;
+          .status({}, { location: location() })) as FeishuStatus;
         await updateState((draft) => {
           draft.data = data;
           draft.error = "";
         });
       } catch (error) {
         await updateState((draft) => {
-          draft.error = error instanceof Error ? error.message : String(error);
+          draft.error = describeError(error);
         });
       }
     };
@@ -37,7 +57,11 @@ export default Plugin.define({
       append: "sidebar.content",
       render: () => {
         const data = state.data;
-        const status = data ? (data.enabled ? data.wsState : "off") : "unavailable";
+        const status = data
+          ? data.enabled
+            ? data.wsState
+            : "off"
+          : "unavailable";
         const detail = state.error
           ? `error: ${state.error.split(/\r?\n/)[0].slice(0, 48)}`
           : data
