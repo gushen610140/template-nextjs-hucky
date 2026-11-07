@@ -2,6 +2,7 @@ import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Plugin } from "@opencode/plugin";
+import { buildCard, type ToolLine, type ToolStatus } from "./card";
 import { FeishuBridge } from "./rpc";
 
 /**
@@ -30,6 +31,8 @@ type BridgeState = {
   lastEventAt?: string;
   messageCount: number;
   busyChats: string[];
+  streams: Map<string, StreamState>;
+  eventsAbort?: AbortController;
   owner?: symbol;
   pending?: Promise<void>;
   controller?: {
@@ -59,6 +62,17 @@ type AnyMessage = {
   type?: string;
   text?: string;
   content?: Array<{ type?: string; text?: string }>;
+};
+
+type StreamState = {
+  chatId: string;
+  messageId: string;
+  text: string;
+  meta: string;
+  tools: Map<string, { name: string; status: ToolStatus }>;
+  lastPatchAt: number;
+  timer?: ReturnType<typeof setTimeout>;
+  finished: boolean;
 };
 
 function log(message: string, extra?: unknown) {
@@ -109,10 +123,13 @@ function getState(): BridgeState {
     wsState: "idle",
     messageCount: 0,
     busyChats: [],
+    streams: new Map(),
     ...existing,
   };
   // 热重载时旧 state 可能缺字段，补默认值
   state.busyChats = Array.isArray(state.busyChats) ? state.busyChats : [];
+  state.streams =
+    state.streams instanceof Map ? state.streams : new Map<string, StreamState>();
   holder[GLOBAL_KEY] = state;
   return state;
 }
@@ -349,6 +366,75 @@ export default Plugin.define({
         }
       };
 
+      const toolLines = (stream: StreamState): ToolLine[] =>
+        [...stream.tools.values()].map((tool) => ({
+          name: tool.name,
+          status: tool.status,
+        }));
+
+      const readMeta = async (sessionID: string) => {
+        try {
+          const info = await ctx.session.get({ sessionID });
+          const model = info.model
+            ? `${info.model.providerID}/${info.model.id}${
+                info.model.variant ? `:${info.model.variant}` : ""
+              }`
+            : "default model";
+          return [
+            info.agent ?? "default",
+            model,
+            info.location?.directory ?? ctx.location.directory,
+          ].join(" · ");
+        } catch {
+          return ctx.location.directory;
+        }
+      };
+
+      const patchCard = async (cardId: string, card: unknown) => {
+        try {
+          await client.im.message.patch({
+            path: { message_id: cardId },
+            data: { content: JSON.stringify(card) },
+          });
+        } catch (error) {
+          log("card patch failed", error);
+        }
+      };
+
+      const sendCard = async (replyTo: string, card: unknown) => {
+        const result = await client.im.message.reply({
+          path: { message_id: replyTo },
+          data: { msg_type: "interactive", content: JSON.stringify(card) },
+        });
+        return result?.data?.message_id as string | undefined;
+      };
+
+      const schedulePatch = (stream: StreamState) => {
+        if (stream.finished || stream.timer) return;
+        const delay = Math.max(0, 900 - (Date.now() - stream.lastPatchAt));
+        stream.timer = setTimeout(() => {
+          stream.timer = undefined;
+          stream.lastPatchAt = Date.now();
+          void patchCard(
+            stream.messageId,
+            buildCard({
+              text: stream.text,
+              tools: toolLines(stream),
+              status: "running",
+              meta: stream.meta,
+            }),
+          );
+        }, delay);
+      };
+
+      const finishStream = (stream: StreamState) => {
+        stream.finished = true;
+        if (stream.timer) {
+          clearTimeout(stream.timer);
+          stream.timer = undefined;
+        }
+      };
+
       const getOrCreateSession = async (chatId: string) => {
         const key = `chat/${chatId}`;
         const stored = (await ctx.storage.get(key)) as StoredChat | undefined;
@@ -432,12 +518,39 @@ export default Plugin.define({
         }
 
         state.busyChats.push(chatId);
+        let sessionID: string | undefined;
+        let stream: StreamState | undefined;
         try {
-          const sessionID = await getOrCreateSession(chatId);
-          await sendText(messageId, "收到，处理中…");
+          sessionID = await getOrCreateSession(chatId);
+          const meta = await readMeta(sessionID);
+
+          const cardId = await sendCard(
+            messageId,
+            buildCard({ text: "", tools: [], status: "running", meta }),
+          );
+          if (cardId) {
+            stream = {
+              chatId,
+              messageId: cardId,
+              text: "",
+              meta,
+              tools: new Map(),
+              lastPatchAt: Date.now(),
+              finished: false,
+            };
+            state.streams.set(sessionID, stream);
+          } else {
+            await sendText(messageId, "收到，处理中…");
+          }
 
           const started = Date.now();
           await ctx.session.prompt({ sessionID, text });
+
+          if (stream) {
+            stream.meta = await readMeta(sessionID);
+            schedulePatch(stream);
+          }
+
           await ctx.session.wait({ sessionID });
 
           const messages = (await ctx.session.context({ sessionID })) as AnyMessage[];
@@ -449,13 +562,54 @@ export default Plugin.define({
             chars: answer.length,
           });
 
-          await sendText(messageId, answer.length > 0 ? answer : "（本轮没有返回文本）");
+          if (stream) {
+            finishStream(stream);
+            const tools = toolLines(stream);
+            if (answer.length <= 4000) {
+              await patchCard(
+                stream.messageId,
+                buildCard({
+                  text: answer.length > 0 ? answer : "（本轮没有返回文本）",
+                  tools,
+                  status: "done",
+                  meta: stream.meta,
+                }),
+              );
+            } else {
+              await patchCard(
+                stream.messageId,
+                buildCard({
+                  text: `已完成，全文见下方（${answer.length} 字）`,
+                  tools,
+                  status: "done",
+                  meta: stream.meta,
+                }),
+              );
+              await sendText(messageId, answer);
+            }
+          } else {
+            await sendText(messageId, answer.length > 0 ? answer : "（本轮没有返回文本）");
+          }
         } catch (error) {
           log("prompt FAILED", error);
           const message = error instanceof Error ? error.message : String(error);
-          await sendText(messageId, `出错：${message}`);
+          if (stream) {
+            finishStream(stream);
+            await patchCard(
+              stream.messageId,
+              buildCard({
+                text: `出错：${message}`,
+                tools: toolLines(stream),
+                status: "error",
+                meta: stream.meta,
+              }),
+            );
+          } else {
+            await sendText(messageId, `出错：${message}`);
+          }
         } finally {
           state.busyChats = state.busyChats.filter((item) => item !== chatId);
+          if (sessionID) state.streams.delete(sessionID);
         }
       };
 
@@ -525,6 +679,66 @@ export default Plugin.define({
         },
       });
 
+      let eventsAbort: AbortController | undefined;
+
+      const subscribeEvents = () => {
+        if (eventsAbort) return;
+        eventsAbort = new AbortController();
+        state.eventsAbort = eventsAbort;
+        const signal = eventsAbort.signal;
+
+        void (async () => {
+          try {
+            for await (const event of ctx.event.subscribe({
+              signal,
+              types: [
+                "session.text.delta",
+                "session.tool.input.started",
+                "session.tool.called",
+                "session.tool.success",
+                "session.tool.failed",
+              ],
+            })) {
+              const data = event.data as {
+                sessionID?: string;
+                delta?: string;
+                id?: string;
+                name?: string;
+              };
+              const stream = data.sessionID
+                ? state.streams.get(data.sessionID)
+                : undefined;
+              if (!stream || stream.finished) continue;
+
+              if (event.type === "session.text.delta") {
+                stream.text += data.delta ?? "";
+                schedulePatch(stream);
+              } else if (event.type === "session.tool.input.started") {
+                if (data.id && data.name) {
+                  stream.tools.set(data.id, { name: data.name, status: "running" });
+                }
+                schedulePatch(stream);
+              } else if (event.type === "session.tool.called") {
+                const tool = data.id ? stream.tools.get(data.id) : undefined;
+                if (tool) tool.status = "running";
+                schedulePatch(stream);
+              } else if (event.type === "session.tool.success") {
+                const tool = data.id ? stream.tools.get(data.id) : undefined;
+                if (tool) tool.status = "done";
+                schedulePatch(stream);
+              } else if (event.type === "session.tool.failed") {
+                const tool = data.id ? stream.tools.get(data.id) : undefined;
+                if (tool) tool.status = "error";
+                schedulePatch(stream);
+              }
+            }
+            if (!signal.aborted) log("event stream ended");
+          } catch (error) {
+            if (!signal.aborted) log("event stream FAILED", error);
+          }
+        })();
+      };
+
       const start = async () => {
         if (state.wsState === "connected" || state.wsState === "starting") return;
         const wsClient = new Lark.WSClient({
@@ -551,6 +765,7 @@ export default Plugin.define({
         });
         state.ws = wsClient as unknown as BridgeState["ws"];
         state.wsState = "starting";
+        subscribeEvents();
         try {
           await wsClient.start({ eventDispatcher: dispatcher });
           state.wsState = "connected";
@@ -564,6 +779,11 @@ export default Plugin.define({
 
       const stop = () => {
         log("websocket stopping");
+        eventsAbort?.abort();
+        eventsAbort = undefined;
+        state.eventsAbort = undefined;
+        for (const stream of state.streams.values()) finishStream(stream);
+        state.streams.clear();
         try {
           state.ws?.close?.({ force: true });
         } catch (error) {
