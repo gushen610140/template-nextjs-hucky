@@ -1,6 +1,6 @@
 # feishu-bridge
 
-飞书机器人 ↔ OpenCode。当前阶段 M1.5：文本对话 + 会话映射 + TUI 控制命令。
+飞书机器人 ↔ OpenCode。当前阶段 M1.5：文本对话 + 会话映射 + TUI 控制命令 + 侧边栏状态。
 
 ## 1. 凭证
 
@@ -30,7 +30,19 @@ FEISHU_DOMAIN=feishu
 npm install --prefix .opencode/plugins/feishu-bridge
 ```
 
-## 4. OpenCode 控制命令
+## 4. 侧边栏
+
+`sidebar.content` 追加一个区块，与 `git-status` 的区块并存：
+
+```
+FEISHU
+connected
+idle · 4 events
+```
+
+数据通过 plugin RPC `hucky.feishu-bridge.status` 每 1.5s 拉取，不走日志解析。TUI 部分改动后需要重启 OpenCode TUI 才会加载。
+
+## 5. OpenCode 控制命令
 
 在 TUI 里输入：
 
@@ -46,7 +58,7 @@ npm install --prefix .opencode/plugins/feishu-bridge
 
 也可以在 `opencode.jsonc` 的 `plugins` 里用 `-hucky.feishu-bridge` 彻底停用插件。
 
-## 5. 飞书侧命令
+## 6. 飞书侧命令
 
 | 命令 | 作用 |
 |---|---|
@@ -55,7 +67,7 @@ npm install --prefix .opencode/plugins/feishu-bridge
 | `/status` | 会话 ID、忙碌状态、连接状态 |
 | `/help` | 帮助 |
 
-## 6. 验证
+## 7. 验证
 
 1. `debug.log` 出现 `websocket ready`。
 2. TUI 执行 `/feishu-status`。
@@ -69,4 +81,5 @@ npm install --prefix .opencode/plugins/feishu-bridge
 | `sdk import FAILED` | SDK 与 Bun 不兼容 |
 | `websocket FAILED` | 凭证错误、应用未发布、未开长连接、出站被拦 |
 | `prompt FAILED` | OpenCode 侧报错，看同一行后面的 message |
+| `rpc register FAILED` | RPC 契约或注册参数有问题 |
 | 有 `websocket ready` 但无 `message received` | 事件订阅没配或应用未发布 |
