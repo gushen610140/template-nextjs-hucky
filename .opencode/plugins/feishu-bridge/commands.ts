@@ -52,6 +52,7 @@ const HELP = [
   "/session           当前会话",
   "/session list      最近会话",
   "/session <编号|id> 绑定已有会话",
+  "/rename <名称>     重命名当前会话",
   "/cwd               工作目录",
   "/compact           压缩上下文",
   "/stop              中断当前任务",
@@ -331,8 +332,22 @@ export function createCommandHandler(deps: Deps) {
       return true;
     }
 
-    if (command === "/cwd") {
+    if (command === "/rename") {
       const session = await currentSession(chatId);
+      if (!session) {
+        await sendText(messageId, "当前没有会话");
+        return true;
+      }
+      if (arg.length === 0) {
+        await sendText(messageId, "用法: /rename <名称>");
+        return true;
+      }
+      await ctx.session.update({ sessionID: session.id, title: arg });
+      await sendText(messageId, `已重命名: ${arg}`);
+      return true;
+    }
+
+    if (command === "/cwd") {      const session = await currentSession(chatId);
       await sendText(messageId, session?.location?.directory ?? ctx.location.directory);
       return true;
     }

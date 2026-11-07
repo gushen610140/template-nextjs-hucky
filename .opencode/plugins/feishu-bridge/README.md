@@ -85,6 +85,7 @@ idle · 4 events
 | `/session` | 当前会话 + 最近会话 |
 | `/session list` | 最近会话 |
 | `/session <编号>` | 绑定已有会话（也兼容直接传 id，但界面不显示 id） |
+| `/rename <名称>` | 重命名当前会话 |
 | `/cwd` | 工作目录 |
 | `/compact` | 压缩上下文 |
 | `/stop` | 中断当前任务 |
