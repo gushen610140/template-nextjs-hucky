@@ -372,17 +372,102 @@ export default Plugin.define({
           status: tool.status,
         }));
 
+      const parseModel = (value: string) => {
+        const index = value.indexOf("/");
+        if (index <= 0 || index === value.length - 1) return undefined;
+        return {
+          providerID: value.slice(0, index),
+          id: value.slice(index + 1),
+        };
+      };
+
+      /** 优先 env 指定；否则继承本 location 最近一个非飞书会话的模型/agent。 */
+      const resolveTarget = async () => {
+        const target: {
+          model?: { providerID: string; id: string };
+          agent?: string;
+        } = {};
+
+        const envModel = process.env.FEISHU_MODEL?.trim();
+        const envAgent = process.env.FEISHU_AGENT?.trim();
+        if (envModel) target.model = parseModel(envModel);
+        if (envAgent) target.agent = envAgent;
+        if (target.model && target.agent) return target;
+
+        try {
+          const page = await ctx.session.list({
+            directory: ctx.location.directory,
+            limit: 20,
+          });
+          for (const item of page.data ?? []) {
+            if ((item.title ?? "").startsWith("飞书 ")) continue;
+            const messages = await ctx.session.context({ sessionID: item.id });
+            for (let index = messages.length - 1; index >= 0; index -= 1) {
+              const message = messages[index] as {
+                type?: string;
+                model?: { providerID: string; id: string };
+                agent?: string;
+              };
+              if (message?.type !== "assistant" || !message.model) continue;
+              target.model ??= message.model;
+              target.agent ??= message.agent;
+              break;
+            }
+            if (target.model && target.agent) break;
+          }
+        } catch (error) {
+          log("resolve target failed", error);
+        }
+
+        return target;
+      };
+
       const readMeta = async (sessionID: string) => {
         try {
           const info = await ctx.session.get({ sessionID });
-          const model = info.model
-            ? `${info.model.providerID}/${info.model.id}${
-                info.model.variant ? `:${info.model.variant}` : ""
-              }`
-            : "default model";
+          let agent = info.agent;
+          let model = info.model;
+
+          if (!model) {
+            const messages = await ctx.session.context({ sessionID });
+            for (let index = messages.length - 1; index >= 0; index -= 1) {
+              const message = messages[index] as {
+                type?: string;
+                model?: { providerID: string; id: string };
+                agent?: string;
+              };
+              if (message?.type !== "assistant" || !message.model) continue;
+              model = message.model;
+              agent ??= message.agent;
+              break;
+            }
+          }
+
+          let label = "unknown";
+          if (model) {
+            try {
+              const models = await ctx.model.list();
+              const found = models.data.find(
+                (item) =>
+                  item.providerID === model!.providerID &&
+                  (item.modelID === model!.id || item.id === model!.id),
+              );
+              label = found?.name ?? `${model.providerID}/${model.id}`;
+            } catch {
+              label = `${model.providerID}/${model.id}`;
+            }
+          } else {
+            try {
+              const fallback = await ctx.model.default();
+              label = fallback.data?.name ?? "unknown";
+            } catch {
+              label = "unknown";
+            }
+          }
+
           return [
-            info.agent ?? "default",
-            model,
+            agent ?? "build",
+            label,
             info.location?.directory ?? ctx.location.directory,
           ].join(" · ");
         } catch {
@@ -522,6 +607,28 @@ export default Plugin.define({
         let stream: StreamState | undefined;
         try {
           sessionID = await getOrCreateSession(chatId);
+
+          const target = await resolveTarget();
+          log("target resolved", {
+            chatId,
+            model: target.model,
+            agent: target.agent,
+          });
+          if (target.model) {
+            try {
+              await ctx.session.switchModel({ sessionID, model: target.model });
+            } catch (error) {
+              log("switch model failed", error);
+            }
+          }
+          if (target.agent) {
+            try {
+              await ctx.session.switchAgent({ sessionID, agent: target.agent });
+            } catch (error) {
+              log("switch agent failed", error);
+            }
+          }
+
           const meta = await readMeta(sessionID);
 
           const cardId = await sendCard(

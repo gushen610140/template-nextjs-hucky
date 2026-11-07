@@ -42,7 +42,16 @@ idle · 4 events
 
 数据通过 plugin RPC `hucky.feishu-bridge.status` 每 1.5s 拉取，不走日志解析。TUI 部分改动后需要重启 OpenCode TUI 才会加载。
 
-## 5. OpenCode 控制命令
+## 5. 卡片 meta
+
+卡片顶部显示 `agent · 模型名 · 工作目录`。
+
+- 优先用 `.env` 的 `FEISHU_MODEL`（`providerID/modelID`）和 `FEISHU_AGENT`
+- 未设置时，继承本目录最近一个非飞书会话的模型和 agent
+- 每次 prompt 前重新应用，所以在 TUI 里切换模型/agent 后，下一条飞书消息会跟着变
+- 模型显示 `Model.Info.name`，不再出现 `default`
+
+## 6. OpenCode 控制命令
 
 在 TUI 里输入：
 
@@ -58,7 +67,7 @@ idle · 4 events
 
 也可以在 `opencode.jsonc` 的 `plugins` 里用 `-hucky.feishu-bridge` 彻底停用插件。
 
-## 6. 飞书侧命令
+## 7. 飞书侧命令
 
 | 命令 | 作用 |
 |---|---|
@@ -67,7 +76,7 @@ idle · 4 events
 | `/status` | 会话 ID、忙碌状态、连接状态 |
 | `/help` | 帮助 |
 
-## 7. 验证
+## 8. 验证
 
 1. `debug.log` 出现 `websocket ready`。
 2. TUI 执行 `/feishu-status`。
