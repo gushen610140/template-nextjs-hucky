@@ -71,10 +71,23 @@ idle · 4 events
 
 | 命令 | 作用 |
 |---|---|
-| `/new` | 新建会话 |
+| `/help` | 命令列表 |
+| `/new [目录]` | 新建会话，可同时切工作目录 |
+| `/model` | 当前模型 |
+| `/model <关键词>` | 搜索模型，返回带编号的结果 |
+| `/model #<编号>` | 选择搜索结果 |
+| `/model provider/model` | 直接指定模型 |
+| `/agent` | 当前 agent 和可用列表 |
+| `/agent <名称>` | 切换 agent（build / plan 等） |
+| `/session` | 当前会话 + 最近会话 |
+| `/session list` | 最近会话 |
+| `/session <编号\|id>` | 绑定已有会话 |
+| `/cwd` | 工作目录 |
+| `/compact` | 压缩上下文 |
 | `/stop` | 中断当前任务 |
-| `/status` | 会话 ID、忙碌状态、连接状态 |
-| `/help` | 帮助 |
+| `/status` | 会话、模型、agent、连接状态 |
+
+`/model` 和 `/agent` 的选择会写入 `ctx.storage`，之后每次 prompt 优先使用它，不再跟随 TUI 的当前选择；`/new` 或 `/session` 换会话后恢复继承。
 
 ## 8. 验证
 

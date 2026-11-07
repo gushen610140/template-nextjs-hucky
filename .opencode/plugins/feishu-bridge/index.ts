@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Plugin } from "@opencode/plugin";
 import { buildCard, type ToolLine, type ToolStatus } from "./card";
+import { createCommandHandler, type StoredChat } from "./commands";
 import { FeishuBridge } from "./rpc";
 
 /**
@@ -55,8 +56,6 @@ type FeishuMessageEvent = {
     content?: string;
   };
 };
-
-type StoredChat = { sessionID: string; createdAt: string };
 
 type AnyMessage = {
   type?: string;
@@ -520,9 +519,23 @@ export default Plugin.define({
         }
       };
 
+      const readChat = async (chatId: string) =>
+        (await ctx.storage.get(`chat/${chatId}`)) as StoredChat | undefined;
+
+      const writeChat = async (chatId: string, patch: Partial<StoredChat>) => {
+        const current =
+          (await readChat(chatId)) ??
+          ({
+            sessionID: "",
+            createdAt: new Date().toISOString(),
+          } satisfies StoredChat);
+        const next = { ...current, ...patch } as StoredChat;
+        await ctx.storage.set(`chat/${chatId}`, next);
+        return next;
+      };
+
       const getOrCreateSession = async (chatId: string) => {
-        const key = `chat/${chatId}`;
-        const stored = (await ctx.storage.get(key)) as StoredChat | undefined;
+        const stored = await readChat(chatId);
         if (stored?.sessionID) {
           try {
             await ctx.session.get({ sessionID: stored.sessionID });
@@ -535,66 +548,38 @@ export default Plugin.define({
           }
         }
         const created = await ctx.session.create({ title: `飞书 ${chatId.slice(-6)}` });
-        await ctx.storage.set(key, {
+        await writeChat(chatId, {
           sessionID: created.id,
           createdAt: new Date().toISOString(),
-        } satisfies StoredChat);
+          model: undefined,
+          agent: undefined,
+        });
         log("session created", { chatId, sessionID: created.id });
         return created.id;
       };
 
       const newSession = async (chatId: string) => {
         const created = await ctx.session.create({ title: `飞书 ${chatId.slice(-6)}` });
-        await ctx.storage.set(`chat/${chatId}`, {
+        await writeChat(chatId, {
           sessionID: created.id,
           createdAt: new Date().toISOString(),
-        } satisfies StoredChat);
+          model: undefined,
+          agent: undefined,
+        });
         log("session created (manual)", { chatId, sessionID: created.id });
         return created.id;
       };
 
-      const handleCommand = async (chatId: string, messageId: string, text: string) => {
-        if (text === "/help") {
-          await sendText(
-            messageId,
-            ["可用命令：", "/new 新建会话", "/stop 中断当前任务", "/status 查看会话状态", "/help 帮助"].join("\n"),
-          );
-          return true;
-        }
-
-        if (text === "/new") {
-          const sessionID = await newSession(chatId);
-          await sendText(messageId, `已新建会话\n${sessionID}`);
-          return true;
-        }
-
-        if (text === "/status") {
-          const stored = (await ctx.storage.get(`chat/${chatId}`)) as StoredChat | undefined;
-          await sendText(
-            messageId,
-            [
-              `session: ${stored?.sessionID ?? "未创建"}`,
-              `busy: ${state.busyChats.includes(chatId)}`,
-              `ws: ${state.wsState}`,
-              `events: ${state.messageCount}`,
-            ].join("\n"),
-          );
-          return true;
-        }
-
-        if (text === "/stop") {
-          const stored = (await ctx.storage.get(`chat/${chatId}`)) as StoredChat | undefined;
-          if (!stored?.sessionID) {
-            await sendText(messageId, "当前没有会话");
-            return true;
-          }
-          await ctx.session.interrupt({ sessionID: stored.sessionID, resume: false });
-          await sendText(messageId, "已中断");
-          return true;
-        }
-
-        return false;
-      };
+      const handleCommand = createCommandHandler({
+        ctx,
+        state,
+        sendText,
+        readChat,
+        writeChat,
+        newSession,
+        readMeta,
+        log,
+      });
 
       const handlePrompt = async (chatId: string, messageId: string, text: string) => {
         if (state.busyChats.includes(chatId)) {
@@ -608,7 +593,12 @@ export default Plugin.define({
         try {
           sessionID = await getOrCreateSession(chatId);
 
-          const target = await resolveTarget();
+          const stored = await readChat(chatId);
+          const inherited = await resolveTarget();
+          const target = {
+            model: stored?.model ?? inherited.model,
+            agent: stored?.agent ?? inherited.agent,
+          };
           log("target resolved", {
             chatId,
             model: target.model,
