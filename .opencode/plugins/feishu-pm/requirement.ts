@@ -5,12 +5,25 @@ export type RequirementSource = {
   chatId: string;
   senderId?: string;
   messageId: string;
+  chatName?: string;
+  senderName?: string;
+  createdAt?: Date;
 };
 
 const INVALID_NAME = /[\\/:*?"<>|#\s]+/g;
 
+function pad(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function formatLocal(date: Date) {
+  return [
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`,
+  ].join(" ");
+}
+
 function stamp(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, "0");
   return [
     date.getFullYear(),
     pad(date.getMonth() + 1),
@@ -76,16 +89,19 @@ export async function writeRequirement(
   const title = requirementTitle(markdown, "客户需求");
   const slug = requirementSlug(title);
   const dir = root;
+  const createdAt = source.createdAt ?? new Date();
   await mkdir(dir, { recursive: true });
-  const fileName = `${stamp(new Date())}-${slug}.md`;
+  const fileName = `${stamp(createdAt)}-${slug}.md`;
   const filePath = join(dir, fileName);
   const header = [
     "---",
     "source: feishu",
     `chat_id: ${source.chatId}`,
+    `chat_name: ${source.chatName ?? ""}`,
     `sender_id: ${source.senderId ?? ""}`,
+    `sender_name: ${source.senderName ?? ""}`,
     `message_id: ${source.messageId}`,
-    `created_at: ${new Date().toISOString()}`,
+    `created_at: ${formatLocal(createdAt)}`,
     "---",
     "",
   ].join("\n");
