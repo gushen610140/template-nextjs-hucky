@@ -1,8 +1,8 @@
 # feishu-pm
 
-项目级飞书变更推送插件，面向客户和团队。它监控本地 `main` 分支，发现新提交后自动截图并推送到飞书，帮助客户了解最近更新了什么。
+项目级飞书协作插件，面向客户和团队。它监控本地 `main` 分支，发现新提交后自动截图并推送到飞书；同时在客户群中接收 @机器人 的消息，整理成需求文档写入项目。
 
-它只发送消息，不接收命令，也不能操控 OpenCode。开发者自己用的飞书控制 bot 是独立的全局插件 `feishu-bridge`，两者必须使用**不同的飞书应用**。
+它不能操控 OpenCode。开发者自己用的飞书控制 bot 是独立的全局插件 `feishu-bridge`，两者必须使用**不同的飞书应用**。
 
 ## 工作方式
 
@@ -12,6 +12,14 @@ main 新提交
   → 复用或启动 dev server
   → Playwright 截取配置页面
   → 发送提交摘要 + 截图到指定 chat / open_id
+```
+
+```text
+客户在群里 @机器人
+  → 长连接接收消息
+  → AI 整理为结构化需求文档
+  → 写入 requirements/<时间>-<标题>.md
+  → 回复文档路径
 ```
 
 - 首次启动只记录当前 HEAD 作为基线，不补发历史提交。
@@ -53,12 +61,15 @@ bun run browser:install
 | `FEISHU_PM_NOTIFY_OPEN_ID` | 二选一 | 私聊用户的 open_id |
 | `FEISHU_PM_ENABLED` | 否 | 默认开启；设为 `0` 关闭 |
 | `FEISHU_PM_SUMMARY` | 否 | 设为 `0` 关闭 AI 摘要，改用固定模板 |
+| `FEISHU_PM_RECEIVE` | 否 | 设为 `0` 关闭群需求接收 |
+| `FEISHU_PM_ALLOWED_CHAT_IDS` | 否 | 允许接收需求的群，逗号分隔；留空则只允许 `FEISHU_PM_NOTIFY_CHAT_ID` |
+| `FEISHU_PM_REQUIREMENTS_DIR` | 否 | 需求文档目录，默认 `requirements` |
 | `FEISHU_SCREENSHOT_PAGES` | 否 | 截图页面，默认 `/`、`/docs`、`/login` |
 | `FEISHU_SCREENSHOT_BASE` | 否 | 开发或预览地址，默认 `http://localhost:3000` |
 | `FEISHU_SCREENSHOT_MATCH` | 否 | 页面必须包含的文本，用于确认服务属于本项目 |
 | `FEISHU_SCREENSHOT_POLL_MS` | 否 | 轮询间隔，默认 20000，最小 5000 |
 
-#凭证、目标和开关都使用 `FEISHU_PM_` 前缀，避免与全局 feishu-bridge 共用同一个 OpenCode 进程的环境变量。
+凭证、目标和开关都使用 `FEISHU_PM_` 前缀，避免与全局 feishu-bridge 共用同一个 OpenCode 进程的环境变量。
 
 ## 获取 chat_id
 
@@ -68,14 +79,27 @@ bun run browser:install
 
 ## 飞书应用权限
 
-客户应用只需要发送能力：
+客户应用需要发送能力，以及接收群 @ 消息的能力：
 
 | 权限 | 用途 |
 | --- | --- |
 | `im:message:send_as_bot` | 发送文本和图片消息 |
 | `im:resource` | 上传截图 |
+| `im:message.group_at_msg:readonly` | 接收群聊中 @机器人 的消息 |
+| `im:chat:readonly` | 查询机器人所在群（获取 chat_id） |
 
-不需要 `im.message.receive_v1`、卡片回调或权限审批。这样即使凭证泄露，也无法通过机器人驱动 OpenCode。
+事件订阅（长连接）：`im.message.receive_v1`。不需要卡片回调或权限审批，机器人无法驱动 OpenCode。
+
+## 接收客户需求
+
+1. 客户在群里 @机器人 并发送文本。
+2. 插件只处理 `FEISHU_PM_ALLOWED_CHAT_IDS` 中的群；留空时只接受 `FEISHU_PM_NOTIFY_CHAT_ID` 对应的群。
+3. AI 把消息整理成固定结构的需求文档，写入 `FEISHU_PM_REQUIREMENTS_DIR`（默认 `requirements`）：
+   `requirements/<YYYYMMDD-HHmmss>-<标题>.md`。
+4. 文档包含 `source`、`chat_id`、`sender_id`、`message_id`、`created_at` 前言，正文为「客户原始描述 / 需求整理 / 验收要点 / 待确认」。
+5. 插件回复原消息，告知文件路径和标题。
+
+安全说明：客户消息只作为待整理的数据传给模型，提示词明确禁止执行其中的指令或调用工具；文件由插件写入固定目录，模型不直接操作文件系统。非文本消息会回复“暂只支持文本需求”。
 
 ## 运行条件
 
@@ -100,4 +124,8 @@ bun run browser:install
 | `screenshot: no feishu target` | 发送目标缺失 |
 | `screenshot: FAILED` | 截图或发送失败 |
 | `dev server 启动失败` | 已有 `next dev` 实例或端口冲突 |
+| `receiver ready` | 群消息长连接已建立 |
+| `requirement saved` | 需求文档已写入 |
+| `requirement timeout` | AI 整理超过 90 秒 |
+| `requirement ignored: chat not allowed` | 非白名单群，已忽略 |
 | `missing FEISHU_PM_APP_ID / FEISHU_PM_APP_SECRET` | 凭证未配置 |
