@@ -3,7 +3,8 @@
 # dependencies
 /node_modules
 .opencode/plugins/**/node_modules/
-.opencode/plugins/feishu-bridge/feishu-files/
+.opencode/plugins/**/feishu-files/
+.opencode/plugins/**/debug.log
 /.pnp
 .pnp.*
 .yarn/*

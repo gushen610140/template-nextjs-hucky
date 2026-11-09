@@ -1,90 +1,84 @@
 ---
-title: Feishu change feed
-description: Watch main-branch commits, capture pages automatically, and push them to Feishu for customer preview and acceptance
+title: Feishu change feed (feishu-pm)
+description: Watch main commits, capture pages automatically, and push updates so customers and teammates see what changed
 ---
 
 import { Step, Steps } from "fumadocs-ui/components/steps";
 
-`feishu-bridge` is a project-level OpenCode plugin. Its main job is to **push recent code changes to Feishu**: it watches the local `main` branch, captures configured pages when a new commit lands, and sends a commit summary plus screenshots so customers or teammates can see what changed.
+`feishu-pm` is a project-level OpenCode plugin that pushes recent code changes to customer or team chats: it watches the local `main` branch, captures configured pages when a new commit lands, and sends a commit summary plus screenshots.
 
-The next step is to connect it to customer groups and pair it with a preview environment for a commit → push → preview → accept loop.
+It only sends messages. It does not receive commands or drive OpenCode. The developer-facing control bot is a separate global plugin named `feishu-bridge`; the two must use **different Feishu apps**.
 
 ```text
 new main commit
-  → plugin polls the git ref
+  → poll refs/heads/main every 20 seconds
   → reuse or start the dev server
   → Playwright captures configured pages
   → commit summary + screenshots
-  → Feishu chat / customer group
+  → configured Feishu group / DM
 ```
 
-## What gets sent
+## How it works
 
-For each new commit on `main`, the plugin sends:
-
-1. A text summary with the short commit and the captured pages.
-2. One PNG per page.
-
-Screenshots live in `.screenshots/commits/` and are overwritten each run. On failure it sends a text error instead and writes the details to the log.
+- The first start records the current HEAD as a baseline and does not backfill old commits.
+- Screenshots live in `.screenshots/commits/` and are overwritten each run.
+- On failure it sends a text error and writes to `debug.log`.
+- There is no Feishu long connection, no event subscription, and no card callback; it works whenever the OpenCode server runs.
 
 ## Quick start
 
 <Steps>
 
 <Step>
-### Create the Feishu app
+### Create a customer app
 
-Create a custom app on the Feishu Open Platform, enable the bot capability, add the permissions and events described in [Feishu console setup](#feishu-console-setup), then publish a version.
+Create a custom app on the Feishu Open Platform, enable the bot capability, add only the scopes needed for sending, then publish a version. Do not reuse the developer control bot.
+
+| Scope | Purpose |
+| --- | --- |
+| `im:message:send_as_bot` | Send text and images |
+| `im:resource` | Upload screenshots |
+
 </Step>
 
 <Step>
-### Fill in credentials
+### Fill in configuration
 
-Edit `.opencode/plugins/feishu-bridge/.env` and set at least `FEISHU_APP_ID` and `FEISHU_APP_SECRET`.
+Copy `.opencode/plugins/feishu-pm/.env.example` to `.env` and fill in the App ID, App Secret, and delivery target. `.env` is git-ignored.
 </Step>
 
 <Step>
 ### Install dependencies and Chromium
 
 ```powershell
-npm install --prefix .opencode/plugins/feishu-bridge
+npm install --prefix .opencode/plugins/feishu-pm
 bun run browser:install
 ```
 
-`browser:install` downloads Chromium for Playwright. Run it once per machine.
+`browser:install` runs once per machine.
 </Step>
 
 <Step>
-### Start the connection
+### Restart OpenCode
 
-The plugin starts disabled. In the OpenCode TUI run:
+The plugin starts watching as soon as it loads; there is no `/feishu-on`. Commit to `main` and the summary and screenshots should arrive within 20 seconds.
 
-```text
-/feishu-on
-```
-
-Once the sidebar shows `connected`, the plugin starts watching `main`.
-</Step>
-
-<Step>
-### Make a commit
-
-Commit anything on `main`; within 20 seconds you should receive the summary and screenshots. The first start only records the current HEAD as a baseline and does not backfill old commits.
 </Step>
 
 </Steps>
 
 ## Configuration
 
-Config file: `.opencode/plugins/feishu-bridge/.env` (git-ignored). System environment variables take precedence.
-
 ```bash
 FEISHU_APP_ID=cli_xxxxxxxx
 FEISHU_APP_SECRET=xxxxxxxx
-FEISHU_ALLOWED_OPEN_ID=ou_xxxxxxxx
 
-# change feed
-FEISHU_SCREENSHOT=1
+# delivery target: one of the two
+FEISHU_NOTIFY_CHAT_ID=
+FEISHU_NOTIFY_OPEN_ID=
+
+# optional
+FEISHU_PM_ENABLED=1
 FEISHU_SCREENSHOT_PAGES=/,/docs,/login
 FEISHU_SCREENSHOT_BASE=http://localhost:3000
 FEISHU_SCREENSHOT_MATCH=Hucky
@@ -93,126 +87,56 @@ FEISHU_SCREENSHOT_POLL_MS=20000
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `FEISHU_APP_ID` | Yes | App ID |
-| `FEISHU_APP_SECRET` | Yes | App Secret |
-| `FEISHU_ALLOWED_OPEN_ID` | No | Comma-separated open_ids allowed to use the bot; empty means unrestricted |
-| `FEISHU_SCREENSHOT` | No | Set to `0` to disable the change feed |
-| `FEISHU_SCREENSHOT_PAGES` | No | Pages to capture, comma-separated; defaults to `/`, `/docs`, `/login` |
-| `FEISHU_SCREENSHOT_BASE` | No | Preview or local base URL; defaults to `http://localhost:3000` |
+| `FEISHU_APP_ID` | Yes | Customer app ID |
+| `FEISHU_APP_SECRET` | Yes | Customer app secret |
+| `FEISHU_NOTIFY_CHAT_ID` | one of two | Group or DM chat_id, preferred |
+| `FEISHU_NOTIFY_OPEN_ID` | one of two | DM user open_id |
+| `FEISHU_PM_ENABLED` | No | Set to `0` to disable |
+| `FEISHU_SCREENSHOT_PAGES` | No | Pages to capture; defaults to `/`, `/docs`, `/login` |
+| `FEISHU_SCREENSHOT_BASE` | No | Dev or preview URL; defaults to `http://localhost:3000` |
 | `FEISHU_SCREENSHOT_MATCH` | No | Text the page must contain to confirm it belongs to this project |
-| `FEISHU_SCREENSHOT_POLL_MS` | No | Poll interval for `main`, minimum 5000, default 20000 |
+| `FEISHU_SCREENSHOT_POLL_MS` | No | Poll interval, default 20000, minimum 5000 |
 
-## Delivery target
+Targets come only from configuration, so the customer app never needs to receive messages.
 
-The feed goes to the most recent chat that messaged the bot. If there is none yet, it goes to the first open_id in `FEISHU_ALLOWED_OPEN_ID`.
+## Getting a chat_id
 
-To target a customer group, add the bot to the group and send one message there. A fixed group `chat_id` option will come later, removing the dependency on “most recent chat”.
+1. Add the bot to the customer group.
+2. Call `GET /open-apis/im/v1/chats` in the Feishu API explorer (requires `im:chat:readonly`) and put the returned `chat_id` into `FEISHU_NOTIFY_CHAT_ID`.
+3. For a DM smoke test, you can use `FEISHU_NOTIFY_OPEN_ID` first.
 
-## Dev server
+## Dev server and preview
 
-Screenshots need reachable pages:
-
-- If `FEISHU_SCREENSHOT_BASE` is reachable, it is reused and never shut down.
-- If not, nearby ports are checked for an existing project server and reused when found.
+- A reachable `FEISHU_SCREENSHOT_BASE` is reused and never shut down.
+- If not reachable, nearby ports are checked for an existing project server and reused.
 - Otherwise the plugin starts `next dev` and stops it after capturing.
 - `next dev` allows only one instance per project; point `FEISHU_SCREENSHOT_BASE` at an existing instance on another port.
+- Once a preview deployment exists, point `FEISHU_SCREENSHOT_BASE` at it so customers preview before accepting.
 
 ## Requirements
 
-- The plugin runs inside the OpenCode server process and only watches after `/feishu-on`; closing the TUI and service stops the feed.
-- A working Node.js and `bun` are needed to run the capture script and start the dev server.
-- Chromium must be installed with `bun run browser:install`.
+- The OpenCode server must stay running; stopping it stops the feed.
+- Node.js, `bun`, and Playwright's Chromium are required.
 - Capture uses `scripts/screenshot.mjs`; you can also run `bun run screenshot` manually.
 
-## Existing interaction features
+## Logs
 
-The plugin originally drove OpenCode remotely from Feishu. That still works but is no longer the primary purpose:
-
-- TUI commands: `/feishu-status`, `/feishu-on`, `/feishu-off`, `/feishu-restart`, `/feishu-log`.
-- Feishu commands: `/help`, `/new`, `/model`, `/agent`, `/session`, `/status`, `/stop`, and more.
-- Streaming cards, permission approval cards, attachments, and recall handling.
-
-See the plugin's `README.md` for details. These will gradually narrow toward pushing and customer collaboration.
-
-## Sidebar and status
-
-The `FEISHU` block in the TUI sidebar shows connection state:
-
-```text
-FEISHU
-connected
-idle · 12 events
-```
-
-`/feishu-status` and the RPC status also expose the latest capture: commit, time, and error.
-
-## Feishu console setup
-
-All steps happen on the Feishu Open Platform. You must **create and publish a version** after changes.
-
-### 1. App and bot
-
-1. Create a custom app.
-2. Under app capabilities, enable **Bot**.
-3. Copy the App ID and App Secret from **Credentials & Basic Info**.
-
-### 2. Permissions
-
-| Scope | Purpose |
-| --- | --- |
-| `im:message` | Read messages |
-| `im:message.p2p_msg:readonly` | Receive direct messages |
-| `im:message.group_at_msg:readonly` | Receive group messages that mention the bot |
-| `im:message:send_as_bot` | Send messages, cards, and images as the bot |
-| `im:resource` | Download images and files |
-
-### 3. Event subscription (long connection)
-
-**Events & Callbacks** → **Event Subscription**:
-
-1. Choose **Receive events through a long connection**.
-2. Add these events:
-
-| Event | Purpose |
-| --- | --- |
-| `im.message.receive_v1` | Remember the latest chat and receive group messages (for future todo triage) |
-| `im.message.recalled_v1` | Interrupt the task when a user recalls a message |
-
-### 4. Callback configuration
-
-Card buttons need callbacks, which live under **Callback Configuration**:
-
-1. Open **Events & Callbacks** → **Callback Configuration**.
-2. Choose **Receive callbacks through a long connection**.
-3. Add the **Card action trigger** callback `card.action.trigger`.
-
-<Callout type="warn" title="Callbacks must respond within 3 seconds">
-Feishu requires a card callback response within 3 seconds. The plugin calls `permission.reply` immediately and does not block.
-</Callout>
-
-### 5. Publish
-
-Create and publish a version under **Version Management & Release**. Permission, event, and callback changes only take effect after publishing.
-
-## Troubleshooting
-
-Log file: `.opencode/plugins/feishu-bridge/debug.log`; you can also run `/feishu-log` in the TUI.
+`.opencode/plugins/feishu-pm/debug.log`:
 
 | Log | Meaning |
 | --- | --- |
-| `missing FEISHU_APP_ID` | `.env` is missing or unreadable |
-| `websocket FAILED` | Bad credentials, unpublished app, long connection disabled, or outbound traffic blocked |
-| `websocket ready` but no `message received` | Event subscription missing or app version not published |
+| `watcher started` | Watching has started |
 | `screenshot: baseline recorded` | First start recorded the baseline; expected |
-| `screenshot: no feishu target` | No chat or open_id available; message the bot once |
-| `screenshot: FAILED` | Capture or delivery failed; read the error on the same line |
-| `dev server 启动失败` | A `next dev` instance already exists; point `FEISHU_SCREENSHOT_BASE` at it |
-| `rpc register FAILED` | RPC contract or registration problem |
+| `screenshot: sent` | Delivery succeeded |
+| `screenshot: no feishu target` | Delivery target missing |
+| `screenshot: FAILED` | Capture or delivery failed |
+| `dev server 启动失败` | A `next dev` instance exists or ports conflict |
+| `missing FEISHU_APP_ID / FEISHU_APP_SECRET` | Credentials are missing |
 
 ## Roadmap
 
-- **Customer group feed**: a fixed group `chat_id` with per-group content and cadence.
-- **Preview environment**: point `FEISHU_SCREENSHOT_BASE` at a preview deployment so customers preview before accepting.
+- **Fixed customer group feed**: per-group content, cadence, and quiet hours.
+- **Preview acceptance**: send screenshots with a preview link and let customers confirm in the group.
 - **Group message triage**: watch customer feedback, summarize it with AI, and file it into the project todo list.
 - **Collaboration loop**: developers confirm requirements, progress, and acceptance with customers through Feishu and AI.
 
@@ -221,6 +145,6 @@ These are not implemented yet; this page will be updated as they land.
 ## Limitations
 
 - Feishu and Lark only; no WeCom or DingTalk.
-- The feed only covers local commits on `main`; it does not watch remote updates or `git push`.
-- Delivery targets the most recent chat; there is no per-group configuration yet.
-- It depends on a running OpenCode server; stopping the service stops the feed.
+- Only local commits on `main` are covered; remote updates and `git push` are not watched.
+- The delivery target must be configured in advance; there is no auto-discovery from messages.
+- It depends on a running OpenCode server.

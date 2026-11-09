@@ -1,11 +1,9 @@
 {
-  "name": "feishu-bridge",
+  "name": "feishu-pm",
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./index.ts",
-    "./tui": "./tui.tsx",
-    "./rpc": "./rpc.ts"
+    ".": "./index.ts"
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.76.0"
