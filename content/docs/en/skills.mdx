@@ -14,10 +14,11 @@ Like `node_modules`, skills are install artifacts, so **`.agents/` is not commit
 | Path | Committed | Purpose |
 | --- | --- | --- |
 | `.agents/skills/` | No, ignored by `.gitignore` | Installed skill files |
+| `.opencode/skills/` | Yes | Project skills committed with the repo |
 | `skills-lock.json` | Yes | Pins each skill's source and hash |
 | `skills` in `package.json` | Yes | Provides the `skills` CLI |
 
-A fresh clone therefore has no `.agents/skills/`; restore it from `skills-lock.json`.
+A fresh clone therefore has no `.agents/skills/`; restore it from `skills-lock.json`. `.opencode/skills/` is different: it is committed to Git and OpenCode discovers it without any install step.
 
 ## Skills included in this project
 
@@ -40,6 +41,35 @@ The lock file currently pins 12 skills:
 
 Skills marked "reference only" ship with the Prisma skill pack. The project may not use them today, but they help when upgrading or switching databases.
 
+## Skills committed with the repo
+
+Skills under `.opencode/skills/` bypass `skills-lock.json`. They are committed with the code and are available right after cloning.
+
+### browser-screenshot
+
+Captures any URL or local page with Playwright and Chromium for visual verification and layout checks. The browser binary is not part of the repo, so each machine downloads it once:
+
+```bash
+bun run browser:install
+```
+
+Then capture:
+
+```bash
+# Local page; base defaults to http://localhost:3000
+bun run screenshot http://localhost:3000 --out .screenshots/home.png
+
+# Any URL, full page
+bun run screenshot https://example.com --full-page
+
+# One element, mobile viewport
+bun run screenshot /docs --selector "main" --viewport 390x844
+```
+
+The script prints JSON with the absolute path, HTTP status, and page size. Images go to `.screenshots/` by default, which is gitignored. Common options: `--full-page`, `--selector`, `--viewport WxH`, `--wait-for`, `--wait-until`, `--color-scheme`, `--scale`.
+
+`playwright` is a dev dependency only and never reaches the production build; `bun ci` does not download Chromium. Start `bun dev` before capturing local pages.
+
 ## Using grill-me for complex problems
 
 `grill-me` is an interview-style skill: instead of producing a plan immediately, it questions assumptions, constraints, and edge cases until the design is sharp. Invoke it for architecture decisions, cross-module refactors, and ambiguous requirements. Skip it for small, well-defined changes.
@@ -50,7 +80,9 @@ Use the grill-me skill to challenge this design before implementation.
 
 The project's `AGENTS.md` asks the agent to invoke this skill for complex tasks.
 
-## Installing skills
+## Installing skills (optional)
+
+This step only controls which skill packs the agent can use. Skipping it does not affect starting or building the app. Skills under `.opencode/skills/` are committed with the repo; only the 12 packs in `skills-lock.json` need restoring.
 
 The skills CLI requires Node.js 22.20 or newer. This project already lists `skills` in `devDependencies`, so install dependencies first, then restore from the lock file:
 

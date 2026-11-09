@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, createReadStream, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Plugin } from "@opencode/plugin";
@@ -10,6 +10,11 @@ import {
 } from "./card";
 import { createCommandHandler, type StoredChat } from "./commands";
 import { FeishuBridge } from "./rpc";
+import {
+  startScreenshotWatcher,
+  type NotifyTarget,
+  type ScreenshotStatus,
+} from "./screenshot";
 
 /**
  * feishu-bridge M1.5
@@ -66,6 +71,7 @@ type BridgeState = {
     close?: (params?: { force?: boolean }) => void;
     getConnectionStatus?: () => unknown;
   };
+  screenshot?: ScreenshotStatus;
 };
 
 type FeishuMessageEvent = {
@@ -357,6 +363,9 @@ export default Plugin.define({
             busyChats: [...state.busyChats],
             lastEventAt: state.lastEventAt ?? null,
             lastError: state.lastError ?? null,
+            lastScreenshotCommit: state.screenshot?.commit ?? null,
+            lastScreenshotAt: state.screenshot?.at ?? null,
+            lastScreenshotError: state.screenshot?.error ?? null,
           };
         },
       });
@@ -399,6 +408,50 @@ export default Plugin.define({
       const client = new Lark.Client({ appId, appSecret });
       const cardTitle = process.env.FEISHU_CARD_TITLE?.trim() || "OpenCode";
       const seen = new Map<string, number>();
+
+      const sendToTarget = async (target: NotifyTarget, text: string) => {
+        await client.im.message.create({
+          params: { receive_id_type: target.receiveIdType },
+          data: {
+            receive_id: target.receiveId,
+            msg_type: "text",
+            content: JSON.stringify({ text }),
+          },
+        });
+      };
+
+      const sendImageToTarget = async (target: NotifyTarget, filePath: string) => {
+        const uploaded = await client.im.image.create({
+          data: {
+            image_type: "message",
+            image: createReadStream(filePath),
+          },
+        });
+        const imageKey = (uploaded as { data?: { image_key?: string } })?.data
+          ?.image_key;
+        if (!imageKey) throw new Error("图片上传失败：没有返回 image_key");
+        await client.im.message.create({
+          params: { receive_id_type: target.receiveIdType },
+          data: {
+            receive_id: target.receiveId,
+            msg_type: "image",
+            content: JSON.stringify({ image_key: imageKey }),
+          },
+        });
+      };
+
+      const resolveNotifyTarget = async (): Promise<
+        NotifyTarget | undefined
+      > => {
+        const lastChat = await ctx.storage.get("bridge/lastChat");
+        if (typeof lastChat === "string" && lastChat) {
+          return { receiveIdType: "chat_id", receiveId: lastChat };
+        }
+        if (allowed[0]) {
+          return { receiveIdType: "open_id", receiveId: allowed[0] };
+        }
+        return undefined;
+      };
 
       const sendText = async (messageId: string, text: string) => {
         for (const chunk of splitText(text)) {
@@ -941,6 +994,7 @@ export default Plugin.define({
           });
 
           if (!messageId || !chatId) return;
+          void ctx.storage.set("bridge/lastChat", chatId).catch(() => {});
 
           const now = Date.now();
           for (const [id, at] of seen) {
@@ -1178,8 +1232,22 @@ export default Plugin.define({
         })();
       };
 
+      let screenshotWatcher: { stop: () => void } | undefined;
+
       const start = async () => {
         if (state.wsState === "connected" || state.wsState === "starting") return;
+        screenshotWatcher ??= startScreenshotWatcher({
+          directory: ctx.location.directory,
+          log,
+          storageGet: (key) => ctx.storage.get(key),
+          storageSet: (key, value) => ctx.storage.set(key, value),
+          getTarget: resolveNotifyTarget,
+          sendImage: sendImageToTarget,
+          sendText: sendToTarget,
+          onStatus: (status) => {
+            state.screenshot = status;
+          },
+        });
         const wsClient = new Lark.WSClient({
           appId,
           appSecret,
@@ -1218,6 +1286,8 @@ export default Plugin.define({
 
       const stop = () => {
         log("websocket stopping");
+        screenshotWatcher?.stop();
+        screenshotWatcher = undefined;
         eventsAbort?.abort();
         eventsAbort = undefined;
         state.eventsAbort = undefined;

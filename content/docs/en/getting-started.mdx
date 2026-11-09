@@ -29,13 +29,25 @@ bun ci
 </Step>
 
 <Step>
-### Install Skills
+### Install Skills (optional)
+
+This step only controls which skill packs the agent can use. Skipping it does not affect starting or building the app.
+
+To restore the skill packs in `skills-lock.json`:
 
 ```bash
 bunx skills experimental_install
 ```
 
 This command reads `skills-lock.json` and restores the Agent Skills into `.agents/skills/`. It does not install npm dependencies, so run it after dependencies are installed.
+
+To use the project's own `browser-screenshot` skill, also run (optional):
+
+```bash
+bun run browser:install
+```
+
+This downloads Playwright's Chromium (~150 MB) once per machine. The skill itself is committed with the repo and needs no installation. See [Skills](/en/docs/skills) for details.
 
 </Step>
 
@@ -121,6 +133,8 @@ Open `http://localhost:3000`; you will be redirected to the default locale `/zh`
 | `bun start` | Run the production build |
 | `bun run lint` | Biome checks |
 | `bun run format` | Format with Biome |
+| `bun run screenshot` | Capture a page with Playwright (requires Chromium) |
+| `bun run browser:install` | Download Playwright's Chromium (once per machine) |
 | `bun run db:setup` | Generate the client, apply migrations, and sync RBAC seed data |
 | `bun run db:seed` | Sync RBAC seed data only (idempotent) |
 

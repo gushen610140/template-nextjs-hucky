@@ -9,6 +9,9 @@ export type FeishuStatus = {
   busyChats: string[];
   lastEventAt: string | null;
   lastError: string | null;
+  lastScreenshotCommit: string | null;
+  lastScreenshotAt: string | null;
+  lastScreenshotError: string | null;
 };
 
 export const FeishuBridge = Rpc.define({
@@ -32,6 +35,9 @@ export const FeishuBridge = Rpc.define({
           busyChats: { type: "array", items: { type: "string" } },
           lastEventAt: { type: ["string", "null"] },
           lastError: { type: ["string", "null"] },
+          lastScreenshotCommit: { type: ["string", "null"] },
+          lastScreenshotAt: { type: ["string", "null"] },
+          lastScreenshotError: { type: ["string", "null"] },
         },
         required: [
           "enabled",
@@ -42,6 +48,9 @@ export const FeishuBridge = Rpc.define({
           "busyChats",
           "lastEventAt",
           "lastError",
+          "lastScreenshotCommit",
+          "lastScreenshotAt",
+          "lastScreenshotError",
         ],
         additionalProperties: false,
       },

@@ -29,13 +29,25 @@ bun ci
 </Step>
 
 <Step>
-### 安装 Skills
+### 安装 Skills（选做）
+
+这一步只影响 Agent 能用哪些技能包，跳过不影响应用启动和构建。
+
+需要 `skills-lock.json` 中的技能包时执行：
 
 ```bash
 bunx skills experimental_install
 ```
 
 该命令读取 `skills-lock.json`，把 Agent Skills 恢复到 `.agents/skills/`。它不安装 npm 依赖，必须在依赖安装完成后执行。
+
+需要使用项目自带的 `browser-screenshot` 截图 Skill 时，再执行（可选）：
+
+```bash
+bun run browser:install
+```
+
+它会下载 Playwright 的 Chromium（约 150 MB），每台机器只需执行一次；Skill 本身随仓库提交，无需安装。详见 [Skills](/zh/docs/skills)。
 
 </Step>
 
@@ -121,6 +133,8 @@ bun dev
 | `bun start` | 运行生产构建 |
 | `bun run lint` | Biome 检查 |
 | `bun run format` | Biome 格式化 |
+| `bun run screenshot` | 用 Playwright 截取页面（需先安装 Chromium） |
+| `bun run browser:install` | 下载 Playwright 的 Chromium（每台机器一次） |
 | `bun run db:setup` | 生成客户端、应用迁移并同步 RBAC 种子数据 |
 | `bun run db:seed` | 只同步 RBAC 种子数据（幂等） |
 

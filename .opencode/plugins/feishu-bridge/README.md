@@ -126,6 +126,28 @@ idle · 4 events
 2. `debug.log` 出现 `websocket ready`。
 3. 飞书私聊发消息，应出现卡片并流式更新。
 
+## 10. main 提交自动截图
+
+飞书连接开启后，插件每 20 秒检查一次本地 `main` 的 HEAD。发现新提交时依次截取配置的页面，先发一条提交摘要，再逐张发送截图。结果同步到 `/feishu-status` 和 RPC 状态。
+
+配置写在 `.env`：
+
+```
+FEISHU_SCREENSHOT=1
+FEISHU_SCREENSHOT_PAGES=/,/docs,/login
+FEISHU_SCREENSHOT_BASE=http://localhost:3000
+FEISHU_SCREENSHOT_MATCH=Hucky
+FEISHU_SCREENSHOT_POLL_MS=20000
+```
+
+- 需要先执行 `bun run browser:install` 安装 Chromium；截图调用项目根目录的 `scripts/screenshot.mjs`。
+- `FEISHU_SCREENSHOT_BASE` 上的 dev server 已运行时直接复用，截完不关闭。
+- base 不可达时先找相邻端口上已运行的本项目 server；找不到才自动 `next dev`，截完关闭。
+- `next dev` 同一项目只允许一个实例；已有实例在别的端口时，把 `FEISHU_SCREENSHOT_BASE` 指向它。
+- 截图保存在 `.screenshots/commits/`，每轮覆盖；首次启动只记录基线，不补发历史提交。
+- 发送目标优先最近一次消息的 chat，其次 `FEISHU_ALLOWED_OPEN_ID` 的第一个 open_id。
+- 只在 `/feishu-on` 之后生效；失败会发送一条文字说明并写入日志。
+
 ## 排错
 
 | debug.log | 含义 |
