@@ -81,6 +81,7 @@
         "fumadocs-core": "^16.17.9",
         "fumadocs-mdx": "^15.4.10",
         "fumadocs-ui": "^16.17.9",
+        "playwright": "^1.65.0",
         "prisma": "^7.9.0",
         "skills": "^1.7.4",
         "tailwindcss": "^4",
@@ -1991,6 +1992,10 @@
     "pkce-challenge": ["pkce-challenge@5.0.1", "", {}, "sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ=="],
 
     "pkg-types": ["pkg-types@2.3.1", "", { "dependencies": { "confbox": "^0.2.4", "exsolve": "^1.0.8", "pathe": "^2.0.3" } }, "sha512-y+ichcgc2LrADuhLNAx8DFjVfgz91pRxfZdI3UDhxHvcVEZsenLO+7XaU5vOp0u/7V/wZ+plyuQxtrDlZJ+yeg=="],
+
+    "playwright": ["playwright@1.65.0", "", { "dependencies": { "playwright-core": "1.65.0" }, "bin": { "playwright": "cli.js" } }, "sha512-F3AMWcR44qMBt4kq+6Kb6mX7bjGXshktKFOPULd7reED6ZJWevjbNRqysP7q+AATE9kdPEZBibex1BYsvpVoeA=="],
+
+    "playwright-core": ["playwright-core@1.65.0", "", { "bin": { "playwright-core": "cli.js" } }, "sha512-vNSKgH6YqtN7cdT/L334zo0a+YwkrpicyrHJlWWPIm/Q+Nn2SWInil01oT0mbu96U4GgoRtCYQD9CzJQgju+lA=="],
 
     "po-parser": ["po-parser@2.1.1", "", {}, "sha512-ECF4zHLbUItpUgE3OTtLKlPjeBN+fKEczj2zYjDfCGOzicNs0GK3Vg2IoAYwx7LH/XYw43fZQP6xnZ4TkNxSLQ=="],
 
