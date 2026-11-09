@@ -248,7 +248,7 @@ export function startScreenshotWatcher(options: ScreenshotWatcherOptions) {
   let stopped = false;
   let running = false;
 
-  const tick = async () => {
+  const runTick = async () => {
     if (stopped || running) return;
     const sha = await readMainSha(options.directory);
     if (!sha) return;
@@ -317,6 +317,15 @@ export function startScreenshotWatcher(options: ScreenshotWatcherOptions) {
     } finally {
       await server?.close();
       running = false;
+    }
+  };
+
+  const tick = async () => {
+    try {
+      await runTick();
+    } catch (error) {
+      running = false;
+      options.log("screenshot: tick failed", error);
     }
   };
 
