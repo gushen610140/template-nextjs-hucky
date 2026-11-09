@@ -7,6 +7,12 @@ const withMDX = createMDX();
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  experimental: {
+    // 构建/预渲染阶段限制为单 worker，压低内存峰值以适配 EdgeOne 等小内存构建容器。
+    // 代价是构建变慢。
+    cpus: 1,
+    workerThreads: false,
+  },
   async headers() {
     return [
       {
