@@ -15,9 +15,10 @@ It cannot drive OpenCode. The developer-facing control bot is a separate global 
 ```text
 new main commit
   → poll refs/heads/main every 20 seconds
-  → reuse or start the dev server
-  → Playwright captures configured pages
-  → AI drafts the commit summary
+  → AI reads the diff and app/[locale] static routes to choose pages
+  → reuse an existing dev server, or start one
+  → prefix routes with the default locale
+  → Playwright captures only changed pages with the saved login state
   → summary + screenshots to the configured chat
 
 customer @-mentions the bot
@@ -32,7 +33,11 @@ customer @-mentions the bot
 ### Change feed
 
 - The first start records the current HEAD as a baseline and does not backfill old commits.
-- Each new commit is summarized by AI in 2-4 customer-facing sentences; failures or timeouts fall back to the commit title.
+- Each new commit is analyzed by AI, which returns a 2-4 sentence customer-facing summary and the pages that need screenshots.
+- AI may only choose static routes under `app/[locale]`, up to 6; dynamic routes are skipped. When no page changed, only a text explanation is sent.
+- If AI is unavailable or returns invalid output, pages are inferred from changed files under `app/[locale]`.
+- Routes automatically get the `defaultLocale` prefix from `i18n/routing.ts`; override it with `FEISHU_SCREENSHOT_LOCALE`.
+- Captures use the `auth.json` login state so private pages are not redirected to the login screen. An expired state fails the run instead of sending login screenshots.
 - Screenshots live in `.screenshots/commits/` and are overwritten each run.
 - Failures send a text explanation and are written to `debug.log`.
 
@@ -77,11 +82,28 @@ Copy `.opencode/plugins/feishu-pm/.env.example` to `.env` and fill in the App ID
 ### Install dependencies and Chromium
 
 ```powershell
-npm install --prefix .opencode/plugins/feishu-pm
-bun run browser:install
+bun run feishu-pm:install
 ```
 
-`browser:install` runs once per machine.
+This installs the plugin dependencies and downloads Playwright Chromium. The developer machine needs a desktop environment and Chrome/Chromium; the Playwright Chromium installed above already supports headed mode, so a system Chrome install is not required. On headless Linux, run the login helper under `xvfb-run`.
+</Step>
+
+<Step>
+### Generate the screenshot login state
+
+Start the dev server first:
+
+```powershell
+bun dev
+```
+
+Then run the login helper:
+
+```powershell
+bun run feishu-pm:auth
+```
+
+It opens headed Chromium at `http://localhost:3000/<defaultLocale>/dashboard` by default. Finish Logto login, return to the terminal, and press Enter. The state is saved to `.opencode/plugins/feishu-pm/auth.json`, which is git-ignored. The session lasts 7 days; rerun after it expires.
 </Step>
 
 <Step>
@@ -112,7 +134,9 @@ FEISHU_PM_AGENT=
 FEISHU_PM_RECEIVE=1
 FEISHU_PM_ALLOWED_CHAT_IDS=
 FEISHU_PM_REQUIREMENTS_DIR=requirements
-FEISHU_SCREENSHOT_PAGES=/,/docs,/login
+FEISHU_SCREENSHOT_LOCALE=
+FEISHU_SCREENSHOT_STORAGE_STATE=.opencode/plugins/feishu-pm/auth.json
+FEISHU_SCREENSHOT_LOGIN_URL=
 FEISHU_SCREENSHOT_BASE=http://localhost:3000
 FEISHU_SCREENSHOT_MATCH=Hucky
 FEISHU_SCREENSHOT_POLL_MS=20000
@@ -125,14 +149,16 @@ FEISHU_SCREENSHOT_POLL_MS=20000
 | `FEISHU_PM_NOTIFY_CHAT_ID` | one of two | Group or DM chat_id for pushes |
 | `FEISHU_PM_NOTIFY_OPEN_ID` | one of two | DM open_id for pushes |
 | `FEISHU_PM_ENABLED` | No | Enabled by default; set to `0` to disable |
-| `FEISHU_PM_SUMMARY` | No | Set to `0` to disable AI commit summaries |
+| `FEISHU_PM_SUMMARY` | No | Set to `0` to disable AI commit summaries (page selection still runs) |
 | `FEISHU_PM_MODEL` | No | Model as `providerID/modelID`; empty inherits the default |
 | `FEISHU_PM_AGENT` | No | Agent name; requirement intake defaults to `plan` |
 | `FEISHU_PM_RECEIVE` | No | Set to `0` to disable group intake |
 | `FEISHU_PM_ALLOWED_CHAT_IDS` | No | Chats allowed to submit requirements; empty means only `FEISHU_PM_NOTIFY_CHAT_ID` |
 | `FEISHU_PM_REQUIREMENTS_DIR` | No | Requirement directory, default `requirements` |
-| `FEISHU_SCREENSHOT_PAGES` | No | Pages to capture; defaults to `/`, `/docs`, `/login` |
-| `FEISHU_SCREENSHOT_BASE` | No | Dev or preview URL; defaults to `http://localhost:3000` |
+| `FEISHU_SCREENSHOT_LOCALE` | No | Locale for capture routes; defaults to `defaultLocale` in `i18n/routing.ts` |
+| `FEISHU_SCREENSHOT_STORAGE_STATE` | No | Playwright login state file; defaults to `.opencode/plugins/feishu-pm/auth.json` |
+| `FEISHU_SCREENSHOT_LOGIN_URL` | No | URL opened by the login helper; defaults to `http://localhost:3000/<locale>/dashboard` |
+| `FEISHU_SCREENSHOT_BASE` | No | Dev or preview URL; defaults to `http://localhost:3000`; reused, probed on nearby ports, or auto-started |
 | `FEISHU_SCREENSHOT_MATCH` | No | Text the page must contain to confirm it belongs to this project |
 | `FEISHU_SCREENSHOT_POLL_MS` | No | Poll interval, default 20000, minimum 5000 |
 
@@ -140,7 +166,7 @@ Credentials, target, and toggles use the `FEISHU_PM_` prefix so they cannot coll
 
 ## AI model and agent
 
-`FEISHU_PM_MODEL` and `FEISHU_PM_AGENT` apply to both commit summaries and requirement drafting. When unset, the OpenCode default model is inherited; requirement intake defaults to the read-only `plan` agent when no agent is configured.
+`FEISHU_PM_MODEL` and `FEISHU_PM_AGENT` apply to commit analysis (summary and page selection) and requirement drafting. When unset, the OpenCode default model is inherited; requirement intake defaults to the read-only `plan` agent when no agent is configured.
 
 ```ini
 FEISHU_PM_MODEL=opencode-go/deepseek-v4.1-flash
@@ -222,12 +248,14 @@ created_at: 2026-11-09 17:00:30
 - If not reachable, nearby ports are checked for an existing project server and reused.
 - Otherwise the plugin starts `next dev` and stops it after capturing.
 - `next dev` allows only one instance per project; point `FEISHU_SCREENSHOT_BASE` at an existing instance on another port.
+- `auth.json` is scoped to the site origin: switching local ports still reuses it, but a preview deployment needs its own `bun run feishu-pm:auth` run.
 - Once a preview deployment exists, point `FEISHU_SCREENSHOT_BASE` at it so customers preview before accepting.
 
 ## Requirements
 
 - The OpenCode server must stay running; stopping it stops both features.
-- Node.js, `bun`, and Playwright's Chromium are required.
+- Node.js, `bun`, a desktop environment, Chrome/Chromium, and Playwright's Chromium are required.
+- Run `bun run feishu-pm:auth` after first setup and whenever the 7-day session expires.
 - Capture uses `scripts/screenshot.mjs`; you can also run `bun run screenshot` manually.
 
 ## Logs
@@ -238,8 +266,14 @@ created_at: 2026-11-09 17:00:30
 | --- | --- |
 | `watcher started` | Commit watching has started |
 | `screenshot: baseline recorded` | First start recorded the baseline |
+| `analyze: pages selected` | AI chose the pages to capture |
+| `analyze: invalid JSON` | AI output was invalid; fell back to changed-file routes |
 | `screenshot: sent` | Delivery succeeded |
+| `screenshot: no page changes` | No page changed; text-only update sent |
+| `screenshot: page failed` | One page failed; other pages continue |
+| `screenshot: login required` | Capture was redirected to login; regenerate auth.json |
 | `screenshot: FAILED` | Capture or delivery failed |
+| `dev server 启动失败` | Existing `next dev` instance or port conflict |
 | `receiver ready` | Group message long connection is up |
 | `requirement saved` | Requirement document written |
 | `requirement timeout` | AI drafting exceeded 90 seconds |
@@ -266,5 +300,6 @@ created_at: 2026-11-09 17:00:30
 
 - Feishu and Lark only; no WeCom or DingTalk.
 - Only local commits on `main` are covered; remote updates and `git push` are not watched.
+- Screenshots require a valid `auth.json`; regenerate it after the session expires.
 - Requirements are limited to @bot text in groups; images and files are not supported yet.
 - It depends on a running OpenCode server.
