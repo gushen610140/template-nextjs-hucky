@@ -1,90 +1,84 @@
 ---
-title: 飞书变更推送
-description: 监控 main 分支提交，自动截取页面并推送到飞书，用于客户预览与验收
+title: 飞书变更推送（feishu-pm）
+description: 监控 main 提交、自动截图并推送到飞书，帮助客户和团队了解最近更新
 ---
 
 import { Step, Steps } from "fumadocs-ui/components/steps";
 
-`feishu-bridge` 是一个项目级 OpenCode 插件。它的主要职责是**把最近的代码变更推送给飞书**：监控本地 `main` 分支，发现新提交后自动截取页面，发送提交摘要和截图，让客户或团队成员快速了解这次更新了什么。
+`feishu-pm` 是一个项目级 OpenCode 插件，用来把最近的代码变更推送给客户或团队：监控本地 `main` 分支，发现新提交后自动截取页面，发送提交摘要和截图。
 
-后续会把它接入客户群，并配合预览环境完成“提交 → 推送 → 预览 → 验收”的闭环。
+它只发送消息，不接收命令，也不能操控 OpenCode。开发者自己使用的飞书控制 bot 是独立的全局插件 `feishu-bridge`，两者必须使用**不同的飞书应用**。
 
 ```text
 main 新提交
-  → 插件轮询 git ref
+  → 每 20 秒检查一次 refs/heads/main
   → 复用或启动 dev server
   → Playwright 截取配置页面
   → 提交摘要 + 截图
-  → 飞书会话 / 客户群
+  → 指定飞书群 / 私聊
 ```
 
-## 推送内容
+## 工作方式
 
-每次检测到 `main` 的新提交，会发送两条内容：
-
-1. 文本摘要：短 commit 信息和本次截取的页面列表。
-2. 每页一张 PNG 截图。
-
-截图保存在 `.screenshots/commits/`，每轮覆盖；失败时改为发送一条错误说明，并写入日志。
+- 首次启动只记录当前 HEAD 作为基线，不补发历史提交。
+- 截图保存在 `.screenshots/commits/`，每轮覆盖。
+- 推送失败时发送一条文字说明，并写入 `debug.log`。
+- 不建立飞书长连接，不需要事件订阅或卡片回调，OpenCode server 运行即生效。
 
 ## 快速开始
 
 <Steps>
 
 <Step>
-### 创建飞书应用
+### 创建客户应用
 
-在飞书开放平台创建「企业自建应用」，开启机器人能力，按[飞书控制台配置](#飞书控制台配置)添加权限和事件，然后发布版本。
+在飞书开放平台新建一个「企业自建应用」，开启机器人能力，只添加发送所需权限，然后发布版本。不要复用它作为开发者的控制 bot。
+
+| 权限 | 用途 |
+| --- | --- |
+| `im:message:send_as_bot` | 发送文本和图片 |
+| `im:resource` | 上传截图 |
+
 </Step>
 
 <Step>
-### 填写凭证
+### 填写配置
 
-编辑 `.opencode/plugins/feishu-bridge/.env`，至少填写 `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET`。
+复制 `.opencode/plugins/feishu-pm/.env.example` 为 `.env`，填写 App ID、App Secret 和推送目标。`.env` 已被 git 忽略。
 </Step>
 
 <Step>
 ### 安装依赖与 Chromium
 
 ```powershell
-npm install --prefix .opencode/plugins/feishu-bridge
+npm install --prefix .opencode/plugins/feishu-pm
 bun run browser:install
 ```
 
-`browser:install` 会下载 Playwright 使用的 Chromium，每台机器只需执行一次。
+`browser:install` 每台机器执行一次。
 </Step>
 
 <Step>
-### 启动连接
+### 重启 OpenCode
 
-插件默认关闭。在 OpenCode TUI 里执行：
+插件加载后即开始监控，不需要 `/feishu-on`。在 `main` 上提交一次改动，20 秒内应收到摘要和截图。
 
-```text
-/feishu-on
-```
-
-侧边栏显示 `connected` 后，插件开始监控 `main`。
-</Step>
-
-<Step>
-### 产生一次提交
-
-在 `main` 上提交任意改动，20 秒内应收到提交摘要和截图。首次启动只记录当前 HEAD 作为基线，不会补发历史提交。
 </Step>
 
 </Steps>
 
 ## 配置
 
-配置文件：`.opencode/plugins/feishu-bridge/.env`（已被 git 忽略）。系统环境变量优先级更高。
-
 ```bash
 FEISHU_APP_ID=cli_xxxxxxxx
 FEISHU_APP_SECRET=xxxxxxxx
-FEISHU_ALLOWED_OPEN_ID=ou_xxxxxxxx
 
-# 变更推送
-FEISHU_SCREENSHOT=1
+# 推送目标：二选一
+FEISHU_NOTIFY_CHAT_ID=
+FEISHU_NOTIFY_OPEN_ID=
+
+# 可选
+FEISHU_PM_ENABLED=1
 FEISHU_SCREENSHOT_PAGES=/,/docs,/login
 FEISHU_SCREENSHOT_BASE=http://localhost:3000
 FEISHU_SCREENSHOT_MATCH=Hucky
@@ -93,134 +87,64 @@ FEISHU_SCREENSHOT_POLL_MS=20000
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
-| `FEISHU_APP_ID` | 是 | 应用 App ID |
-| `FEISHU_APP_SECRET` | 是 | 应用 App Secret |
-| `FEISHU_ALLOWED_OPEN_ID` | 否 | 允许使用机器人的 open_id，逗号分隔；留空表示不限制 |
-| `FEISHU_SCREENSHOT` | 否 | 设为 `0` 关闭变更推送 |
-| `FEISHU_SCREENSHOT_PAGES` | 否 | 要截取的页面，逗号分隔，默认 `/`、`/docs`、`/login` |
-| `FEISHU_SCREENSHOT_BASE` | 否 | 预览或本地开发地址，默认 `http://localhost:3000` |
+| `FEISHU_APP_ID` | 是 | 客户应用 App ID |
+| `FEISHU_APP_SECRET` | 是 | 客户应用 App Secret |
+| `FEISHU_NOTIFY_CHAT_ID` | 二选一 | 群或私聊的 chat_id，优先使用 |
+| `FEISHU_NOTIFY_OPEN_ID` | 二选一 | 私聊用户的 open_id |
+| `FEISHU_PM_ENABLED` | 否 | 设为 `0` 关闭推送 |
+| `FEISHU_SCREENSHOT_PAGES` | 否 | 要截取的页面，默认 `/`、`/docs`、`/login` |
+| `FEISHU_SCREENSHOT_BASE` | 否 | 开发或预览地址，默认 `http://localhost:3000` |
 | `FEISHU_SCREENSHOT_MATCH` | 否 | 页面必须包含的文本，用于确认服务属于本项目 |
-| `FEISHU_SCREENSHOT_POLL_MS` | 否 | 轮询 `main` 的间隔，最小 5000，默认 20000 |
+| `FEISHU_SCREENSHOT_POLL_MS` | 否 | 轮询间隔，默认 20000，最小 5000 |
 
-## 发送目标
+目标只从配置读取，因此客户应用不需要接收消息的能力。
 
-推送优先发送到最近一次和机器人对话的会话；还没有会话记录时，使用 `FEISHU_ALLOWED_OPEN_ID` 中第一个 open_id 的私聊。
+## 获取 chat_id
 
-接入客户群时，把机器人拉进群并先发送一条消息即可成为推送目标。后续会增加固定的群 `chat_id` 配置，避免依赖“最近会话”。
+1. 把机器人拉进客户群。
+2. 在飞书开放平台 API 调试台调用 `GET /open-apis/im/v1/chats`（需要 `im:chat:readonly`），把返回的 `chat_id` 填进 `FEISHU_NOTIFY_CHAT_ID`。
+3. 只做私聊验证时，也可以先填 `FEISHU_NOTIFY_OPEN_ID`。
 
-## 开发服务器
+## 开发服务器与预览
 
-截图需要页面可访问：
-
-- `FEISHU_SCREENSHOT_BASE` 已经能访问时直接复用，不关闭用户的 dev server。
-- base 不可达时，会先检查相邻端口上是否已有本项目服务；找到就复用。
+- `FEISHU_SCREENSHOT_BASE` 可访问时直接复用，不关闭用户的 dev server。
+- 不可达时先检查相邻端口上是否已有本项目服务，找到就复用。
 - 都没有时自动启动 `next dev`，截完关闭。
 - `next dev` 同一项目只允许一个实例；已有实例在别的端口时，把 `FEISHU_SCREENSHOT_BASE` 指向它。
+- 接入 preview 部署后，把 `FEISHU_SCREENSHOT_BASE` 改成预览地址，客户即可先预览再验收。
 
 ## 运行条件
 
-- 插件运行在 OpenCode server 进程内，`/feishu-on` 后才会监控；关闭 TUI 和服务后停止推送。
-- 需要可用的 Node.js 与 `bun`（用于执行截图脚本和启动 dev server）。
-- 需要 Chromium：`bun run browser:install`。
-- 截图调用项目根目录的 `scripts/screenshot.mjs`，也可以用 `bun run screenshot` 手动截取。
+- 依赖 OpenCode server 常驻；服务停止后不再推送。
+- 需要 Node.js、`bun` 和 Playwright 的 Chromium。
+- 截图调用项目根目录的 `scripts/screenshot.mjs`，也可以手动执行 `bun run screenshot`。
 
-## 已有的交互能力
+## 日志
 
-插件早期用于在飞书里远程驱动 OpenCode，这部分能力仍然保留，但不再是主要用途：
-
-- TUI 命令：`/feishu-status`、`/feishu-on`、`/feishu-off`、`/feishu-restart`、`/feishu-log`。
-- 飞书侧命令：`/help`、`/new`、`/model`、`/agent`、`/session`、`/status`、`/stop` 等。
-- 流式卡片、权限审批卡片、附件与撤回处理。
-
-细节见插件目录的 `README.md`。后续会逐步收敛为以“推送与客户协作”为主的插件。
-
-## 侧边栏与状态
-
-TUI 侧边栏的 `FEISHU` 区块展示连接状态：
-
-```text
-FEISHU
-connected
-idle · 12 events
-```
-
-`/feishu-status` 和 RPC 状态还会返回最近一次截图结果：commit、时间与错误信息。
-
-## 飞书控制台配置
-
-以下步骤在飞书开放平台完成，修改后必须**创建版本并发布**。
-
-### 1. 应用与机器人
-
-1. 创建「企业自建应用」。
-2. 在「添加应用能力」里开启「机器人」。
-3. 记录「凭证与基础信息」里的 App ID 和 App Secret。
-
-### 2. 权限
-
-| 权限 | 用途 |
-| --- | --- |
-| `im:message` | 读取消息 |
-| `im:message.p2p_msg:readonly` | 接收私聊消息 |
-| `im:message.group_at_msg:readonly` | 接收群聊 @ 消息 |
-| `im:message:send_as_bot` | 以机器人身份发消息、卡片和图片 |
-| `im:resource` | 下载图片和文件 |
-
-### 3. 事件订阅（长连接）
-
-「事件与回调」→「事件订阅」：
-
-1. 订阅方式选「使用长连接接收事件」。
-2. 添加事件：
-
-| 事件 | 用途 |
-| --- | --- |
-| `im.message.receive_v1` | 记录最近会话、接收群聊消息（用于后续整理待办） |
-| `im.message.recalled_v1` | 撤回消息时中断任务 |
-
-### 4. 回调配置
-
-卡片按钮依赖回调，位于「回调配置」标签：
-
-1. 切到「事件与回调」→「回调配置」。
-2. 订阅方式选「使用长连接接收回调」。
-3. 添加回调「卡片回传交互」`card.action.trigger`。
-
-<Callout type="warn" title="回调必须在 3 秒内响应">
-飞书要求卡片回调在 3 秒内响应。插件收到回调后立即调用 `permission.reply`，不会阻塞。
-</Callout>
-
-### 5. 发布
-
-在「版本管理与发布」创建版本并发布。权限、事件、回调的修改都要重新发布才生效。
-
-## 排错
-
-日志文件：`.opencode/plugins/feishu-bridge/debug.log`，也可以在 TUI 执行 `/feishu-log`。
+`.opencode/plugins/feishu-pm/debug.log`：
 
 | 日志 | 含义 |
 | --- | --- |
-| `missing FEISHU_APP_ID` | `.env` 没填或没读到 |
-| `websocket FAILED` | 凭证错误、应用未发布、未开长连接、出站被拦 |
-| `websocket ready` 但没有 `message received` | 事件订阅没配，或应用版本未发布 |
-| `screenshot: baseline recorded` | 首次启动记录基线，正常 |
-| `screenshot: no feishu target` | 没有可用的会话或 open_id，先给机器人发一条消息 |
-| `screenshot: FAILED` | 截图或发送失败，看同一行后面的错误 |
-| `dev server 启动失败` | 已有 `next dev` 实例，设置 `FEISHU_SCREENSHOT_BASE` 指向它 |
-| `rpc register FAILED` | RPC 契约或注册参数有问题 |
+| `watcher started` | 已开始监控 |
+| `screenshot: baseline recorded` | 首次记录基线，正常 |
+| `screenshot: sent` | 推送成功 |
+| `screenshot: no feishu target` | 发送目标缺失 |
+| `screenshot: FAILED` | 截图或发送失败 |
+| `dev server 启动失败` | 已有 `next dev` 实例或端口冲突 |
+| `missing FEISHU_APP_ID / FEISHU_APP_SECRET` | 凭证未配置 |
 
 ## 路线图
 
-- **客户群推送**：固定群 `chat_id`，按群配置推送内容和频率。
-- **预览环境**：将 `FEISHU_SCREENSHOT_BASE` 指向 preview 部署，客户先预览再验收。
-- **群消息整理**：监控客户群反馈，由 AI 归纳为结构化需求，写入项目待办清单。
-- **协作闭环**：开发者通过飞书 + AI 与客户快速确认需求、进度与验收结果。
+- **客户群固定推送**：按群配置内容、频率和静默时段。
+- **预览验收**：把截图与 preview 链接一起发送，客户直接在群里确认。
+- **群消息整理**：监控客户反馈，由 AI 归纳为结构化需求，写入项目待办清单。
+- **协作闭环**：开发者通过飞书 + AI 与客户确认需求、进度与验收结果。
 
 这些能力尚未实现，文档会在落地后同步更新。
 
 ## 限制
 
 - 只支持飞书和 Lark，不支持企业微信、钉钉。
-- 推送目前只覆盖 `main` 的本地提交，不监听远端更新或 `git push`。
-- 推送目标是“最近会话”，还没有按群固定配置。
-- 依赖 OpenCode server 常驻；服务退出后停止监控。
+- 只覆盖本地 `main` 提交，不监听远端更新或 `git push`。
+- 推送目标必须预先配置，不支持按消息自动发现。
+- 依赖 OpenCode server 常驻。

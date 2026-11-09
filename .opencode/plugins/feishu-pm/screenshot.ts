@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
-const LAST_COMMIT_KEY = "screenshot/lastCommit";
+const LAST_COMMIT_KEY = "feishu-pm/lastCommit";
 
 export type NotifyTarget = {
   receiveIdType: "chat_id" | "open_id";
