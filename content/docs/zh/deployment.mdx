@@ -13,6 +13,7 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 - Logto：生产应用，回调地址指向生产域名。
 - RustFS：浏览器可达的 S3 API、私有 bucket，以及允许生产域名的 CORS。
 - Vercel：项目已连接 Git 仓库。
+- 可选服务：Qdrant（RAG）、OnlyOffice Document Server、AI 供应商密钥。只部署不使用对应功能时可以留空，但上线后要补齐才能启用。
 
 <Callout type="warn" title="生产配置不要复用开发值">
 `LOGTO_BASE_URL`、`LOGTO_COOKIE_SECRET`、数据库连接串和 `RUSTFS_*` 都依赖实际域名或生产环境。直接复制 `.env.development` 会让登录回调、会话 Cookie 或文件直传在生产失效。
@@ -32,11 +33,15 @@ bun run vercel-build
 
 只写 `next build` 或 `bun run build` 会跳过 Prisma Client 生成、数据库迁移和 seed，部署后应用可能直接报错。也可以在 `vercel.json` 中设置 `buildCommand`，但不要在项目设置和 `vercel.json` 两处重复配置。
 
-Install Command 保持自动检测即可。Vercel 识别到 `bun.lock` 后会使用 Bun；需要手动指定时填 `bun ci`。Node.js 版本选 20 或更高。
+Install Command 保持自动检测即可。Vercel 识别到 `bun.lock` 后会使用 Bun；需要手动指定时填 `bun ci`。Node.js 版本选 22：Next.js 16 要求 20.9 以上，22 是当前 LTS，Vercel 的构建镜像与运行时都默认提供。
+
+Next.js 16 在 Vercel 上默认使用 Turbopack 构建，`next.config.ts` 不再需要为构建内存额外调参。如果你把构建迁到内存更小的平台，再单独评估是否需要限制 worker 数量。
 
 ### 环境变量
 
-在 Project Settings → Environment Variables 中添加变量，作用域选 Production。Build 阶段也需要读取这些值，所以不要把数据库变量只放在运行时配置里。
+在 Project Settings → Environment Variables 中添加变量，作用域选 Production。Vercel 的 Production 构建和运行时共用同一份变量：Build 阶段会真实连接数据库、执行迁移和 seed，因此这些值必须直接填生产值，不能放占位符。
+
+#### 构建阶段必须可用
 
 | 变量 | 生产环境取值 |
 | --- | --- |
@@ -44,18 +49,34 @@ Install Command 保持自动检测即可。Vercel 识别到 `bun.lock` 后会使
 | `MIGRATE_DATABASE_URL` | 生产库的直连地址，`migrate deploy` 和 seed 使用；不能是 PgBouncer transaction 池 |
 | `LOGTO_ENDPOINT` | 生产 Logto 租户地址 |
 | `LOGTO_APP_ID` / `LOGTO_APP_SECRET` | 生产 Logto 应用；secret 仅服务端使用 |
-| `LOGTO_BASE_URL` | `https://<生产域名>`，同时把 Logto 回调地址改成同一域名 |
-| `LOGTO_COOKIE_SECRET` | 重新生成的随机值，至少 32 个字符 |
+| `LOGTO_BASE_URL` | `https://<生产域名>`，不带结尾斜杠；Logto 控制台的 Redirect URI 填 `<LOGTO_BASE_URL>/api/auth/callback` |
+| `LOGTO_COOKIE_SECRET` | 重新生成的随机值，至少 32 个字符；更换后所有已签发会话立即失效 |
 | `BOOTSTRAP_ADMIN_EMAILS` | 首次部署的管理员邮箱，逗号分隔 |
 | `RUSTFS_ENDPOINT` | 浏览器可达的生产 S3 API 地址，不是 9001 控制台 |
 | `RUSTFS_ACCESS_KEY` / `RUSTFS_SECRET_KEY` | 生产凭据，仅服务端使用 |
 | `RUSTFS_BUCKET` | 生产私有 bucket，CORS 允许生产域名 |
 
+#### 按功能启用的运行时变量
+
+这些变量构建阶段不会校验，缺失时应用仍能启动，但对应功能不可用：
+
+| 变量 | 缺失时的表现 |
+| --- | --- |
+| `AI_SECRET_KEY` | 保存或更新 AI 供应商失败；部署后不要更换，否则已有密文无法解密 |
+| `QDRANT_URL` / `QDRANT_API_KEY` | 知识库索引与检索失败 |
+| `QDRANT_COLLECTION` / `QDRANT_VECTOR_SIZE` | 同上；`QDRANT_VECTOR_SIZE` 必须与 embedding 模型输出维度一致，集合建好后不能改 |
+| `ONLYOFFICE_DS_URL` / `ONLYOFFICE_JWT_SECRET` | 打开文档编辑页时提示配置缺失 |
+| `ONLYOFFICE_SAVE_CALLBACK_URL` | 编辑器可以打开，但保存不可用；生产环境必须填公网可达地址，不能是 loopback |
+
 <Callout type="warn" title="这些变量必须换成生产值">
-`DATABASE_URL`、`MIGRATE_DATABASE_URL`、`LOGTO_BASE_URL`、`LOGTO_COOKIE_SECRET`、`LOGTO_*` 应用凭据、`RUSTFS_ENDPOINT`、`RUSTFS_BUCKET` 以及 RustFS 的 CORS 都应按生产环境重新配置。尤其不要保留 localhost、示例邮箱或开发密钥。`BOOTSTRAP_ADMIN_EMAILS` 也要填真实管理员邮箱。
+`DATABASE_URL`、`MIGRATE_DATABASE_URL`、`LOGTO_BASE_URL`、`LOGTO_COOKIE_SECRET`、`LOGTO_*` 应用凭据、`RUSTFS_ENDPOINT`、`RUSTFS_BUCKET` 以及 RustFS 的 CORS 都应按生产环境重新配置。尤其不要保留 localhost、示例邮箱或开发密钥。`BOOTSTRAP_ADMIN_EMAILS` 也要填真实管理员邮箱。`ONLYOFFICE_SAVE_CALLBACK_URL` 必须指向生产域名，否则 OnlyOffice 的回调会写到不可达地址。
 </Callout>
 
-Vercel 的 Production 构建会自动注入 `NODE_ENV=production`，不需要手动添加。修改环境变量后要重新部署才会生效。
+<Callout type="warn" title="不要加 NEXT_PUBLIC_ 前缀">
+带 `NEXT_PUBLIC_` 的变量会被打进浏览器 bundle。`LOGTO_APP_SECRET`、`LOGTO_COOKIE_SECRET`、`RUSTFS_SECRET_KEY`、`AI_SECRET_KEY`、`QDRANT_API_KEY`、`ONLYOFFICE_JWT_SECRET` 都只能留在服务端。
+</Callout>
+
+Vercel 的 Production 构建会自动注入 `NODE_ENV=production`，不需要手动添加。环境变量只在部署或重新部署时读取，修改后必须触发一次新部署才会生效。
 
 ## vercel-build 的执行顺序
 
@@ -110,7 +131,7 @@ seed 是幂等的：每次部署都会运行，但不会重复插入数据，也
 
 ## Preview 部署
 
-Build Command 对所有部署生效，Preview 也会执行 `vercel-build`。要么给 Preview 配置独立数据库和独立环境变量，要么让 Preview 只生成客户端并构建，不执行迁移。
+Build Command 对所有部署生效，Preview 也会执行 `vercel-build`。要么给 Preview 配置独立数据库和独立环境变量，要么让 Preview 只生成客户端并构建，不执行迁移。注意环境变量的作用域是分开的：只给 Production 配了变量时，Preview 构建读不到，会直接失败。
 
 如果希望只在 Production 迁移，可以把 `vercel-build` 改成按 `VERCEL_ENV` 分支：Production 执行完整的 `db:setup`，Preview 至少保留 `prisma generate && next build`。不要把 Preview 的数据库步骤整个跳过，否则预览构建会缺少生成的 Prisma Client。
 
@@ -124,7 +145,8 @@ Preview 每次提交都会触发构建。如果 Preview 共享生产 `MIGRATE_DA
 2. 推送到 Vercel 的生产分支，确认构建日志按 `prisma generate` → `migrate deploy` → `RBAC seed completed.` → `next build` 的顺序成功。
 3. 用 `BOOTSTRAP_ADMIN_EMAILS` 中的邮箱登录，确认获得 `admin` 角色。系统存在管理员后该变量失效。
 4. 检查 Logto 回调和文件上传、下载；这些功能依赖生产域名和生产 RustFS CORS。
-5. 在本地连接生产库运行 `bunx prisma migrate status`，确认没有待应用迁移。
+5. 按需验证 AI 供应商保存（`AI_SECRET_KEY`）、知识库检索（`QDRANT_*`）和文档编辑（`ONLYOFFICE_*`）。
+6. 在本地连接生产库运行 `bunx prisma migrate status`，确认没有待应用迁移。
 
 ## 常见失败
 
@@ -135,6 +157,12 @@ Preview 每次提交都会触发构建。如果 Preview 共享生产 `MIGRATE_DA
 | 迁移报 P3009 | 生产库存在失败迁移 | 先备份，修复后用 `migrate resolve` 标记；不要在生产运行 `migrate reset` |
 | 登录后没有权限 | seed 未执行，或邮箱不在 `BOOTSTRAP_ADMIN_EMAILS` | 确认日志有 `RBAC seed completed.`，并核对邮箱 |
 | 上传或下载失败 | `RUSTFS_ENDPOINT` 浏览器不可达，或 CORS 没有生产域名 | 改成公网 S3 地址，并补上 `PUT`、`GET`、`HEAD` 的 CORS |
+| 登录回调报 redirect_uri 不匹配 | Logto 控制台登记的地址与实际域名不一致 | 必须精确填 `<LOGTO_BASE_URL>/api/auth/callback`，协议和结尾斜杠都要一致 |
+| 文档编辑页提示缺少配置 | `ONLYOFFICE_DS_URL` 或 `ONLYOFFICE_JWT_SECRET` 未配置 / JWT 不一致 | 补全变量，并确保与 Document Server 的 `JWT_SECRET` 完全相同 |
+| 保存文档无反应 | `ONLYOFFICE_SAVE_CALLBACK_URL` 缺失或指向 loopback | 填生产域名，代码会自动补 `/api/onlyoffice/callback` |
+| AI 供应商保存失败 | `AI_SECRET_KEY` 缺失，或部署后更换过 | 恢复原值；更换后旧密文无法解密 |
+| RAG 索引 / 检索报错 | `QDRANT_*` 缺失或 `QDRANT_VECTOR_SIZE` 与模型不一致 | 补全变量；维度必须与 embedding 模型输出一致，集合建好后不能改 |
+| 改了变量但线上行为没变 | Vercel 只在部署时读取变量 | 触发一次新的 Production 部署 |
 
 ## 相关文档
 
