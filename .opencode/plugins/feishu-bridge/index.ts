@@ -429,14 +429,13 @@ export default Plugin.define({
       };
 
       const sendImageToTarget = async (target: NotifyTarget, filePath: string) => {
-        const uploaded = await client.im.image.create({
+        const uploaded = (await client.im.image.create({
           data: {
             image_type: "message",
             image: createReadStream(filePath),
           },
-        });
-        const imageKey = (uploaded as { data?: { image_key?: string } })?.data
-          ?.image_key;
+        })) as { image_key?: string; data?: { image_key?: string } };
+        const imageKey = uploaded?.image_key ?? uploaded?.data?.image_key;
         if (!imageKey) throw new Error("图片上传失败：没有返回 image_key");
         await client.im.message.create({
           params: { receive_id_type: target.receiveIdType },
