@@ -1,20 +1,40 @@
 import { type ChildProcess, execFile, spawn } from "node:child_process";
-import { mkdir, rm } from "node:fs/promises";
+import { type Dirent, readFileSync } from "node:fs";
+import { mkdir, readdir, rm } from "node:fs/promises";
 import { createServer } from "node:net";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const LAST_COMMIT_KEY = "feishu-pm/lastCommit";
+const MAX_PAGES = 6;
 
 export type NotifyTarget = {
   receiveIdType: "chat_id" | "open_id";
   receiveId: string;
 };
 
+export type CommitAnalysis = {
+  summary?: string;
+  pages: string[];
+};
+
+type RunningServer = {
+  url: string;
+  close: () => Promise<void>;
+};
+
+type CaptureResult = {
+  url?: string;
+  finalUrl?: string;
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export type ScreenshotStatus = {
   commit?: string;
   at?: string;
+  pages?: string[];
   error?: string;
 };
 
@@ -26,17 +46,13 @@ export type ScreenshotWatcherOptions = {
   getTarget: () => Promise<NotifyTarget | undefined>;
   sendImage: (target: NotifyTarget, filePath: string) => Promise<void>;
   sendText: (target: NotifyTarget, text: string) => Promise<void>;
-  /** 根据提交内容生成推送摘要；返回空时回退到固定格式。 */
-  summarize?: (sha: string, subject: string) => Promise<string | undefined>;
+  /** AI 根据提交内容返回发布摘要与需要截图的页面；失败时回退到文件路径推断。 */
+  analyze?: (
+    sha: string,
+    subject: string,
+  ) => Promise<CommitAnalysis | undefined>;
   onStatus: (status: ScreenshotStatus) => void;
 };
-
-type RunningServer = {
-  url: string;
-  close: () => Promise<void>;
-};
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 type BunGlobal = { which?: (command: string) => string | null };
 
@@ -53,16 +69,174 @@ function jsRuntime() {
   return which("node") ?? which("bun") ?? "node";
 }
 
-function defaultPages(): string[] {
-  return (process.env.FEISHU_SCREENSHOT_PAGES ?? "/,/docs,/login")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+type RoutingConfig = {
+  locales: string[];
+  defaultLocale: string;
+};
+
+function readRouting(directory: string): RoutingConfig {
+  const fallback = { locales: ["zh"], defaultLocale: "zh" };
+  try {
+    const text = readFileSync(join(directory, "i18n", "routing.ts"), "utf8");
+    const localesMatch = /locales\s*:\s*\[([\s\S]*?)\]/.exec(text);
+    const locales = localesMatch
+      ? [...localesMatch[1].matchAll(/["']([^"']+)["']/g)].map(
+          (match) => match[1],
+        )
+      : [];
+    const defaultLocale =
+      /defaultLocale\s*:\s*["']([^"']+)["']/.exec(text)?.[1] ??
+      locales[0] ??
+      fallback.defaultLocale;
+    return {
+      locales: locales.length > 0 ? locales : [defaultLocale],
+      defaultLocale,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function screenshotLocale(directory: string) {
+  return (
+    process.env.FEISHU_SCREENSHOT_LOCALE?.trim() ||
+    readRouting(directory).defaultLocale
+  );
+}
+
+function toLocalePath(page: string, routing: RoutingConfig, locale: string) {
+  let path = page.trim();
+  if (!path.startsWith("/")) path = `/${path}`;
+  path = path.replace(/\/{2,}/g, "/");
+
+  const parts = path.split("/").filter(Boolean);
+  if (parts.length > 0 && routing.locales.includes(parts[0])) {
+    path = `/${parts.slice(1).join("/")}`;
+  }
+  path = path.replace(/\/+$/, "") || "/";
+  return path === "/" ? `/${locale}` : `/${locale}${path}`;
+}
+
+export function normalizePages(pages: readonly string[], directory: string) {
+  const routing = readRouting(directory);
+  const locale = screenshotLocale(directory);
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const page of pages) {
+    if (typeof page !== "string") continue;
+    let path = page.trim();
+    if (!path) continue;
+    if (!path.startsWith("/")) path = `/${path}`;
+    if (/[[\]*]/.test(path)) continue;
+    if (/^\/(api|_next)(\/|$)/.test(path)) continue;
+
+    const full = toLocalePath(path, routing, locale);
+    if (seen.has(full)) continue;
+    seen.add(full);
+    result.push(full);
+    if (result.length >= MAX_PAGES) break;
+  }
+
+  return result;
 }
 
 function pageSlug(page: string) {
   const slug = page.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "");
   return slug || "home";
+}
+
+function routeFromPageFile(rel: string) {
+  const parts = rel.replace(/\\/g, "/").split("/");
+  const file = parts.pop() ?? "";
+  if (!/^page\.[^.]+$/.test(file)) return undefined;
+
+  const segments: string[] = [];
+  for (const segment of parts) {
+    if (!segment) continue;
+    if (/^\(.+\)$/.test(segment) || segment.startsWith("@")) continue;
+    // 可选 catch-all 的父路径本身可访问，例如 /docs/[[...slug]] -> /docs
+    if (/^\[\[\.\.\..+\]\]$/.test(segment)) break;
+    if (segment.includes("[") || segment.includes("]")) return undefined;
+    segments.push(segment);
+  }
+
+  return `/${segments.join("/")}`.replace(/\/+$/, "") || "/";
+}
+
+function routeFromChangedFile(rel: string) {
+  const parts = rel.replace(/\\/g, "/").split("/");
+  const file = parts.pop() ?? "";
+  if (/^page\.[^.]+$/.test(file)) return routeFromPageFile(rel);
+
+  const segments: string[] = [];
+  for (const segment of parts) {
+    if (!segment) continue;
+    if (/^\(.+\)$/.test(segment) || segment.startsWith("@")) continue;
+    if (segment.includes("[") || segment.includes("]")) return undefined;
+    segments.push(segment);
+  }
+
+  return `/${segments.join("/")}`.replace(/\/+$/, "") || "/";
+}
+
+export async function collectStaticRoutes(directory: string) {
+  const root = join(directory, "app", "[locale]");
+  const routes = new Set<string>();
+
+  const walk = async (dir: string): Promise<void> => {
+    let entries: Dirent[];
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+      } else if (/^page\.[^.]+$/.test(entry.name)) {
+        const route = routeFromPageFile(relative(root, full));
+        if (route) routes.add(route);
+      }
+    }
+  };
+
+  await walk(root);
+  return [...routes].sort();
+}
+
+/** AI 不可用时的兜底：把 app/[locale] 下改动的文件映射成页面路由。 */
+export async function fallbackPagesFromCommit(directory: string, sha: string) {
+  let files: string[];
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["-C", directory, "show", "--name-only", "--format=", sha],
+      { timeout: 20000, windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
+    );
+    files = stdout.split(/\r?\n/).map((line) => line.trim());
+  } catch {
+    return [];
+  }
+
+  const prefix = "app/[locale]/";
+  const targets = new Set<string>();
+  for (const file of files) {
+    if (!file.startsWith(prefix)) continue;
+    const route = routeFromChangedFile(file.slice(prefix.length));
+    if (route) targets.add(route);
+  }
+  if (targets.size === 0) return [];
+
+  const routes = await collectStaticRoutes(directory);
+  const matched = routes.filter((route) =>
+    [...targets].some(
+      (target) =>
+        target === "/" || route === target || route.startsWith(`${target}/`),
+    ),
+  );
+  return (matched.length > 0 ? matched : [...targets]).slice(0, MAX_PAGES);
 }
 
 async function readMainSha(directory: string) {
@@ -93,7 +267,7 @@ async function readCommitSubject(directory: string, sha: string) {
 
 async function isProjectServer(url: string) {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(2500) });
+    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (response.status >= 500) return false;
     const match = process.env.FEISHU_SCREENSHOT_MATCH ?? "Hucky";
     const body = await response.text();
@@ -239,22 +413,45 @@ async function ensureServer(
   throw new Error("dev server 启动超时");
 }
 
-async function capturePage(directory: string, url: string, outPath: string) {
+async function capturePage(
+  directory: string,
+  url: string,
+  outPath: string,
+): Promise<CaptureResult> {
   const script = join(directory, "scripts", "screenshot.mjs");
-  await execFileAsync(
-    jsRuntime(),
-    [
-      script,
-      url,
-      "--out",
-      outPath,
-      "--wait-until",
-      "load",
-      "--timeout",
-      "30000",
-    ],
-    { cwd: directory, timeout: 90000, windowsHide: true },
-  );
+  const args = [
+    script,
+    url,
+    "--out",
+    outPath,
+    "--wait-until",
+    "load",
+    "--timeout",
+    "30000",
+  ];
+  const storageState = process.env.FEISHU_SCREENSHOT_STORAGE_STATE?.trim();
+  if (storageState) args.push("--storage-state", storageState);
+
+  const { stdout } = await execFileAsync(jsRuntime(), args, {
+    cwd: directory,
+    timeout: 90000,
+    windowsHide: true,
+  });
+  const line = stdout.trim().split(/\r?\n/).filter(Boolean).pop();
+  try {
+    return line ? (JSON.parse(line) as CaptureResult) : {};
+  } catch {
+    return {};
+  }
+}
+
+function isLoginUrl(url: string | undefined) {
+  if (!url) return false;
+  try {
+    return new URL(url).pathname.split("/").filter(Boolean).includes("login");
+  } catch {
+    return false;
+  }
 }
 
 export function startScreenshotWatcher(options: ScreenshotWatcherOptions) {
@@ -296,43 +493,87 @@ export function startScreenshotWatcher(options: ScreenshotWatcherOptions) {
       }
 
       const subject = await readCommitSubject(options.directory, sha);
+      const analysis = options.analyze
+        ? await options.analyze(sha, subject).catch((error) => {
+            options.log("screenshot: analyze failed", error);
+            return undefined;
+          })
+        : undefined;
+      const pages = normalizePages(analysis?.pages ?? [], options.directory);
+      const body =
+        process.env.FEISHU_PM_SUMMARY === "0"
+          ? undefined
+          : analysis?.summary?.trim();
+      const summary = body ? `${subject}\n\n${body}` : `main 更新 ${subject}`;
+
+      if (pages.length === 0) {
+        await options.sendText(
+          target,
+          `${summary}\n\n本次提交未涉及页面变更，未生成截图。`,
+        );
+        options.onStatus({
+          commit: subject,
+          at: new Date().toISOString(),
+          pages: [],
+        });
+        options.log("screenshot: no page changes", { commit: subject });
+        return;
+      }
+
+      server = await ensureServer(options.directory, baseUrl, options.log);
+      const serverUrl = server.url;
       const outDir = join(options.directory, ".screenshots", "commits");
       await rm(outDir, { recursive: true, force: true });
       await mkdir(outDir, { recursive: true });
 
-      server = await ensureServer(options.directory, baseUrl, options.log);
-      const pages = defaultPages();
       const shots: Array<{ page: string; path: string }> = [];
-
       for (const page of pages) {
         const path = join(outDir, `${pageSlug(page)}.png`);
-        await capturePage(
-          options.directory,
-          new URL(page, server.url).toString(),
-          path,
-        );
+        const pageUrl = new URL(page, serverUrl).toString();
+        let result: CaptureResult;
+        try {
+          result = await capturePage(options.directory, pageUrl, path);
+        } catch (error) {
+          const detail = cleanOutput(
+            error instanceof Error ? error.message : String(error),
+          );
+          options.log("screenshot: page failed", { page, detail });
+          continue;
+        }
+        if (!isLoginUrl(pageUrl) && isLoginUrl(result.finalUrl)) {
+          options.log("screenshot: login required", {
+            page,
+            finalUrl: result.finalUrl,
+          });
+          throw new Error(
+            "登录态失效：截图被重定向到登录页，请运行 bun run feishu-pm:auth 重新生成登录态",
+          );
+        }
         shots.push({ page, path });
       }
-
-      const summaryPromise = options.summarize
-        ? options.summarize(sha, subject).catch((error) => {
-            options.log("screenshot: summarize failed", error);
-            return undefined;
-          })
-        : Promise.resolve(undefined);
-      const generated = await summaryPromise;
-      const summary = generated ?? `main 更新 ${subject}`;
+      if (shots.length === 0) {
+        throw new Error("所有页面截图失败，请检查 dev server 与页面路由");
+      }
 
       await options.sendText(
         target,
-        `${summary}\n\n截图页面：${pages.join("、")}`,
+        `${summary}\n\n截图页面：${shots.map((shot) => shot.page).join("、")}`,
       );
       for (const shot of shots) {
         await options.sendImage(target, shot.path);
       }
 
-      options.onStatus({ commit: subject, at: new Date().toISOString() });
-      options.log("screenshot: sent", { commit: subject, count: shots.length });
+      const sentPages = shots.map((shot) => shot.page);
+      options.onStatus({
+        commit: subject,
+        at: new Date().toISOString(),
+        pages: sentPages,
+      });
+      options.log("screenshot: sent", {
+        commit: subject,
+        count: shots.length,
+        pages: sentPages,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       options.onStatus({ at: new Date().toISOString(), error: message });

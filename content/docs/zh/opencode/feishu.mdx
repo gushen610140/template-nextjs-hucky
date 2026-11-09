@@ -15,9 +15,10 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 ```text
 main 新提交
   → 每 20 秒检查 refs/heads/main
-  → 复用或启动 dev server
-  → Playwright 截取配置页面
-  → AI 生成提交摘要
+  → AI 读取 diff 与 app/[locale] 静态路由，判断需要截图的页面
+  → 复用现有 dev server，找不到时自动启动
+  → 按默认语言补充 /<locale> 前缀
+  → Playwright 带登录态只截取有变更的页面
   → 发送摘要 + 截图到指定群
 
 客户在群里 @机器人
@@ -32,7 +33,11 @@ main 新提交
 ### 变更推送
 
 - 首次启动只记录当前 HEAD 作为基线，不补发历史提交。
-- 每次新提交读取 diff，由 AI 生成 2-4 句面向客户的摘要；失败或超时会回退到 commit 标题。
+- 每次新提交读取 diff，由 AI 同时生成 2-4 句面向客户的摘要和需要截图的页面列表。
+- AI 只能从 `app/[locale]` 的静态路由中选择，最多 6 个；动态路由不截图。没有页面变更时只发送文字说明。
+- AI 不可用或返回无法解析时，按改动的 `app/[locale]` 文件推断页面。
+- 截图路由自动补上 `i18n/routing.ts` 的 `defaultLocale` 前缀，也可用 `FEISHU_SCREENSHOT_LOCALE` 覆盖。
+- 截图使用 `auth.json` 登录态，避免私有页面被重定向到登录页；登录态失效时会报错并停止发送截图。
 - 截图保存在 `.screenshots/commits/`，每轮覆盖。
 - 推送失败时发送一条文字说明，并写入 `debug.log`。
 
@@ -77,11 +82,28 @@ main 新提交
 ### 安装依赖与 Chromium
 
 ```powershell
-npm install --prefix .opencode/plugins/feishu-pm
-bun run browser:install
+bun run feishu-pm:install
 ```
 
-`browser:install` 每台机器执行一次。
+这条命令会安装插件依赖并下载 Playwright Chromium。开发电脑需要有图形界面和 Chrome/Chromium；Playwright 安装的 Chromium 已包含有头模式，不要求系统另外安装 Chrome。Linux 无桌面环境需要在 `xvfb-run` 下运行登录脚本。
+</Step>
+
+<Step>
+### 生成截图登录态
+
+先启动 dev server：
+
+```powershell
+bun dev
+```
+
+再运行登录脚本：
+
+```powershell
+bun run feishu-pm:auth
+```
+
+脚本会打开有头 Chromium，默认访问 `http://localhost:3000/<defaultLocale>/dashboard`。完成 Logto 登录后回到终端按 Enter，登录态保存到 `.opencode/plugins/feishu-pm/auth.json`，该文件已被 git 忽略。session 有效期 7 天，过期后重新运行即可。
 </Step>
 
 <Step>
@@ -112,7 +134,9 @@ FEISHU_PM_AGENT=
 FEISHU_PM_RECEIVE=1
 FEISHU_PM_ALLOWED_CHAT_IDS=
 FEISHU_PM_REQUIREMENTS_DIR=requirements
-FEISHU_SCREENSHOT_PAGES=/,/docs,/login
+FEISHU_SCREENSHOT_LOCALE=
+FEISHU_SCREENSHOT_STORAGE_STATE=.opencode/plugins/feishu-pm/auth.json
+FEISHU_SCREENSHOT_LOGIN_URL=
 FEISHU_SCREENSHOT_BASE=http://localhost:3000
 FEISHU_SCREENSHOT_MATCH=Hucky
 FEISHU_SCREENSHOT_POLL_MS=20000
@@ -125,14 +149,16 @@ FEISHU_SCREENSHOT_POLL_MS=20000
 | `FEISHU_PM_NOTIFY_CHAT_ID` | 二选一 | 推送目标群或私聊的 chat_id |
 | `FEISHU_PM_NOTIFY_OPEN_ID` | 二选一 | 推送目标用户的 open_id |
 | `FEISHU_PM_ENABLED` | 否 | 默认开启；设为 `0` 关闭 |
-| `FEISHU_PM_SUMMARY` | 否 | 设为 `0` 关闭 AI 提交摘要 |
+| `FEISHU_PM_SUMMARY` | 否 | 设为 `0` 关闭 AI 提交摘要（页面选择仍然生效） |
 | `FEISHU_PM_MODEL` | 否 | AI 模型，格式 `providerID/modelID`；留空继承默认 |
 | `FEISHU_PM_AGENT` | 否 | AI agent；留空时需求整理默认 `plan` |
 | `FEISHU_PM_RECEIVE` | 否 | 设为 `0` 关闭群需求接收 |
 | `FEISHU_PM_ALLOWED_CHAT_IDS` | 否 | 允许接收需求的群，逗号分隔；留空只允许 `FEISHU_PM_NOTIFY_CHAT_ID` |
 | `FEISHU_PM_REQUIREMENTS_DIR` | 否 | 需求文档目录，默认 `requirements` |
-| `FEISHU_SCREENSHOT_PAGES` | 否 | 截图页面，默认 `/`、`/docs`、`/login` |
-| `FEISHU_SCREENSHOT_BASE` | 否 | 开发或预览地址，默认 `http://localhost:3000` |
+| `FEISHU_SCREENSHOT_LOCALE` | 否 | 截图路由语言，默认读取 `i18n/routing.ts` 的 `defaultLocale` |
+| `FEISHU_SCREENSHOT_STORAGE_STATE` | 否 | Playwright 登录态文件，默认 `.opencode/plugins/feishu-pm/auth.json` |
+| `FEISHU_SCREENSHOT_LOGIN_URL` | 否 | 生成登录态时打开的地址，默认 `http://localhost:3000/<locale>/dashboard` |
+| `FEISHU_SCREENSHOT_BASE` | 否 | 开发或预览地址，默认 `http://localhost:3000`；可复用、查找相邻端口或自动启动 dev server |
 | `FEISHU_SCREENSHOT_MATCH` | 否 | 页面必须包含的文本，用于确认服务属于本项目 |
 | `FEISHU_SCREENSHOT_POLL_MS` | 否 | 轮询间隔，默认 20000，最小 5000 |
 
@@ -140,7 +166,7 @@ FEISHU_SCREENSHOT_POLL_MS=20000
 
 ## AI 模型与 agent
 
-`FEISHU_PM_MODEL` 和 `FEISHU_PM_AGENT` 同时作用于提交摘要和需求整理。留空时继承 OpenCode 的默认模型；需求整理未指定 agent 时默认使用只读的 `plan`，避免模型改动项目。
+`FEISHU_PM_MODEL` 和 `FEISHU_PM_AGENT` 同时作用于提交分析（摘要与页面选择）和需求整理。留空时继承 OpenCode 的默认模型；需求整理未指定 agent 时默认使用只读的 `plan`，避免模型改动项目。
 
 示例：
 
@@ -226,12 +252,14 @@ created_at: 2026-11-09 17:00:30
 - 不可达时先检查相邻端口上是否已有本项目服务，找到就复用。
 - 都没有时自动启动 `next dev`，截完关闭。
 - `next dev` 同一项目只允许一个实例；已有实例在别的端口时，把 `FEISHU_SCREENSHOT_BASE` 指向它。
+- 登录态 `auth.json` 按站点域名生效：本地切换端口仍可复用；接入 preview 部署后，需要用预览域名重新运行 `bun run feishu-pm:auth`。
 - 接入 preview 部署后，把 `FEISHU_SCREENSHOT_BASE` 改成预览地址，客户即可先预览再验收。
 
 ## 运行条件
 
 - 依赖 OpenCode server 常驻；服务停止后不再推送或接收。
-- 需要 Node.js、`bun` 和 Playwright 的 Chromium。
+- 需要 Node.js、`bun`、图形界面与 Chrome/Chromium，以及 Playwright 的 Chromium。
+- 首次使用或 session 过期后，需要重新运行 `bun run feishu-pm:auth` 生成登录态。
 - 截图调用项目根目录的 `scripts/screenshot.mjs`，也可以手动执行 `bun run screenshot`。
 
 ## 日志
@@ -242,8 +270,14 @@ created_at: 2026-11-09 17:00:30
 | --- | --- |
 | `watcher started` | 已开始监控提交 |
 | `screenshot: baseline recorded` | 首次记录基线，正常 |
+| `analyze: pages selected` | AI 已选出需要截图的页面 |
+| `analyze: invalid JSON` | AI 返回格式异常，改用文件路径兜底 |
 | `screenshot: sent` | 推送成功 |
+| `screenshot: no page changes` | 本次提交无页面变更，仅发文字 |
+| `screenshot: page failed` | 单个页面截图失败，其他页面继续 |
+| `screenshot: login required` | 截图被重定向到登录页，需要重新生成 auth.json |
 | `screenshot: FAILED` | 截图或发送失败 |
+| `dev server 启动失败` | 已有 `next dev` 实例或端口冲突 |
 | `receiver ready` | 群消息长连接已建立 |
 | `requirement saved` | 需求文档已写入 |
 | `requirement timeout` | AI 整理超过 90 秒 |
@@ -270,5 +304,6 @@ created_at: 2026-11-09 17:00:30
 
 - 只支持飞书和 Lark，不支持企业微信、钉钉。
 - 只覆盖本地 `main` 提交，不监听远端更新或 `git push`。
+- 截图依赖有效的 `auth.json`，session 过期后需要重新生成。
 - 需求只处理群聊 @机器人 的文本消息，暂不支持图片和文件。
 - 依赖 OpenCode server 常驻。

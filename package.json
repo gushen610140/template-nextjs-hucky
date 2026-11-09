@@ -10,6 +10,8 @@
     "format": "biome format --write",
     "screenshot": "node scripts/screenshot.mjs",
     "browser:install": "playwright install chromium",
+    "feishu-pm:install": "npm install --prefix .opencode/plugins/feishu-pm && bun run browser:install",
+    "feishu-pm:auth": "node .opencode/plugins/feishu-pm/save-auth-state.mjs",
     "db:generate": "prisma generate",
     "db:seed": "prisma db seed",
     "db:setup": "prisma generate && prisma migrate deploy && prisma db seed",

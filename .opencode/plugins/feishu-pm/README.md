@@ -9,8 +9,10 @@
 ```text
 main 新提交
   → 每 20 秒检查一次 refs/heads/main
-  → 复用或启动 dev server
-  → Playwright 截取配置页面
+  → AI 读取 diff 与 app/[locale] 路由，判断需要截图的页面
+  → 复用现有 dev server，找不到时自动启动 next dev
+  → 按默认语言补充 /<locale> 前缀
+  → Playwright 带登录态只截取有变更的页面
   → 发送提交摘要 + 截图到指定 chat / open_id
 ```
 
@@ -23,7 +25,11 @@ main 新提交
 ```
 
 - 首次启动只记录当前 HEAD 作为基线，不补发历史提交。
-- 每次新提交会用 OpenCode 的 AI 阅读 diff，生成 2-4 句面向客户的变更摘要；生成失败或超时会回退到 commit 标题。
+- 每次新提交会用 OpenCode 的 AI 阅读 diff，同时生成 2-4 句面向客户的变更摘要和需要截图的页面列表；AI 不可用或返回无法解析时，按 `app/[locale]` 下的改动文件推断页面。
+- 页面路由由 AI 从 `app/[locale]` 的静态路由中选择，最多 6 个；动态路由不截图。没有页面变更时只发送文字说明，不发送截图。
+- dev server 优先复用已有实例；3000 不可用时会寻找相邻端口，仍找不到就自动启动 `next dev`，截完关闭。
+- 截图使用 `auth.json` 登录态，避免私有页面被重定向到登录页；登录态失效时会报错并停止发送截图。
+- 路由会自动补上 `i18n/routing.ts` 的 `defaultLocale` 前缀，也可用 `FEISHU_SCREENSHOT_LOCALE` 覆盖。
 - 截图保存在 `.screenshots/commits/`，每轮覆盖。
 - 失败时发送一条文字说明，并写入 `debug.log`。
 - 不建立飞书长连接，不需要 `/feishu-on`，OpenCode server 运行即生效。
@@ -45,9 +51,25 @@ main 新提交
 ## 安装
 
 ```powershell
-npm install --prefix .opencode/plugins/feishu-pm
-bun run browser:install
+bun run feishu-pm:install
 ```
+
+这条命令会安装插件依赖并下载 Playwright Chromium。开发电脑需要有图形界面和 Chrome/Chromium；`browser:install` 安装的 Playwright Chromium 已包含有头模式，不要求系统另外安装 Chrome。Linux 无桌面环境需要在 `xvfb-run` 下运行登录脚本。
+
+## 截图登录态
+
+私有页面需要登录后才能截图。首次使用、或 session 过期后，先生成一次登录态：
+
+```powershell
+bun dev
+bun run feishu-pm:auth
+```
+
+脚本会打开有头 Chromium，默认访问 `http://localhost:3000/<defaultLocale>/dashboard`。完成 Logto 登录后回到终端按 Enter，登录态保存到 `.opencode/plugins/feishu-pm/auth.json`，该文件已被 git 忽略。
+
+- session 有效期 7 天，过期后重新运行 `bun run feishu-pm:auth`。
+- 可用 `FEISHU_SCREENSHOT_LOGIN_URL` 指定登录页地址；预览环境需用预览域名重新生成。
+- 插件截图时通过 `FEISHU_SCREENSHOT_STORAGE_STATE` 读取该文件。截图最终被重定向到 `/login` 时，会记录 `screenshot: login required` 并停止发送截图。
 
 ## 配置
 
@@ -60,14 +82,16 @@ bun run browser:install
 | `FEISHU_PM_NOTIFY_CHAT_ID` | 二选一 | 群或私聊的 chat_id，优先使用 |
 | `FEISHU_PM_NOTIFY_OPEN_ID` | 二选一 | 私聊用户的 open_id |
 | `FEISHU_PM_ENABLED` | 否 | 默认开启；设为 `0` 关闭 |
-| `FEISHU_PM_SUMMARY` | 否 | 设为 `0` 关闭 AI 摘要，改用固定模板 |
+| `FEISHU_PM_SUMMARY` | 否 | 设为 `0` 关闭 AI 摘要，改用固定模板（页面判断仍然生效） |
 | `FEISHU_PM_MODEL` | 否 | AI 使用的模型，格式 `providerID/modelID`；留空继承默认 |
 | `FEISHU_PM_AGENT` | 否 | AI 使用的 agent，例如 `plan`；留空时需求整理默认 `plan` |
 | `FEISHU_PM_RECEIVE` | 否 | 设为 `0` 关闭群需求接收 |
 | `FEISHU_PM_ALLOWED_CHAT_IDS` | 否 | 允许接收需求的群，逗号分隔；留空则只允许 `FEISHU_PM_NOTIFY_CHAT_ID` |
 | `FEISHU_PM_REQUIREMENTS_DIR` | 否 | 需求文档目录，默认 `requirements` |
-| `FEISHU_SCREENSHOT_PAGES` | 否 | 截图页面，默认 `/`、`/docs`、`/login` |
-| `FEISHU_SCREENSHOT_BASE` | 否 | 开发或预览地址，默认 `http://localhost:3000` |
+| `FEISHU_SCREENSHOT_LOCALE` | 否 | 截图路由使用的语言，默认读取 `i18n/routing.ts` 的 `defaultLocale` |
+| `FEISHU_SCREENSHOT_STORAGE_STATE` | 否 | Playwright 登录态文件，默认 `.opencode/plugins/feishu-pm/auth.json` |
+| `FEISHU_SCREENSHOT_LOGIN_URL` | 否 | 生成登录态时打开的地址，默认 `http://localhost:3000/<locale>/dashboard` |
+| `FEISHU_SCREENSHOT_BASE` | 否 | 开发或预览地址，默认 `http://localhost:3000`；可复用、查找相邻端口或自动启动 dev server |
 | `FEISHU_SCREENSHOT_MATCH` | 否 | 页面必须包含的文本，用于确认服务属于本项目 |
 | `FEISHU_SCREENSHOT_POLL_MS` | 否 | 轮询间隔，默认 20000，最小 5000 |
 
@@ -107,13 +131,13 @@ bun run browser:install
 ## 运行条件
 
 - 依赖 OpenCode server 常驻；服务停止后不再推送。
-- 需要 Node.js 与 `bun`，以及 Playwright 的 Chromium。
-- dev server 处理：`FEISHU_SCREENSHOT_BASE` 可访问时复用；否则尝试相邻端口；最后自动启动 `next dev`，截完关闭。
-- `next dev` 同一项目只允许一个实例，已有实例在别的端口时请指向它。
+- 需要 Node.js、`bun`、图形界面与 Chrome/Chromium，以及 Playwright 的 Chromium。
+- dev server 会复用现有实例；3000 不可用时查找相邻端口，仍找不到就自动启动 `next dev`，截完关闭。
+- 页面路由由 AI 根据提交判断，只截取有变更的页面；没有页面变更时仅发送文字说明。
 
 ## 预览环境
 
-把 `FEISHU_SCREENSHOT_BASE` 指向 preview 部署地址即可推送预发页面，客户先预览再验收。`FEISHU_SCREENSHOT_MATCH` 用于避免误截其他服务。
+把 `FEISHU_SCREENSHOT_BASE` 指向 preview 部署地址即可推送预发页面，客户先预览再验收。`FEISHU_SCREENSHOT_MATCH` 用于避免误截其他服务。语言前缀来自 `FEISHU_SCREENSHOT_LOCALE` 或 `i18n/routing.ts`。预览环境的登录态需要单独用预览域名运行 `bun run feishu-pm:auth` 生成。
 
 ## 日志
 
@@ -123,9 +147,14 @@ bun run browser:install
 | --- | --- |
 | `watcher started` | 插件已开始监控 |
 | `screenshot: baseline recorded` | 首次记录基线，正常 |
+| `analyze: pages selected` | AI 已选出需要截图的页面 |
+| `analyze: invalid JSON` | AI 返回格式异常，改用文件路径兜底 |
 | `screenshot: sent` | 推送成功 |
+| `screenshot: no page changes` | 本次提交无页面变更，仅发文字 |
 | `screenshot: no feishu target` | 发送目标缺失 |
-| `screenshot: FAILED` | 截图或发送失败 |
+| `screenshot: page failed` | 单个页面截图失败，其他页面继续 |
+| `screenshot: login required` | 截图被重定向到登录页，需要重新生成 auth.json |
+| `screenshot: FAILED` | 分析、截图或发送失败 |
 | `dev server 启动失败` | 已有 `next dev` 实例或端口冲突 |
 | `receiver ready` | 群消息长连接已建立 |
 | `requirement saved` | 需求文档已写入 |

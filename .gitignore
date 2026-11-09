@@ -5,6 +5,7 @@
 .opencode/plugins/**/node_modules/
 .opencode/plugins/**/feishu-files/
 .opencode/plugins/**/debug.log
+.opencode/plugins/**/auth.json
 /.pnp
 .pnp.*
 .yarn/*
