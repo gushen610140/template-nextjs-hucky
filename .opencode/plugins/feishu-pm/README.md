@@ -15,6 +15,7 @@ main 新提交
 ```
 
 - 首次启动只记录当前 HEAD 作为基线，不补发历史提交。
+- 每次新提交会用 OpenCode 的 AI 阅读 diff，生成 2-4 句面向客户的变更摘要；生成失败或超时会回退到 commit 标题。
 - 截图保存在 `.screenshots/commits/`，每轮覆盖。
 - 失败时发送一条文字说明，并写入 `debug.log`。
 - 不建立飞书长连接，不需要 `/feishu-on`，OpenCode server 运行即生效。
@@ -37,6 +38,7 @@ bun run browser:install
 | `FEISHU_NOTIFY_CHAT_ID` | 二选一 | 群或私聊的 chat_id，优先使用 |
 | `FEISHU_NOTIFY_OPEN_ID` | 二选一 | 私聊用户的 open_id |
 | `FEISHU_PM_ENABLED` | 否 | 设为 `0` 关闭推送 |
+| `FEISHU_PM_SUMMARY` | 否 | 设为 `0` 关闭 AI 摘要，改用固定模板 |
 | `FEISHU_SCREENSHOT_PAGES` | 否 | 截图页面，默认 `/`、`/docs`、`/login` |
 | `FEISHU_SCREENSHOT_BASE` | 否 | 开发或预览地址，默认 `http://localhost:3000` |
 | `FEISHU_SCREENSHOT_MATCH` | 否 | 页面必须包含的文本，用于确认服务属于本项目 |
