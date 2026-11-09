@@ -14,10 +14,11 @@ Skills 和 `node_modules` 一样属于“安装产物”，因此 **`.agents/` �
 | 路径 | 是否提交 | 作用 |
 | --- | --- | --- |
 | `.agents/skills/` | 否，已在 `.gitignore` 中忽略 | 安装后的 Skill 文件 |
+| `.opencode/skills/` | 是 | 随仓库提交的项目级 Skill |
 | `skills-lock.json` | 是 | 锁定每个 Skill 的来源与哈希 |
 | `package.json` 中的 `skills` | 是 | 提供 `skills` CLI |
 
-所以刚克隆项目时并没有 `.agents/skills/`，需要从 `skills-lock.json` 恢复。
+所以刚克隆项目时并没有 `.agents/skills/`，需要从 `skills-lock.json` 恢复。`.opencode/skills/` 则不同：它直接提交到 Git，克隆后无需安装即可被 OpenCode 发现。
 
 ## 项目内置的 Skills
 
@@ -40,6 +41,35 @@ Skills 和 `node_modules` 一样属于“安装产物”，因此 **`.agents/` �
 
 其中标记“备查”的技能随 Prisma 技能包一起锁定，当前项目不一定直接用到，但升级或切换数据库时会派上用场。
 
+## 随仓库提交的 Skills
+
+`.opencode/skills/` 下的 Skill 不经过 `skills-lock.json`，而是跟代码一起提交，克隆后即可使用。
+
+### browser-screenshot
+
+基于 Playwright + Chromium 截取任意 URL 或本地页面，用于视觉验收和布局检查。浏览器二进制不在仓库里，每台机器需要下载一次：
+
+```bash
+bun run browser:install
+```
+
+之后即可截图：
+
+```bash
+# 本地页面，默认 base 为 http://localhost:3000
+bun run screenshot http://localhost:3000 --out .screenshots/home.png
+
+# 任意 URL，整页截图
+bun run screenshot https://example.com --full-page
+
+# 单个元素、移动端视口
+bun run screenshot /docs --selector "main" --viewport 390x844
+```
+
+脚本会输出 JSON，包含绝对路径、HTTP 状态和页面尺寸；图片默认写入 `.screenshots/`（已加入 `.gitignore`）。常用参数：`--full-page`、`--selector`、`--viewport WxH`、`--wait-for`、`--wait-until`、`--color-scheme`、`--scale`。
+
+`playwright` 只是 `devDependency`，不会进入生产构建；`bun ci` 也不会自动下载 Chromium。截取本地页面时需要先启动 `bun dev`。
+
 ## 用 grill-me 处理复杂问题
 
 `grill-me` 是访谈式 Skill：不会直接给出方案，而是先追问目标、约束和边界，把模糊需求打磨清楚。适合架构决策、跨模块重构和需求不明确的场景；小而明确的改动不需要使用。
@@ -50,7 +80,9 @@ Skills 和 `node_modules` 一样属于“安装产物”，因此 **`.agents/` �
 
 项目的 `AGENTS.md` 要求 Agent 在复杂任务中主动调用该 Skill。
 
-## 安装 Skills
+## 安装 Skills（选做）
+
+这一步只决定 Agent 能用哪些技能包，跳过它不影响应用启动和构建。`.opencode/skills/` 下的 Skill 随仓库提交，实际只有 `skills-lock.json` 里的 12 个技能包需要恢复。
 
 Skills CLI 要求 Node.js 22.20 或更高版本。项目已经把 `skills` 放在 `devDependencies`，所以先安装依赖，再从锁文件恢复：
 
