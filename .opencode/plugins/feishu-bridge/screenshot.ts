@@ -36,6 +36,21 @@ type RunningServer = {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+type BunGlobal = { which?: (command: string) => string | null };
+
+/** OpenCode 的 process.execPath 是 opencode.exe，不能用来执行脚本。 */
+function which(command: string) {
+  try {
+    return (globalThis as { Bun?: BunGlobal }).Bun?.which?.(command) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function jsRuntime() {
+  return which("node") ?? which("bun") ?? "node";
+}
+
 function defaultPages(): string[] {
   return (process.env.FEISHU_SCREENSHOT_PAGES ?? "/,/docs,/login")
     .split(",")
@@ -53,7 +68,7 @@ async function readMainSha(directory: string) {
     const { stdout } = await execFileAsync(
       "git",
       ["-C", directory, "rev-parse", "--verify", "refs/heads/main"],
-      { timeout: 10000 },
+      { timeout: 10000, windowsHide: true },
     );
     return stdout.trim() || undefined;
   } catch {
@@ -66,7 +81,7 @@ async function readCommitSubject(directory: string, sha: string) {
     const { stdout } = await execFileAsync(
       "git",
       ["-C", directory, "log", "-1", "--format=%h %s", sha],
-      { timeout: 10000 },
+      { timeout: 10000, windowsHide: true },
     );
     return stdout.trim();
   } catch {
@@ -169,17 +184,23 @@ async function ensureServer(
   const origin = `${parsed.protocol}//${parsed.hostname}:${port}`;
 
   log("screenshot: starting dev server", { port });
-  const child = spawn(
-    process.execPath,
-    ["x", "next", "dev", "-p", String(port)],
-    {
-      cwd: directory,
-      env: process.env,
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-      detached: process.platform !== "win32",
-    },
-  );
+  const bun = which("bun");
+  const command = bun ?? jsRuntime();
+  const commandArgs = bun
+    ? ["x", "next", "dev", "-p", String(port)]
+    : [
+        join(directory, "node_modules", "next", "dist", "bin", "next"),
+        "dev",
+        "-p",
+        String(port),
+      ];
+  const child = spawn(command, commandArgs, {
+    cwd: directory,
+    env: process.env,
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+    detached: process.platform !== "win32",
+  });
 
   let output = "";
   child.stdout?.on("data", (chunk: Buffer) => {
@@ -219,7 +240,7 @@ async function ensureServer(
 async function capturePage(directory: string, url: string, outPath: string) {
   const script = join(directory, "scripts", "screenshot.mjs");
   await execFileAsync(
-    process.execPath,
+    jsRuntime(),
     [
       script,
       url,
@@ -230,7 +251,7 @@ async function capturePage(directory: string, url: string, outPath: string) {
       "--timeout",
       "30000",
     ],
-    { cwd: directory, timeout: 90000 },
+    { cwd: directory, timeout: 90000, windowsHide: true },
   );
 }
 
