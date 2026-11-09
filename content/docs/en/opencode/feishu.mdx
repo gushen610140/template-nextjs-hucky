@@ -26,6 +26,22 @@ new main commit
 - On failure it sends a text error and writes to `debug.log`.
 - There is no Feishu long connection, no event subscription, and no card callback; it works whenever the OpenCode server runs.
 
+## Control and status
+
+The `FEISHU-PM` sidebar block shows `watching` / `off`, the page count, and the latest commit. TUI commands:
+
+| Command | Effect |
+| --- | --- |
+| `/feishu-pm-status` | Toggle state, target, pages, latest commit, and error |
+| `/feishu-pm-on` | Enable and persist |
+| `/feishu-pm-off` | Disable and persist |
+| `/feishu-pm-restart` | Restart watching |
+| `/feishu-pm-log` | Last 20 log lines |
+
+Watching is enabled by default. `/feishu-pm-off` writes to plugin storage and stays off across restarts.
+
+The developer control bot is a separate global plugin with the `/feishu-bridge-*` command prefix.
+
 ## Quick start
 
 <Steps>
@@ -93,7 +109,7 @@ FEISHU_SCREENSHOT_POLL_MS=20000
 | `FEISHU_APP_SECRET` | Yes | Customer app secret |
 | `FEISHU_NOTIFY_CHAT_ID` | one of two | Group or DM chat_id, preferred |
 | `FEISHU_NOTIFY_OPEN_ID` | one of two | DM user open_id |
-| `FEISHU_PM_ENABLED` | No | Set to `0` to disable |
+| `FEISHU_PM_ENABLED` | No | Enabled by default; set to `0` to disable |
 | `FEISHU_PM_SUMMARY` | No | Set to `0` to disable AI summaries |
 | `FEISHU_SCREENSHOT_PAGES` | No | Pages to capture; defaults to `/`, `/docs`, `/login` |
 | `FEISHU_SCREENSHOT_BASE` | No | Dev or preview URL; defaults to `http://localhost:3000` |

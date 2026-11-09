@@ -20,6 +20,20 @@ main 新提交
 - 失败时发送一条文字说明，并写入 `debug.log`。
 - 不建立飞书长连接，不需要 `/feishu-on`，OpenCode server 运行即生效。
 
+## 控制与状态
+
+侧边栏的 `FEISHU-PM` 区块显示 `watching` / `off`、页面数量和最近提交。TUI 命令：
+
+| 命令 | 作用 |
+| --- | --- |
+| `/feishu-pm-status` | 开关、目标、页面、最近提交与错误 |
+| `/feishu-pm-on` | 开启并持久化 |
+| `/feishu-pm-off` | 关闭并持久化 |
+| `/feishu-pm-restart` | 重启监控 |
+| `/feishu-pm-log` | 最近 20 行日志 |
+
+首次加载默认开启。`/feishu-pm-off` 会写入插件存储，重启后保持关闭；需要时再 `/feishu-pm-on`。
+
 ## 安装
 
 ```powershell
@@ -37,7 +51,7 @@ bun run browser:install
 | `FEISHU_APP_SECRET` | 是 | 客户应用的 App Secret |
 | `FEISHU_NOTIFY_CHAT_ID` | 二选一 | 群或私聊的 chat_id，优先使用 |
 | `FEISHU_NOTIFY_OPEN_ID` | 二选一 | 私聊用户的 open_id |
-| `FEISHU_PM_ENABLED` | 否 | 设为 `0` 关闭推送 |
+| `FEISHU_PM_ENABLED` | 否 | 默认开启；设为 `0` 关闭 |
 | `FEISHU_PM_SUMMARY` | 否 | 设为 `0` 关闭 AI 摘要，改用固定模板 |
 | `FEISHU_SCREENSHOT_PAGES` | 否 | 截图页面，默认 `/`、`/docs`、`/login` |
 | `FEISHU_SCREENSHOT_BASE` | 否 | 开发或预览地址，默认 `http://localhost:3000` |

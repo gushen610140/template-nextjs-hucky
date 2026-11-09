@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./tui": "./tui.tsx",
+    "./rpc": "./rpc.ts"
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.76.0"
