@@ -5,9 +5,9 @@ description: Watch main commits, capture pages automatically, and push updates s
 
 import { Step, Steps } from "fumadocs-ui/components/steps";
 
-`feishu-pm` is a project-level OpenCode plugin that pushes recent code changes to customer or team chats: it watches the local `main` branch, captures configured pages when a new commit lands, and sends a commit summary plus screenshots.
+`feishu-pm` is a project-level OpenCode plugin for customer and team collaboration: it watches local `main` commits, captures pages, and pushes updates; it also receives @bot messages in customer groups and files them as requirement documents.
 
-It only sends messages. It does not receive commands or drive OpenCode. The developer-facing control bot is a separate global plugin named `feishu-bridge`; the two must use **different Feishu apps**.
+It cannot drive OpenCode. The developer-facing control bot is a separate global plugin named `feishu-bridge`; the two must use **different Feishu apps**.
 
 ```text
 new main commit
@@ -18,13 +18,21 @@ new main commit
   → configured Feishu group / DM
 ```
 
+```text
+customer @-mentions the bot in a group
+  → long connection receives the message
+  → AI drafts a structured requirement
+  → writes requirements/<time>-<title>.md
+  → replies with the file path
+```
+
 ## How it works
 
 - The first start records the current HEAD as a baseline and does not backfill old commits.
 - Each new commit is summarized by OpenCode's AI in 2-4 customer-facing sentences; failures or timeouts fall back to the commit title.
 - Screenshots live in `.screenshots/commits/` and are overwritten each run.
 - On failure it sends a text error and writes to `debug.log`.
-- There is no Feishu long connection, no event subscription, and no card callback; it works whenever the OpenCode server runs.
+- A Feishu long connection receives group messages, but only allowlisted chats with @bot text are processed.
 
 ## Control and status
 
@@ -49,12 +57,16 @@ The developer control bot is a separate global plugin with the `/feishu-bridge-*
 <Step>
 ### Create a customer app
 
-Create a custom app on the Feishu Open Platform, enable the bot capability, add only the scopes needed for sending, then publish a version. Do not reuse the developer control bot.
+Create a custom app on the Feishu Open Platform, enable the bot capability, add the send and group @-mention receive scopes, then publish a version. Do not reuse the developer control bot.
 
 | Scope | Purpose |
 | --- | --- |
 | `im:message:send_as_bot` | Send text and images |
 | `im:resource` | Upload screenshots |
+| `im:message.group_at_msg:readonly` | Receive group messages that mention the bot |
+| `im:chat:readonly` | List the chats the bot belongs to |
+
+Subscribe to `im.message.receive_v1` over the long connection. No card callbacks or permission approvals are needed.
 
 </Step>
 
@@ -97,6 +109,9 @@ FEISHU_PM_NOTIFY_OPEN_ID=
 # optional
 FEISHU_PM_ENABLED=1
 FEISHU_PM_SUMMARY=1
+FEISHU_PM_RECEIVE=1
+FEISHU_PM_ALLOWED_CHAT_IDS=
+FEISHU_PM_REQUIREMENTS_DIR=requirements
 FEISHU_SCREENSHOT_PAGES=/,/docs,/login
 FEISHU_SCREENSHOT_BASE=http://localhost:3000
 FEISHU_SCREENSHOT_MATCH=Hucky
@@ -111,18 +126,31 @@ FEISHU_SCREENSHOT_POLL_MS=20000
 | `FEISHU_PM_NOTIFY_OPEN_ID` | one of two | DM user open_id |
 | `FEISHU_PM_ENABLED` | No | Enabled by default; set to `0` to disable |
 | `FEISHU_PM_SUMMARY` | No | Set to `0` to disable AI summaries |
+| `FEISHU_PM_RECEIVE` | No | Set to `0` to disable group requirement intake |
+| `FEISHU_PM_ALLOWED_CHAT_IDS` | No | Chats allowed to submit requirements; empty means only `FEISHU_PM_NOTIFY_CHAT_ID` |
+| `FEISHU_PM_REQUIREMENTS_DIR` | No | Requirement directory, default `requirements` |
 | `FEISHU_SCREENSHOT_PAGES` | No | Pages to capture; defaults to `/`, `/docs`, `/login` |
 | `FEISHU_SCREENSHOT_BASE` | No | Dev or preview URL; defaults to `http://localhost:3000` |
 | `FEISHU_SCREENSHOT_MATCH` | No | Text the page must contain to confirm it belongs to this project |
 | `FEISHU_SCREENSHOT_POLL_MS` | No | Poll interval, default 20000, minimum 5000 |
 
-Targets come only from configuration, so the customer app never needs to receive messages. Credentials, target, and toggles use the `FEISHU_PM_` prefix so they cannot collide with the global feishu-bridge in the same OpenCode process.
+Targets come only from configuration. Credentials, target, and toggles use the `FEISHU_PM_` prefix so they cannot collide with the global feishu-bridge in the same OpenCode process.
 
 ## Getting a chat_id
 
 1. Add the bot to the customer group.
 2. Call `GET /open-apis/im/v1/chats` in the Feishu API explorer (requires `im:chat:readonly`) and put the returned `chat_id` into `FEISHU_PM_NOTIFY_CHAT_ID`.
 3. For a DM smoke test, you can use `FEISHU_PM_NOTIFY_OPEN_ID` first.
+
+## Receiving customer requirements
+
+1. A customer @-mentions the bot in a group with text.
+2. Only chats in `FEISHU_PM_ALLOWED_CHAT_IDS` are processed; when empty, only `FEISHU_PM_NOTIFY_CHAT_ID` is accepted.
+3. The AI drafts a fixed structure and writes it to `FEISHU_PM_REQUIREMENTS_DIR` (default `requirements`): `requirements/<YYYYMMDD-HHmmss>-<title>.md`.
+4. The document has `source`, `chat_id`, `sender_id`, `message_id`, and `created_at` frontmatter, plus “Customer request / Requirements / Acceptance / Open questions”.
+5. The bot replies with the file path and title.
+
+Security: customer text is passed to the model as data only; the prompt forbids following instructions inside it or calling tools. The plugin writes files into a fixed directory, and the model never touches the filesystem. Non-text messages get “text only for now”.
 
 ## Dev server and preview
 
@@ -150,13 +178,17 @@ Targets come only from configuration, so the customer app never needs to receive
 | `screenshot: no feishu target` | Delivery target missing |
 | `screenshot: FAILED` | Capture or delivery failed |
 | `dev server 启动失败` | A `next dev` instance exists or ports conflict |
+| `receiver ready` | Group message long connection is up |
+| `requirement saved` | Requirement document written |
+| `requirement timeout` | AI drafting exceeded 90 seconds |
+| `requirement ignored: chat not allowed` | Chat not allowlisted, ignored |
 | `missing FEISHU_PM_APP_ID / FEISHU_PM_APP_SECRET` | Credentials are missing |
 
 ## Roadmap
 
 - **Fixed customer group feed**: per-group content, cadence, and quiet hours.
 - **Preview acceptance**: send screenshots with a preview link and let customers confirm in the group.
-- **Group message triage**: watch customer feedback, summarize it with AI, and file it into the project todo list.
+- **Requirement status sync**: connect requirement documents to the todo list and track delivery.
 - **Collaboration loop**: developers confirm requirements, progress, and acceptance with customers through Feishu and AI.
 
 These are not implemented yet; this page will be updated as they land.

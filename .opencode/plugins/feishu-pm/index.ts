@@ -5,10 +5,11 @@ import {
   existsSync,
   readFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { Plugin } from "@opencode/plugin";
+import { buildRequirementPrompt, writeRequirement } from "./requirement";
 import { FeishuPm } from "./rpc";
 import { type NotifyTarget, startScreenshotWatcher } from "./screenshot";
 
@@ -30,6 +31,10 @@ type PmState = {
   lastCommit?: string;
   lastAt?: string;
   lastError?: string;
+  receiver?: { close?: (params?: { force?: boolean }) => void };
+  receiverState: "idle" | "starting" | "connected" | "failed";
+  received: number;
+  lastRequirement?: string;
 };
 
 type AnyMessage = {
@@ -89,6 +94,8 @@ function getState(): PmState {
       enabled: false,
       watching: false,
       target: null,
+      receiverState: "idle",
+      received: 0,
     } satisfies PmState;
   }
   return holder[GLOBAL_KEY] as PmState;
@@ -121,6 +128,17 @@ function resolveTarget(): NotifyTarget | undefined {
   const openId = process.env.FEISHU_PM_NOTIFY_OPEN_ID?.trim();
   if (openId) return { receiveIdType: "open_id", receiveId: openId };
   return undefined;
+}
+
+function messageText(message: { content?: string }) {
+  try {
+    const parsed = JSON.parse(message.content ?? "{}") as { text?: string };
+    return String(parsed.text ?? "")
+      .replace(/@_user_\d+/g, "")
+      .trim();
+  } catch {
+    return "";
+  }
 }
 
 async function readCommitDiff(directory: string, sha: string) {
@@ -186,6 +204,9 @@ function statusText(state: PmState) {
     `lastCommit: ${state.lastCommit ?? "-"}`,
     `lastAt: ${state.lastAt ?? "-"}`,
     `lastError: ${state.lastError ?? "-"}`,
+    `receiver: ${state.receiverState}`,
+    `received: ${state.received}`,
+    `lastRequirement: ${state.lastRequirement ?? "-"}`,
   ].join("\n");
 }
 
@@ -359,6 +380,189 @@ export default Plugin.define({
       return true;
     };
 
+    const allowedChats = () => {
+      const configured = (process.env.FEISHU_PM_ALLOWED_CHAT_IDS ?? "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      if (configured.length > 0) return new Set(configured);
+      const fallback = process.env.FEISHU_PM_NOTIFY_CHAT_ID?.trim();
+      return new Set(fallback ? [fallback] : []);
+    };
+
+    const replyMessage = async (messageId: string, text: string) => {
+      const lark = await getClient();
+      await lark.im.message.reply({
+        path: { message_id: messageId },
+        data: {
+          msg_type: "text",
+          content: JSON.stringify({ text }),
+        },
+      });
+    };
+
+    const seenMessages = new Set<string>();
+    let queue: Promise<void> = Promise.resolve();
+    const enqueue = (task: () => Promise<void>) => {
+      queue = queue
+        .then(task)
+        .catch((error) => log("receive task FAILED", error));
+    };
+
+    const requirementsDir = () =>
+      join(
+        ctx.location.directory,
+        process.env.FEISHU_PM_REQUIREMENTS_DIR?.trim() || "requirements",
+      );
+
+    const handleIncoming = async (data: unknown) => {
+      const event = data as {
+        message?: {
+          message_id?: string;
+          chat_id?: string;
+          chat_type?: string;
+          message_type?: string;
+          content?: string;
+        };
+        sender?: {
+          sender_type?: string;
+          sender_id?: { open_id?: string };
+        };
+      };
+      const message = event.message;
+      const sender = event.sender;
+      if (!message?.message_id || !message?.chat_id) return;
+      if (message.chat_type !== "group") return;
+      if (sender?.sender_type === "app" || sender?.sender_type === "bot") {
+        return;
+      }
+      if (seenMessages.has(message.message_id)) return;
+      seenMessages.add(message.message_id);
+      if (seenMessages.size > 500) {
+        const first = seenMessages.values().next().value;
+        if (first) seenMessages.delete(first);
+      }
+
+      const allowed = allowedChats();
+      if (allowed.size > 0 && !allowed.has(message.chat_id)) {
+        log("requirement ignored: chat not allowed", {
+          chatId: message.chat_id,
+        });
+        return;
+      }
+
+      if (message.message_type !== "text") {
+        await replyMessage(
+          message.message_id,
+          "目前只支持文本需求，请直接发送文字。",
+        );
+        return;
+      }
+
+      const text = messageText(message);
+      if (!text) return;
+
+      const source = {
+        chatId: message.chat_id,
+        senderId: sender?.sender_id?.open_id,
+        messageId: message.message_id,
+      };
+      const promptText = buildRequirementPrompt(text, source);
+
+      const created = await ctx.session.create({
+        title: `客户需求 ${new Date().toISOString().slice(0, 10)}`,
+      });
+      await ctx.session
+        .switchAgent({ sessionID: created.id, agent: "plan" })
+        .catch(() => {});
+      await ctx.session.prompt({ sessionID: created.id, text: promptText });
+      const finished = await Promise.race([
+        ctx.session.wait({ sessionID: created.id }).then(() => true),
+        new Promise<boolean>((resolve) =>
+          setTimeout(() => resolve(false), 90000),
+        ),
+      ]);
+      if (!finished) {
+        log("requirement timeout", { messageId: message.message_id });
+        await replyMessage(message.message_id, "需求整理超时，请稍后重试。");
+        return;
+      }
+
+      const messages = (await ctx.session.context({
+        sessionID: created.id,
+      })) as AnyMessage[];
+      const body = extractAnswer(messages, promptText);
+      if (!body) {
+        await replyMessage(message.message_id, "需求整理失败：没有生成内容。");
+        return;
+      }
+
+      const { filePath, title } = await writeRequirement(
+        requirementsDir(),
+        body,
+        source,
+      );
+      const display = relative(ctx.location.directory, filePath).replace(
+        /\\/g,
+        "/",
+      );
+      state.received += 1;
+      state.lastRequirement = display;
+      log("requirement saved", { file: display, title });
+      await replyMessage(
+        message.message_id,
+        `已记录需求：${display}\n标题：${title}`,
+      );
+    };
+
+    const startReceiver = async () => {
+      if (process.env.FEISHU_PM_RECEIVE === "0") return;
+      if (!appId || !appSecret) return;
+      if (state.receiver) return;
+      try {
+        const Lark = await import("@larksuiteoapi/node-sdk");
+        const dispatcher = new Lark.EventDispatcher({}).register({
+          "im.message.receive_v1": (data: unknown) => {
+            enqueue(() => handleIncoming(data));
+          },
+        });
+        const ws = new Lark.WSClient({
+          appId,
+          appSecret,
+          loggerLevel: Lark.LoggerLevel.info,
+        });
+        state.receiver = ws as unknown as PmState["receiver"];
+        state.receiverState = "starting";
+        await ws.start({ eventDispatcher: dispatcher });
+        state.receiverState = "connected";
+        log("receiver ready");
+      } catch (error) {
+        state.receiverState = "failed";
+        log("receiver FAILED", error);
+      }
+    };
+
+    const stopReceiver = () => {
+      try {
+        state.receiver?.close?.({ force: true });
+      } catch (error) {
+        log("receiver close FAILED", error);
+      }
+      state.receiver = undefined;
+      state.receiverState = "idle";
+    };
+
+    const startAll = () => {
+      const started = startWatcher();
+      void startReceiver();
+      return started;
+    };
+
+    const stopAll = () => {
+      stopWatcher();
+      stopReceiver();
+    };
+
     const initialized = await ctx.storage.get(INITIALIZED_KEY);
     if (initialized !== true) {
       await ctx.storage.set(INITIALIZED_KEY, true);
@@ -367,7 +571,7 @@ export default Plugin.define({
     } else {
       state.enabled = (await ctx.storage.get(ENABLED_KEY)) !== false;
     }
-    if (state.enabled) startWatcher();
+    if (state.enabled) startAll();
 
     try {
       await ctx.rpc.register(FeishuPm, {
@@ -381,6 +585,9 @@ export default Plugin.define({
           lastCommit: state.lastCommit ?? null,
           lastAt: state.lastAt ?? null,
           lastError: state.lastError ?? null,
+          receiverState: state.receiverState,
+          received: state.received,
+          lastRequirement: state.lastRequirement ?? null,
         }),
       });
       log("rpc registered", { id: FeishuPm.id });
@@ -402,7 +609,7 @@ export default Plugin.define({
         execute: async ({ sessionID }) => {
           await ctx.storage.set(ENABLED_KEY, true);
           state.enabled = true;
-          const started = startWatcher();
+          const started = startAll();
           await say(
             sessionID,
             `[feishu-pm] ${started ? "已开启" : "配置不完整，未启动"}\n${statusText(state)}`,
@@ -415,7 +622,7 @@ export default Plugin.define({
         execute: async ({ sessionID }) => {
           await ctx.storage.set(ENABLED_KEY, false);
           state.enabled = false;
-          stopWatcher();
+          stopAll();
           await say(sessionID, "[feishu-pm] 已关闭");
         },
       });
@@ -423,8 +630,8 @@ export default Plugin.define({
         name: "feishu-pm-restart",
         description: "重启飞书变更推送",
         execute: async ({ sessionID }) => {
-          stopWatcher();
-          const started = startWatcher();
+          stopAll();
+          const started = startAll();
           await say(
             sessionID,
             `[feishu-pm] ${started ? "已重启" : "配置不完整，未启动"}\n${statusText(state)}`,
@@ -442,7 +649,7 @@ export default Plugin.define({
 
     return () => {
       if (state.owner !== token) return;
-      stopWatcher();
+      stopAll();
       state.owner = undefined;
     };
   },

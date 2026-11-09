@@ -10,6 +10,9 @@ export type FeishuPmStatus = {
   lastCommit: string | null;
   lastAt: string | null;
   lastError: string | null;
+  receiverState: "idle" | "starting" | "connected" | "failed";
+  received: number;
+  lastRequirement: string | null;
 };
 
 export const FeishuPm = Rpc.define({
@@ -34,6 +37,9 @@ export const FeishuPm = Rpc.define({
           lastCommit: { type: ["string", "null"] },
           lastAt: { type: ["string", "null"] },
           lastError: { type: ["string", "null"] },
+          receiverState: { type: "string" },
+          received: { type: "number" },
+          lastRequirement: { type: ["string", "null"] },
         },
         required: [
           "enabled",
@@ -45,6 +51,9 @@ export const FeishuPm = Rpc.define({
           "lastCommit",
           "lastAt",
           "lastError",
+          "receiverState",
+          "received",
+          "lastRequirement",
         ],
         additionalProperties: false,
       },

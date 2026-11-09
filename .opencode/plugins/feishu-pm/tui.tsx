@@ -70,12 +70,18 @@ export default Plugin.define({
               ? `error: ${data.lastError.split(/\r?\n/)[0].slice(0, 36)}`
               : `${data.pages.length} pages · ${data.lastCommit ? data.lastCommit.slice(0, 7) : "no runs"}`
             : "no server response";
+        const receiver = data
+          ? `recv ${data.receiverState} · ${data.received} reqs`
+          : "";
 
         return (
           <box flexDirection="column">
             <text fg={context.theme.text.muted}>{"\nFEISHU-PM"}</text>
             <text fg={context.theme.text.base}>{status}</text>
             <text fg={context.theme.text.faint}>{detail}</text>
+            {receiver ? (
+              <text fg={context.theme.text.faint}>{receiver}</text>
+            ) : null}
           </box>
         );
       },
