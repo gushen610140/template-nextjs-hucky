@@ -1,6 +1,7 @@
-import { execFile } from "node:child_process";
+import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { type Dirent, readFileSync } from "node:fs";
 import { mkdir, readdir, rm } from "node:fs/promises";
+import { createServer } from "node:net";
 import { join, relative } from "node:path";
 import { promisify } from "node:util";
 
@@ -17,6 +18,18 @@ export type CommitAnalysis = {
   summary?: string;
   pages: string[];
 };
+
+type RunningServer = {
+  url: string;
+  close: () => Promise<void>;
+};
+
+type CaptureResult = {
+  url?: string;
+  finalUrl?: string;
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export type ScreenshotStatus = {
   commit?: string;
@@ -254,7 +267,7 @@ async function readCommitSubject(directory: string, sha: string) {
 
 async function isProjectServer(url: string) {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (response.status >= 500) return false;
     const match = process.env.FEISHU_SCREENSHOT_MATCH ?? "Hucky";
     const body = await response.text();
@@ -264,17 +277,48 @@ async function isProjectServer(url: string) {
   }
 }
 
-async function ensureServer(
-  baseUrl: string,
-  log: ScreenshotWatcherOptions["log"],
-) {
-  if (await isProjectServer(baseUrl)) {
-    log("screenshot: reuse running server", { baseUrl });
-    return baseUrl;
+async function isPortFree(port: number) {
+  return await new Promise<boolean>((resolve) => {
+    const server = createServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => server.close(() => resolve(true)));
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+async function findFreePort(start: number) {
+  for (let port = start; port < start + 20; port += 1) {
+    if (await isPortFree(port)) return port;
   }
-  throw new Error(
-    `开发服务器不可用：${baseUrl}。请先在默认 3000 端口运行 bun dev，并确认页面可访问。`,
-  );
+  throw new Error(`没有可用端口（从 ${start} 开始）`);
+}
+
+function stopProcess(child: ChildProcess) {
+  if (child.exitCode !== null || !child.pid) return;
+  try {
+    if (process.platform === "win32") {
+      spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+        windowsHide: true,
+        stdio: "ignore",
+      });
+    } else {
+      process.kill(-child.pid, "SIGTERM");
+    }
+  } catch {
+    // 进程已退出时忽略
+  }
+}
+
+async function findNearbyServer(
+  protocol: string,
+  hostname: string,
+  startPort: number,
+) {
+  for (let port = startPort; port < startPort + 10; port += 1) {
+    const url = `${protocol}//${hostname}:${port}`;
+    if (await isProjectServer(url)) return url;
+  }
+  return undefined;
 }
 
 function cleanOutput(text: string) {
@@ -288,22 +332,126 @@ function cleanOutput(text: string) {
     .join(" ");
 }
 
-async function capturePage(directory: string, url: string, outPath: string) {
-  const script = join(directory, "scripts", "screenshot.mjs");
-  await execFileAsync(
-    jsRuntime(),
-    [
-      script,
-      url,
-      "--out",
-      outPath,
-      "--wait-until",
-      "load",
-      "--timeout",
-      "30000",
-    ],
-    { cwd: directory, timeout: 90000, windowsHide: true },
+async function ensureServer(
+  directory: string,
+  baseUrl: string,
+  log: ScreenshotWatcherOptions["log"],
+): Promise<RunningServer> {
+  if (await isProjectServer(baseUrl)) {
+    log("screenshot: reuse running server", { baseUrl });
+    return { url: baseUrl, close: async () => {} };
+  }
+
+  const parsed = new URL(baseUrl);
+  const requested = Number(parsed.port || 3000);
+
+  // next dev 同一项目只允许一个实例；用户可能已经跑在别的端口。
+  const nearby = await findNearbyServer(
+    parsed.protocol,
+    parsed.hostname,
+    requested + 1,
   );
+  if (nearby) {
+    log("screenshot: found existing dev server", { nearby });
+    return { url: nearby, close: async () => {} };
+  }
+
+  const port = await findFreePort(requested);
+  const origin = `${parsed.protocol}//${parsed.hostname}:${port}`;
+
+  log("screenshot: starting dev server", { port });
+  const bun = which("bun");
+  const command = bun ?? jsRuntime();
+  const commandArgs = bun
+    ? ["x", "next", "dev", "-p", String(port)]
+    : [
+        join(directory, "node_modules", "next", "dist", "bin", "next"),
+        "dev",
+        "-p",
+        String(port),
+      ];
+  const child = spawn(command, commandArgs, {
+    cwd: directory,
+    env: process.env,
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+    detached: process.platform !== "win32",
+  });
+
+  let output = "";
+  child.stdout?.on("data", (chunk: Buffer) => {
+    output = (output + chunk.toString()).slice(-2000);
+  });
+  child.stderr?.on("data", (chunk: Buffer) => {
+    output = (output + chunk.toString()).slice(-2000);
+  });
+
+  const close = async () => {
+    stopProcess(child);
+    await sleep(500);
+  };
+
+  const deadline = Date.now() + 120000;
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) {
+      await close();
+      const hint = /Another next dev server is already running/i.test(output)
+        ? "已有 next dev 实例在运行，请设置 FEISHU_SCREENSHOT_BASE 指向其端口"
+        : cleanOutput(output);
+      throw new Error(
+        `dev server 启动失败（退出码 ${child.exitCode}）${hint ? `：${hint}` : ""}`,
+      );
+    }
+    if (await isProjectServer(origin)) {
+      log("screenshot: dev server ready", { origin });
+      return { url: origin, close };
+    }
+    await sleep(1000);
+  }
+
+  await close();
+  throw new Error("dev server 启动超时");
+}
+
+async function capturePage(
+  directory: string,
+  url: string,
+  outPath: string,
+): Promise<CaptureResult> {
+  const script = join(directory, "scripts", "screenshot.mjs");
+  const args = [
+    script,
+    url,
+    "--out",
+    outPath,
+    "--wait-until",
+    "load",
+    "--timeout",
+    "30000",
+  ];
+  const storageState = process.env.FEISHU_SCREENSHOT_STORAGE_STATE?.trim();
+  if (storageState) args.push("--storage-state", storageState);
+
+  const { stdout } = await execFileAsync(jsRuntime(), args, {
+    cwd: directory,
+    timeout: 90000,
+    windowsHide: true,
+  });
+  const line = stdout.trim().split(/\r?\n/).filter(Boolean).pop();
+  try {
+    return line ? (JSON.parse(line) as CaptureResult) : {};
+  } catch {
+    return {};
+  }
+}
+
+function isLoginUrl(url: string | undefined) {
+  if (!url) return false;
+  try {
+    return new URL(url).pathname.split("/").filter(Boolean).includes("login");
+  } catch {
+    return false;
+  }
 }
 
 export function startScreenshotWatcher(options: ScreenshotWatcherOptions) {
@@ -336,6 +484,7 @@ export function startScreenshotWatcher(options: ScreenshotWatcherOptions) {
     running = true;
     await options.storageSet(LAST_COMMIT_KEY, sha);
 
+    let server: RunningServer | undefined;
     try {
       const target = await options.getTarget();
       if (!target) {
@@ -371,7 +520,8 @@ export function startScreenshotWatcher(options: ScreenshotWatcherOptions) {
         return;
       }
 
-      const serverUrl = await ensureServer(baseUrl, options.log);
+      server = await ensureServer(options.directory, baseUrl, options.log);
+      const serverUrl = server.url;
       const outDir = join(options.directory, ".screenshots", "commits");
       await rm(outDir, { recursive: true, force: true });
       await mkdir(outDir, { recursive: true });
@@ -379,19 +529,27 @@ export function startScreenshotWatcher(options: ScreenshotWatcherOptions) {
       const shots: Array<{ page: string; path: string }> = [];
       for (const page of pages) {
         const path = join(outDir, `${pageSlug(page)}.png`);
+        const pageUrl = new URL(page, serverUrl).toString();
+        let result: CaptureResult;
         try {
-          await capturePage(
-            options.directory,
-            new URL(page, serverUrl).toString(),
-            path,
-          );
-          shots.push({ page, path });
+          result = await capturePage(options.directory, pageUrl, path);
         } catch (error) {
           const detail = cleanOutput(
             error instanceof Error ? error.message : String(error),
           );
           options.log("screenshot: page failed", { page, detail });
+          continue;
         }
+        if (!isLoginUrl(pageUrl) && isLoginUrl(result.finalUrl)) {
+          options.log("screenshot: login required", {
+            page,
+            finalUrl: result.finalUrl,
+          });
+          throw new Error(
+            "登录态失效：截图被重定向到登录页，请运行 bun run feishu-pm:auth 重新生成登录态",
+          );
+        }
+        shots.push({ page, path });
       }
       if (shots.length === 0) {
         throw new Error("所有页面截图失败，请检查 dev server 与页面路由");
@@ -429,6 +587,7 @@ export function startScreenshotWatcher(options: ScreenshotWatcherOptions) {
         // 通知失败时只保留日志
       }
     } finally {
+      await server?.close();
       running = false;
     }
   };

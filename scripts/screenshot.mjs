@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
@@ -8,6 +9,7 @@ const USAGE = `Usage: bun run screenshot <url|path> [options]
 Options:
   --out <file>            Output PNG path (default: .screenshots/<timestamp>.png)
   --base <url>            Base URL for path-only targets (default: http://localhost:3000)
+  --storage-state <file>  Playwright storage state JSON with login cookies
   --full-page             Capture the full scrollable page
   --selector <css>        Capture one element instead of the viewport
   --viewport <WxH>        Viewport size (default: 1440x900)
@@ -28,6 +30,7 @@ function parseArgs(argv) {
   const valued = new Set([
     "--out",
     "--base",
+    "--storage-state",
     "--selector",
     "--viewport",
     "--scale",
@@ -110,7 +113,14 @@ const timeout = options.timeout
   : 30000;
 const waitUntil = options["wait-until"] ?? "load";
 const colorScheme = options["color-scheme"];
+const storageState = options["storage-state"]
+  ? path.resolve(options["storage-state"])
+  : undefined;
 const outPath = path.resolve(options.out ?? defaultOutPath(new URL(url).host));
+
+if (storageState && !existsSync(storageState)) {
+  fail(`Storage state not found: ${storageState}\nRun: bun run feishu-pm:auth`);
+}
 
 const browser = await chromium.launch({ headless: true });
 
@@ -119,6 +129,7 @@ try {
     viewport,
     deviceScaleFactor: scale,
     ...(colorScheme ? { colorScheme } : {}),
+    ...(storageState ? { storageState } : {}),
   });
   const page = await context.newPage();
   page.setDefaultTimeout(timeout);
@@ -154,6 +165,7 @@ try {
     JSON.stringify({
       ok: true,
       url,
+      finalUrl: page.url(),
       status: response?.status() ?? null,
       path: outPath,
       viewport,
