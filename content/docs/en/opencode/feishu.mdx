@@ -1,44 +1,31 @@
 ---
-title: Feishu Bridge
-description: Drive OpenCode from a Feishu bot with streaming cards, commands, permission approvals, attachments, and recall
+title: Feishu change feed
+description: Watch main-branch commits, capture pages automatically, and push them to Feishu for customer preview and acceptance
 ---
 
 import { Step, Steps } from "fumadocs-ui/components/steps";
 
-`feishu-bridge` is a project-level OpenCode plugin that connects a Feishu bot to the local OpenCode server. Send messages from a Feishu DM or group, run tasks, switch models, and approve permissions; results stream back as cards.
+`feishu-bridge` is a project-level OpenCode plugin. Its main job is to **push recent code changes to Feishu**: it watches the local `main` branch, captures configured pages when a new commit lands, and sends a commit summary plus screenshots so customers or teammates can see what changed.
 
-It has three parts:
-
-- **Server plugin**: opens the Feishu WebSocket long connection, receives messages and card callbacks, and drives OpenCode sessions.
-- **RPC**: exposes connection state, event counts, and busy chats to the TUI.
-- **TUI plugin**: appends a `FEISHU` block to the sidebar beside `git-status`.
+The next step is to connect it to customer groups and pair it with a preview environment for a commit → push → preview → accept loop.
 
 ```text
-Feishu user
-  → Feishu long connection (WebSocket)
-  → feishu-bridge server plugin
-  → OpenCode session.prompt
-  → session event stream
-  → throttled card patches
-  → Feishu
+new main commit
+  → plugin polls the git ref
+  → reuse or start the dev server
+  → Playwright captures configured pages
+  → commit summary + screenshots
+  → Feishu chat / customer group
 ```
 
-## Layout
+## What gets sent
 
-```text
-.opencode/plugins/feishu-bridge/
-├── index.ts        # server plugin: connection, messages, cards, permissions, attachments
-├── commands.ts     # Feishu-side commands
-├── card.ts         # card JSON builders
-├── rpc.ts          # sidebar status RPC contract
-├── tui.tsx         # sidebar block
-├── prompts.json    # prompt strings injected into the model
-├── package.json
-├── .env            # credentials, git-ignored
-└── feishu-files/   # downloaded attachments, git-ignored
-```
+For each new commit on `main`, the plugin sends:
 
-Plugins under `.opencode/plugins/` are discovered automatically; no `opencode.jsonc` change is needed.
+1. A text summary with the short commit and the captured pages.
+2. One PNG per page.
+
+Screenshots live in `.screenshots/commits/` and are overwritten each run. On failure it sends a text error instead and writes the details to the log.
 
 ## Quick start
 
@@ -47,7 +34,7 @@ Plugins under `.opencode/plugins/` are discovered automatically; no `opencode.js
 <Step>
 ### Create the Feishu app
 
-Create a custom app on the Feishu Open Platform, enable the bot capability, configure permissions, events, and callbacks as described below, then publish a version.
+Create a custom app on the Feishu Open Platform, enable the bot capability, add the permissions and events described in [Feishu console setup](#feishu-console-setup), then publish a version.
 </Step>
 
 <Step>
@@ -57,34 +44,111 @@ Edit `.opencode/plugins/feishu-bridge/.env` and set at least `FEISHU_APP_ID` and
 </Step>
 
 <Step>
-### Install dependencies
+### Install dependencies and Chromium
 
 ```powershell
 npm install --prefix .opencode/plugins/feishu-bridge
+bun run browser:install
 ```
+
+`browser:install` downloads Chromium for Playwright. Run it once per machine.
 </Step>
 
 <Step>
 ### Start the connection
 
-The bridge starts disabled. In the OpenCode TUI run:
+The plugin starts disabled. In the OpenCode TUI run:
 
 ```text
 /feishu-on
 ```
+
+Once the sidebar shows `connected`, the plugin starts watching `main`.
 </Step>
 
 <Step>
-### Send a message
+### Make a commit
 
-DM the bot. You should see a streaming card. Send `/help` for commands.
+Commit anything on `main`; within 20 seconds you should receive the summary and screenshots. The first start only records the current HEAD as a baseline and does not backfill old commits.
 </Step>
 
 </Steps>
 
+## Configuration
+
+Config file: `.opencode/plugins/feishu-bridge/.env` (git-ignored). System environment variables take precedence.
+
+```bash
+FEISHU_APP_ID=cli_xxxxxxxx
+FEISHU_APP_SECRET=xxxxxxxx
+FEISHU_ALLOWED_OPEN_ID=ou_xxxxxxxx
+
+# change feed
+FEISHU_SCREENSHOT=1
+FEISHU_SCREENSHOT_PAGES=/,/docs,/login
+FEISHU_SCREENSHOT_BASE=http://localhost:3000
+FEISHU_SCREENSHOT_MATCH=Hucky
+FEISHU_SCREENSHOT_POLL_MS=20000
+```
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `FEISHU_APP_ID` | Yes | App ID |
+| `FEISHU_APP_SECRET` | Yes | App Secret |
+| `FEISHU_ALLOWED_OPEN_ID` | No | Comma-separated open_ids allowed to use the bot; empty means unrestricted |
+| `FEISHU_SCREENSHOT` | No | Set to `0` to disable the change feed |
+| `FEISHU_SCREENSHOT_PAGES` | No | Pages to capture, comma-separated; defaults to `/`, `/docs`, `/login` |
+| `FEISHU_SCREENSHOT_BASE` | No | Preview or local base URL; defaults to `http://localhost:3000` |
+| `FEISHU_SCREENSHOT_MATCH` | No | Text the page must contain to confirm it belongs to this project |
+| `FEISHU_SCREENSHOT_POLL_MS` | No | Poll interval for `main`, minimum 5000, default 20000 |
+
+## Delivery target
+
+The feed goes to the most recent chat that messaged the bot. If there is none yet, it goes to the first open_id in `FEISHU_ALLOWED_OPEN_ID`.
+
+To target a customer group, add the bot to the group and send one message there. A fixed group `chat_id` option will come later, removing the dependency on “most recent chat”.
+
+## Dev server
+
+Screenshots need reachable pages:
+
+- If `FEISHU_SCREENSHOT_BASE` is reachable, it is reused and never shut down.
+- If not, nearby ports are checked for an existing project server and reused when found.
+- Otherwise the plugin starts `next dev` and stops it after capturing.
+- `next dev` allows only one instance per project; point `FEISHU_SCREENSHOT_BASE` at an existing instance on another port.
+
+## Requirements
+
+- The plugin runs inside the OpenCode server process and only watches after `/feishu-on`; closing the TUI and service stops the feed.
+- A working Node.js and `bun` are needed to run the capture script and start the dev server.
+- Chromium must be installed with `bun run browser:install`.
+- Capture uses `scripts/screenshot.mjs`; you can also run `bun run screenshot` manually.
+
+## Existing interaction features
+
+The plugin originally drove OpenCode remotely from Feishu. That still works but is no longer the primary purpose:
+
+- TUI commands: `/feishu-status`, `/feishu-on`, `/feishu-off`, `/feishu-restart`, `/feishu-log`.
+- Feishu commands: `/help`, `/new`, `/model`, `/agent`, `/session`, `/status`, `/stop`, and more.
+- Streaming cards, permission approval cards, attachments, and recall handling.
+
+See the plugin's `README.md` for details. These will gradually narrow toward pushing and customer collaboration.
+
+## Sidebar and status
+
+The `FEISHU` block in the TUI sidebar shows connection state:
+
+```text
+FEISHU
+connected
+idle · 12 events
+```
+
+`/feishu-status` and the RPC status also expose the latest capture: commit, time, and error.
+
 ## Feishu console setup
 
-All steps happen on the Feishu Open Platform. You must **create and publish a version** after changes, or nothing takes effect.
+All steps happen on the Feishu Open Platform. You must **create and publish a version** after changes.
 
 ### 1. App and bot
 
@@ -94,14 +158,12 @@ All steps happen on the Feishu Open Platform. You must **create and publish a ve
 
 ### 2. Permissions
 
-Add these scopes under **Permissions**:
-
 | Scope | Purpose |
 | --- | --- |
 | `im:message` | Read messages |
 | `im:message.p2p_msg:readonly` | Receive direct messages |
 | `im:message.group_at_msg:readonly` | Receive group messages that mention the bot |
-| `im:message:send_as_bot` | Send messages and cards as the bot |
+| `im:message:send_as_bot` | Send messages, cards, and images as the bot |
 | `im:resource` | Download images and files |
 
 ### 3. Event subscription (long connection)
@@ -113,14 +175,12 @@ Add these scopes under **Permissions**:
 
 | Event | Purpose |
 | --- | --- |
-| `im.message.receive_v1` | Receive direct and group messages |
+| `im.message.receive_v1` | Remember the latest chat and receive group messages (for future todo triage) |
 | `im.message.recalled_v1` | Interrupt the task when a user recalls a message |
 
-Long connection mode needs no public IP, domain, or tunnel.
+### 4. Callback configuration
 
-### 4. Callback configuration (long connection)
-
-Card buttons need callbacks. They live under the **Callback Configuration** tab, not event subscription:
+Card buttons need callbacks, which live under **Callback Configuration**:
 
 1. Open **Events & Callbacks** → **Callback Configuration**.
 2. Choose **Receive callbacks through a long connection**.
@@ -134,225 +194,33 @@ Feishu requires a card callback response within 3 seconds. The plugin calls `per
 
 Create and publish a version under **Version Management & Release**. Permission, event, and callback changes only take effect after publishing.
 
-## Environment variables
-
-Config file: `.opencode/plugins/feishu-bridge/.env` (git-ignored). System environment variables take precedence.
-
-```bash
-FEISHU_APP_ID=cli_xxxxxxxx
-FEISHU_APP_SECRET=xxxxxxxx
-FEISHU_ALLOWED_OPEN_ID=ou_xxxxxxxx
-FEISHU_DOMAIN=feishu
-FEISHU_CARD_TITLE=OpenCode
-FEISHU_MODEL=
-FEISHU_AGENT=
-```
-
-| Variable | Required | Description |
-| --- | --- | --- |
-| `FEISHU_APP_ID` | Yes | App ID |
-| `FEISHU_APP_SECRET` | Yes | App Secret |
-| `FEISHU_ALLOWED_OPEN_ID` | No | Comma-separated open_ids allowed to use the bot; empty means unrestricted and logs a warning |
-| `FEISHU_DOMAIN` | No | `feishu` or `lark` |
-| `FEISHU_CARD_TITLE` | No | Card header title, defaults to `OpenCode` |
-| `FEISHU_MODEL` | No | Pin a model as `providerID/modelID`, for example `opencode-go/deepseek-v4.1-flash` |
-| `FEISHU_AGENT` | No | Pin an agent, for example `build` or `plan` |
-
-To find your `open_id`: leave the allowlist empty, send one message, and read `openId` from the `message received` line in `debug.log`.
-
-## Start and stop
-
-Connection state is stored as `bridge/enabled` in plugin storage and defaults to `false`. The bridge does not connect after install or upgrade until you start it.
-
-Commands in the OpenCode TUI:
-
-| Command | Effect |
-| --- | --- |
-| `/feishu-on` | Open the long connection and wait for the handshake |
-| `/feishu-off` | Close the connection, keep the plugin loaded |
-| `/feishu-restart` | Disconnect and reconnect |
-| `/feishu-status` | Connection state, reconnect count, event count, busy chats, last error |
-| `/feishu-log` | Last 20 log lines |
-
-<Callout type="warn" title="The bot depends on a running OpenCode server">
-The plugin runs inside the OpenCode server process. Closing the TUI and server takes the bot offline. For always-on use, keep `opencode serve` running through Windows Task Scheduler or a service manager.
-</Callout>
-
-To disable the plugin entirely, add it to `plugins` in `opencode.jsonc`:
-
-```jsonc title="opencode.jsonc"
-{
-  "plugins": ["-hucky.feishu-bridge"]
-}
-```
-
-## Feishu-side commands
-
-| Command | Effect |
-| --- | --- |
-| `/help` | Command list |
-| `/new [directory]` | Create a session, optionally moving it to a working directory |
-| `/model` | Show the current model |
-| `/model <keyword>` | Search models and return numbered matches |
-| `/model #1` | Pick a search result |
-| `/model provider/model` | Set a model directly |
-| `/agent` | Show the current agent and available agents |
-| `/agent <name>` | Switch agent, for example `build` or `plan` |
-| `/session` | Current session and the last 10 sessions |
-| `/session list` | Recent sessions |
-| `/session #1` | Bind an existing session |
-| `/rename <name>` | Rename the current session |
-| `/cwd` | Show the working directory |
-| `/compact` | Compact context |
-| `/stop` | Interrupt the current task |
-| `/status` | Session, model, agent, and connection state |
-
-Every command reply is a card. Sessions are shown as `#index name`; the session id is never printed. Indexes come from the last 10 sessions in the current location and can shift as sessions update.
-
-`/model` and `/agent` selections are stored per chat and take precedence on later prompts. `/new` and `/session` clear them and fall back to inheritance.
-
-## Cards
-
-Cards are built by `card.ts` with a header and Markdown body:
-
-- The header title comes from `FEISHU_CARD_TITLE`, default `OpenCode`.
-- The header subtitle shows `agent · model name (provider) · working directory`.
-- The body grows with `session.text.delta`, patched at most once every 900ms to stay under Feishu rate limits.
-- The footer summarizes tool calls by name, for example `shell×3 · read×5 · edit×1`, with `(n running)` while calls are active.
-- The header turns green on success and red on failure.
-- Answers longer than 4000 characters show a summary on the card and send the full text separately.
-
-Model and agent resolution order:
-
-1. `FEISHU_MODEL` / `FEISHU_AGENT` from `.env`.
-2. The model and agent of the latest non-Feishu session in this location.
-3. The model display name comes from `Model.Info.name` plus its `providerID`.
-
-The plugin re-resolves and calls `switchModel` / `switchAgent` before every prompt, so switching models in the TUI affects the next Feishu message.
-
-## Permission approvals
-
-When an OpenCode permission rule resolves to `ask`, it emits `permission.asked`:
-
-1. The plugin maps `sessionID` back to a Feishu chat.
-2. It sends an orange permission card with the action, resources, and message.
-3. Buttons are **Allow once**, **Always allow**, and **Reject**.
-4. A click arrives as `card.action.trigger`; the plugin calls `permission.reply` and updates the card.
-
-Permission requests without a Feishu chat mapping (for example your own TUI session) are ignored.
-
-<Callout type="warn" title="Prefer allow/deny for unattended use">
-If rules stay on `ask`, tasks wait for approval. Allow routine actions and reserve card approvals for risky ones.
-</Callout>
-
-## Recall
-
-When a user recalls a message, Feishu sends `im.message.recalled_v1`. If the session is running, the plugin:
-
-1. Calls `session.interrupt`.
-2. Updates the active card to “message recalled, task interrupted”.
-
-## Attachments
-
-| Message type | Handling |
-| --- | --- |
-| `image` | Download the image and attach it to the prompt |
-| `post` | Captioned images arrive as rich text; the plugin parses `text`, `a`, and `img` nodes, joins text into the prompt, and downloads each image |
-| `file` | Download the file and attach it under its original name |
-
-Download directory: `.opencode/plugins/feishu-bridge/feishu-files/` (git-ignored). Files are named from `messageId` plus `file_key` so multiple images do not overwrite each other.
-
-Prompt strings live in `prompts.json` and are read per message:
-
-```json
-{
-  "prefix": "",
-  "suffix": "",
-  "image": "Take a look at this image",
-  "images": "Take a look at these images",
-  "file": "Please read this file: {{name}}"
-}
-```
-
-- `prefix` / `suffix` wrap every text message and can stay empty.
-- `image` / `images` apply to images without a caption.
-- `{{name}}` in `file` is replaced with the file name.
-
-## Sidebar
-
-The TUI plugin appends a block to `sidebar.content` beside `git-status`:
-
-```text
-FEISHU
-connected
-idle · 12 events
-```
-
-Data comes from the plugin RPC `hucky.feishu-bridge.status` every 1.5 seconds; it does not parse logs. The TUI part loads at OpenCode startup, so restart the TUI after changing `tui.tsx`.
-
-## Implementation notes
-
-### Plugin parts
-
-`package.json` declares three entrypoints:
-
-```json
-{
-  "exports": {
-    ".": "./index.ts",
-    "./tui": "./tui.tsx",
-    "./rpc": "./rpc.ts"
-  }
-}
-```
-
-### Event stream
-
-The server plugin subscribes to:
-
-| Event | Purpose |
-| --- | --- |
-| `session.text.delta` | Append streaming text |
-| `session.tool.input.started` | Record the tool name |
-| `session.tool.called` | Mark a tool as running |
-| `session.tool.success` / `session.tool.failed` | Mark a tool as finished |
-| `permission.asked` | Send a permission card |
-
-### Session mapping
-
-The `chat_id` to `sessionID` mapping lives in `ctx.storage` under `chat/<chat_id>`, together with the chosen model and agent. It survives plugin reloads and OpenCode restarts.
-
-### Connection lifecycle
-
-- Only one Feishu WebSocket connection is kept per plugin process. Hot reloads reuse it so the same app does not open duplicate connections and reply twice.
-- Stopping the bridge aborts the event subscription and clears card timers.
-- `/feishu-off` only closes the connection; the plugin and commands stay available.
-
-### Deduplication
-
-Feishu can redeliver messages after a reconnect. The plugin deduplicates by `message_id` for 10 minutes.
-
 ## Troubleshooting
 
-Log file: `.opencode/plugins/feishu-bridge/debug.log`.
+Log file: `.opencode/plugins/feishu-bridge/debug.log`; you can also run `/feishu-log` in the TUI.
 
 | Log | Meaning |
 | --- | --- |
 | `missing FEISHU_APP_ID` | `.env` is missing or unreadable |
-| `sdk import FAILED` | SDK incompatible with the Bun runtime |
 | `websocket FAILED` | Bad credentials, unpublished app, long connection disabled, or outbound traffic blocked |
 | `websocket ready` but no `message received` | Event subscription missing or app version not published |
-| `prompt FAILED` | OpenCode-side error; read the message on the same line |
-| `card patch failed` | Card update rejected, usually rate limits or card structure |
-| `permission card FAILED` | Permission card failed; check `im:message:send_as_bot` |
+| `screenshot: baseline recorded` | First start recorded the baseline; expected |
+| `screenshot: no feishu target` | No chat or open_id available; message the bot once |
+| `screenshot: FAILED` | Capture or delivery failed; read the error on the same line |
+| `dev server 启动失败` | A `next dev` instance already exists; point `FEISHU_SCREENSHOT_BASE` at it |
 | `rpc register FAILED` | RPC contract or registration problem |
 
-You can also run `/feishu-log` in the TUI.
+## Roadmap
+
+- **Customer group feed**: a fixed group `chat_id` with per-group content and cadence.
+- **Preview environment**: point `FEISHU_SCREENSHOT_BASE` at a preview deployment so customers preview before accepting.
+- **Group message triage**: watch customer feedback, summarize it with AI, and file it into the project todo list.
+- **Collaboration loop**: developers confirm requirements, progress, and acceptance with customers through Feishu and AI.
+
+These are not implemented yet; this page will be updated as they land.
 
 ## Limitations
 
 - Feishu and Lark only; no WeCom or DingTalk.
-- Attachments support `image`, `post`, and `file`; audio, video, and stickers reply with “unsupported”.
-- Group chats require mentioning the bot. Only an `open_id` allowlist is implemented; there is no per-group policy.
-- Card tool status is an aggregate count, not per-call input/output.
-- The bot depends on a running OpenCode server; keeping it alive is up to your service setup.
+- The feed only covers local commits on `main`; it does not watch remote updates or `git push`.
+- Delivery targets the most recent chat; there is no per-group configuration yet.
+- It depends on a running OpenCode server; stopping the service stops the feed.
