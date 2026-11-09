@@ -11,7 +11,12 @@ import { promisify } from "node:util";
 import { Plugin } from "@opencode/plugin";
 import { buildRequirementPrompt, writeRequirement } from "./requirement";
 import { FeishuPm } from "./rpc";
-import { type NotifyTarget, startScreenshotWatcher } from "./screenshot";
+import {
+  collectStaticRoutes,
+  fallbackPagesFromCommit,
+  type NotifyTarget,
+  startScreenshotWatcher,
+} from "./screenshot";
 
 const execFileAsync = promisify(execFile);
 
@@ -30,6 +35,7 @@ type PmState = {
   target: string | null;
   lastCommit?: string;
   lastAt?: string;
+  lastPages?: string[];
   lastError?: string;
   receiver?: { close?: (params?: { force?: boolean }) => void };
   receiverState: "idle" | "starting" | "connected" | "failed";
@@ -99,13 +105,6 @@ function getState(): PmState {
     } satisfies PmState;
   }
   return holder[GLOBAL_KEY] as PmState;
-}
-
-function pagesFromEnv() {
-  return (process.env.FEISHU_SCREENSHOT_PAGES ?? "/,/docs,/login")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
 }
 
 function baseFromEnv() {
@@ -198,9 +197,9 @@ function statusText(state: PmState) {
     `enabled: ${state.enabled}`,
     `watching: ${state.watching}`,
     `target: ${state.target ?? "-"}`,
-    `pages: ${pagesFromEnv().join(", ")}`,
     `base: ${baseFromEnv()}`,
     `poll: ${pollFromEnv()}ms`,
+    `lastPages: ${state.lastPages?.length ? state.lastPages.join(", ") : "-"}`,
     `lastCommit: ${state.lastCommit ?? "-"}`,
     `lastAt: ${state.lastAt ?? "-"}`,
     `lastError: ${state.lastError ?? "-"}`,
@@ -328,23 +327,87 @@ export default Plugin.define({
       }
     };
 
-    const summarizeCommit = async (sha: string, subject: string) => {
-      if (process.env.FEISHU_PM_SUMMARY === "0") return undefined;
-      const diff = await readCommitDiff(ctx.location.directory, sha);
-      if (!diff) return undefined;
+    type CommitAnalysis = {
+      summary?: string;
+      pages: string[];
+    };
+
+    const parseAnalysis = (text: string): CommitAnalysis | undefined => {
+      const cleaned = text.replace(/```(?:json)?/gi, "").trim();
+      const start = cleaned.indexOf("{");
+      const end = cleaned.lastIndexOf("}");
+      if (start < 0 || end <= start) return undefined;
+      try {
+        const parsed = JSON.parse(cleaned.slice(start, end + 1)) as {
+          summary?: unknown;
+          pages?: unknown;
+        };
+        return {
+          summary:
+            typeof parsed.summary === "string"
+              ? parsed.summary.trim()
+              : undefined,
+          pages: Array.isArray(parsed.pages)
+            ? parsed.pages.filter(
+                (page): page is string => typeof page === "string",
+              )
+            : [],
+        };
+      } catch {
+        return undefined;
+      }
+    };
+
+    const analyzeCommit = async (
+      sha: string,
+      subject: string,
+    ): Promise<CommitAnalysis> => {
+      const directory = ctx.location.directory;
+      const diff = await readCommitDiff(directory, sha);
+      if (!diff) {
+        return { pages: await fallbackPagesFromCommit(directory, sha) };
+      }
+
+      const routes = await collectStaticRoutes(directory);
+      const routeList =
+        routes.length > 0
+          ? routes.map((route) => `- ${route}`).join("\n")
+          : "- /";
 
       const promptText = [
-        "你在为客户的更新通知撰写发布说明。",
-        "只根据下面的提交内容，用简体中文 2-4 句话概括本次提交完成或修改了什么。",
-        "面向非开发客户，说明用户能感知的变化，避免逐文件罗列和内部实现细节。",
-        "不要调用工具，不要修改文件。只输出正文，不要标题、列表符号或前后缀。",
+        "你在维护一个 Next.js App Router + next-intl 项目，页面都位于 app/[locale] 下。",
+        "分析下面的 main 分支提交，判断哪些页面需要给客户截图，并写一段发布说明。",
+        "",
+        "路由规则：",
+        "- app/[locale]/page.tsx 对应 /",
+        "- app/[locale]/dashboard/page.tsx 对应 /dashboard",
+        "- 目录下的 layout.tsx 影响该目录及所有子页面",
+        "- 返回的路径不要带语言前缀，插件会自动补上默认语言",
+        "- 只能从下面的静态路由列表中选择，不要臆造路由",
+        "- 不要返回包含动态参数的页面（如 [id]）",
+        "",
+        "可选静态路由：",
+        routeList,
+        "",
+        "判断要求：",
+        "- 只选择本次提交直接影响的页面，最多 6 个，按重要性排序",
+        "- 只改插件、脚本、配置、文档、测试、纯类型时，pages 返回空数组",
+        "- components/lib/hooks/messages 等共享文件改动，要结合 diff 判断影响了哪些页面",
+        "- 没有可见 UI 变化时 pages 返回空数组，不要为了凑数选择页面",
+        "",
+        '只输出一个 JSON 对象，不要输出 JSON 之外的任何内容：{"summary":"面向非技术客户的 2-4 句简体中文变更说明","pages":["/dashboard"]}',
+        "不要调用工具，不要修改文件。",
         "",
         diff,
       ].join("\n");
 
+      const fallback = async (): Promise<CommitAnalysis> => ({
+        pages: await fallbackPagesFromCommit(directory, sha),
+      });
+
       try {
         const created = await ctx.session.create({
-          title: `feishu-pm 摘要 ${sha.slice(0, 7)}`,
+          title: `feishu-pm 分析 ${sha.slice(0, 7)}`,
         });
         await applyTarget(created.id);
         await ctx.session.prompt({ sessionID: created.id, text: promptText });
@@ -355,17 +418,36 @@ export default Plugin.define({
           ),
         ]);
         if (!finished) {
-          log("summarize timeout", { sha });
-          return undefined;
+          log("analyze timeout", { sha, subject });
+          return fallback();
         }
         const messages = (await ctx.session.context({
           sessionID: created.id,
         })) as AnyMessage[];
         const answer = extractAnswer(messages, promptText);
-        return answer ? `${subject}\n\n${answer.slice(0, 2000)}` : undefined;
+        const parsed = parseAnalysis(answer);
+        if (!parsed) {
+          log("analyze: invalid JSON", { sha, answer: answer.slice(0, 300) });
+          return fallback();
+        }
+        const valid = new Set(
+          routes.map((route) => route.replace(/\/+$/, "") || "/"),
+        );
+        const selected = parsed.pages
+          .map((page) => page.trim().replace(/\/+$/, "") || "/")
+          .filter((page) => valid.has(page));
+        if (selected.length === 0 && parsed.pages.length > 0) {
+          log("analyze: no valid routes", { sha, pages: parsed.pages });
+          return {
+            summary: parsed.summary,
+            pages: await fallbackPagesFromCommit(directory, sha),
+          };
+        }
+        log("analyze: pages selected", { sha, pages: selected });
+        return { summary: parsed.summary, pages: selected };
       } catch (error) {
-        log("summarize FAILED", error);
-        return undefined;
+        log("analyze FAILED", error);
+        return fallback();
       }
     };
 
@@ -389,10 +471,11 @@ export default Plugin.define({
         getTarget: async () => resolveTarget(),
         sendImage,
         sendText,
-        summarize: summarizeCommit,
+        analyze: analyzeCommit,
         onStatus: (status) => {
           state.lastCommit = status.commit;
           state.lastAt = status.at;
+          if (status.pages !== undefined) state.lastPages = status.pages;
           state.lastError = status.error;
         },
       });
@@ -652,7 +735,7 @@ export default Plugin.define({
           enabled: state.enabled,
           watching: state.watching,
           target: state.target,
-          pages: pagesFromEnv(),
+          pages: state.lastPages ?? [],
           base: baseFromEnv(),
           pollMs: pollFromEnv(),
           lastCommit: state.lastCommit ?? null,

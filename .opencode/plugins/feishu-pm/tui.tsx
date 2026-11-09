@@ -68,7 +68,7 @@ export default Plugin.define({
           : data
             ? data.lastError
               ? `error: ${data.lastError.split(/\r?\n/)[0].slice(0, 36)}`
-              : `${data.pages.length} pages · ${data.lastCommit ? data.lastCommit.slice(0, 7) : "no runs"}`
+              : `${data.pages.length > 0 ? `${data.pages.length} pages` : "AI pages"} · ${data.lastCommit ? data.lastCommit.slice(0, 7) : "no runs"}`
             : "no server response";
         const receiver = data
           ? `recv ${data.receiverState} · ${data.received} reqs`
