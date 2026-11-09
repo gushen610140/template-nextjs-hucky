@@ -87,12 +87,12 @@ The plugin starts watching as soon as it loads; there is no `/feishu-on`. Commit
 ## Configuration
 
 ```bash
-FEISHU_APP_ID=cli_xxxxxxxx
-FEISHU_APP_SECRET=xxxxxxxx
+FEISHU_PM_APP_ID=cli_xxxxxxxx
+FEISHU_PM_APP_SECRET=xxxxxxxx
 
 # delivery target: one of the two
-FEISHU_NOTIFY_CHAT_ID=
-FEISHU_NOTIFY_OPEN_ID=
+FEISHU_PM_NOTIFY_CHAT_ID=
+FEISHU_PM_NOTIFY_OPEN_ID=
 
 # optional
 FEISHU_PM_ENABLED=1
@@ -105,10 +105,10 @@ FEISHU_SCREENSHOT_POLL_MS=20000
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `FEISHU_APP_ID` | Yes | Customer app ID |
-| `FEISHU_APP_SECRET` | Yes | Customer app secret |
-| `FEISHU_NOTIFY_CHAT_ID` | one of two | Group or DM chat_id, preferred |
-| `FEISHU_NOTIFY_OPEN_ID` | one of two | DM user open_id |
+| `FEISHU_PM_APP_ID` | Yes | Customer app ID |
+| `FEISHU_PM_APP_SECRET` | Yes | Customer app secret |
+| `FEISHU_PM_NOTIFY_CHAT_ID` | one of two | Group or DM chat_id, preferred |
+| `FEISHU_PM_NOTIFY_OPEN_ID` | one of two | DM user open_id |
 | `FEISHU_PM_ENABLED` | No | Enabled by default; set to `0` to disable |
 | `FEISHU_PM_SUMMARY` | No | Set to `0` to disable AI summaries |
 | `FEISHU_SCREENSHOT_PAGES` | No | Pages to capture; defaults to `/`, `/docs`, `/login` |
@@ -116,13 +116,13 @@ FEISHU_SCREENSHOT_POLL_MS=20000
 | `FEISHU_SCREENSHOT_MATCH` | No | Text the page must contain to confirm it belongs to this project |
 | `FEISHU_SCREENSHOT_POLL_MS` | No | Poll interval, default 20000, minimum 5000 |
 
-Targets come only from configuration, so the customer app never needs to receive messages.
+Targets come only from configuration, so the customer app never needs to receive messages. Credentials, target, and toggles use the `FEISHU_PM_` prefix so they cannot collide with the global feishu-bridge in the same OpenCode process.
 
 ## Getting a chat_id
 
 1. Add the bot to the customer group.
-2. Call `GET /open-apis/im/v1/chats` in the Feishu API explorer (requires `im:chat:readonly`) and put the returned `chat_id` into `FEISHU_NOTIFY_CHAT_ID`.
-3. For a DM smoke test, you can use `FEISHU_NOTIFY_OPEN_ID` first.
+2. Call `GET /open-apis/im/v1/chats` in the Feishu API explorer (requires `im:chat:readonly`) and put the returned `chat_id` into `FEISHU_PM_NOTIFY_CHAT_ID`.
+3. For a DM smoke test, you can use `FEISHU_PM_NOTIFY_OPEN_ID` first.
 
 ## Dev server and preview
 
@@ -150,7 +150,7 @@ Targets come only from configuration, so the customer app never needs to receive
 | `screenshot: no feishu target` | Delivery target missing |
 | `screenshot: FAILED` | Capture or delivery failed |
 | `dev server 启动失败` | A `next dev` instance exists or ports conflict |
-| `missing FEISHU_APP_ID / FEISHU_APP_SECRET` | Credentials are missing |
+| `missing FEISHU_PM_APP_ID / FEISHU_PM_APP_SECRET` | Credentials are missing |
 
 ## Roadmap
 

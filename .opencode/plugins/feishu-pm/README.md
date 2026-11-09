@@ -47,10 +47,10 @@ bun run browser:install
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
-| `FEISHU_APP_ID` | 是 | 客户应用的 App ID |
-| `FEISHU_APP_SECRET` | 是 | 客户应用的 App Secret |
-| `FEISHU_NOTIFY_CHAT_ID` | 二选一 | 群或私聊的 chat_id，优先使用 |
-| `FEISHU_NOTIFY_OPEN_ID` | 二选一 | 私聊用户的 open_id |
+| `FEISHU_PM_APP_ID` | 是 | 客户应用的 App ID |
+| `FEISHU_PM_APP_SECRET` | 是 | 客户应用的 App Secret |
+| `FEISHU_PM_NOTIFY_CHAT_ID` | 二选一 | 群或私聊的 chat_id，优先使用 |
+| `FEISHU_PM_NOTIFY_OPEN_ID` | 二选一 | 私聊用户的 open_id |
 | `FEISHU_PM_ENABLED` | 否 | 默认开启；设为 `0` 关闭 |
 | `FEISHU_PM_SUMMARY` | 否 | 设为 `0` 关闭 AI 摘要，改用固定模板 |
 | `FEISHU_SCREENSHOT_PAGES` | 否 | 截图页面，默认 `/`、`/docs`、`/login` |
@@ -58,11 +58,13 @@ bun run browser:install
 | `FEISHU_SCREENSHOT_MATCH` | 否 | 页面必须包含的文本，用于确认服务属于本项目 |
 | `FEISHU_SCREENSHOT_POLL_MS` | 否 | 轮询间隔，默认 20000，最小 5000 |
 
-### 获取 chat_id
+#凭证、目标和开关都使用 `FEISHU_PM_` 前缀，避免与全局 feishu-bridge 共用同一个 OpenCode 进程的环境变量。
+
+## 获取 chat_id
 
 1. 把机器人拉进客户群。
-2. 在飞书开放平台 API 调试台调用 `GET /open-apis/im/v1/chats`（需要 `im:chat:readonly`），返回的 `chat_id` 填进 `FEISHU_NOTIFY_CHAT_ID`。
-3. 私聊测试时，也可以先填 `FEISHU_NOTIFY_OPEN_ID`，在收到消息后从日志或开放平台读取 open_id。
+2. 在飞书开放平台 API 调试台调用 `GET /open-apis/im/v1/chats`（需要 `im:chat:readonly`），返回的 `chat_id` 填进 `FEISHU_PM_NOTIFY_CHAT_ID`。
+3. 私聊测试时，也可以先填 `FEISHU_PM_NOTIFY_OPEN_ID`，在收到消息后从日志或开放平台读取 open_id。
 
 ## 飞书应用权限
 
@@ -98,4 +100,4 @@ bun run browser:install
 | `screenshot: no feishu target` | 发送目标缺失 |
 | `screenshot: FAILED` | 截图或发送失败 |
 | `dev server 启动失败` | 已有 `next dev` 实例或端口冲突 |
-| `missing FEISHU_APP_ID / FEISHU_APP_SECRET` | 凭证未配置 |
+| `missing FEISHU_PM_APP_ID / FEISHU_PM_APP_SECRET` | 凭证未配置 |

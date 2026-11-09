@@ -116,9 +116,9 @@ function pollFromEnv() {
  * 推送目标只来自配置，不依赖接收消息，因此客户 bot 不需要长连接和事件订阅。
  */
 function resolveTarget(): NotifyTarget | undefined {
-  const chatId = process.env.FEISHU_NOTIFY_CHAT_ID?.trim();
+  const chatId = process.env.FEISHU_PM_NOTIFY_CHAT_ID?.trim();
   if (chatId) return { receiveIdType: "chat_id", receiveId: chatId };
-  const openId = process.env.FEISHU_NOTIFY_OPEN_ID?.trim();
+  const openId = process.env.FEISHU_PM_NOTIFY_OPEN_ID?.trim();
   if (openId) return { receiveIdType: "open_id", receiveId: openId };
   return undefined;
 }
@@ -216,8 +216,10 @@ export default Plugin.define({
       await ctx.session.synthetic({ sessionID, text });
     };
 
-    const appId = process.env.FEISHU_APP_ID?.trim();
-    const appSecret = process.env.FEISHU_APP_SECRET?.trim();
+    // 使用独立前缀：全局 feishu-bridge 与本插件共享同一个 OpenCode 进程的 process.env，
+    // 沿用 FEISHU_APP_ID 会被先加载的控制 bot 凭证覆盖。
+    const appId = process.env.FEISHU_PM_APP_ID?.trim();
+    const appSecret = process.env.FEISHU_PM_APP_SECRET?.trim();
     const target = resolveTarget();
     state.target = target
       ? `${target.receiveIdType}:${target.receiveId}`
@@ -225,9 +227,10 @@ export default Plugin.define({
 
     let configError = "";
     if (!appId || !appSecret) {
-      configError = "missing FEISHU_APP_ID / FEISHU_APP_SECRET";
+      configError = "missing FEISHU_PM_APP_ID / FEISHU_PM_APP_SECRET";
     } else if (!target) {
-      configError = "missing FEISHU_NOTIFY_CHAT_ID / FEISHU_NOTIFY_OPEN_ID";
+      configError =
+        "missing FEISHU_PM_NOTIFY_CHAT_ID / FEISHU_PM_NOTIFY_OPEN_ID";
     }
     if (configError) log(configError);
 
