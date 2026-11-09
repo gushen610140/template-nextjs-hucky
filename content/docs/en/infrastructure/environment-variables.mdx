@@ -84,6 +84,14 @@ Apart from the local default for `LOGTO_BASE_URL`, every variable should be set 
 Variables prefixed with `NEXT_PUBLIC_` are bundled into browser code. `LOGTO_APP_SECRET` and `LOGTO_COOKIE_SECRET` must stay server-side.
 </Callout>
 
+## Production
+
+On Vercel, the platform injects environment variables instead of reading a `.env.production` from the repository. Every value tied to the production domain, secrets, database, or object storage must be regenerated or replaced: `DATABASE_URL`, `MIGRATE_DATABASE_URL`, `LOGTO_*`, `RUSTFS_*`, `AI_SECRET_KEY`, plus `QDRANT_*` and `ONLYOFFICE_*` when those features are used. See [Deployment](/en/docs/deployment#environment-variables) for each value and what breaks when it is missing.
+
+<Callout type="warn" title="Production and Preview scopes are separate">
+Vercel keeps separate values for Production and Preview. If only Production has values, the Preview build cannot read them and fails.
+</Callout>
+
 ## `.env.example` is a committed template
 
 `.env.example` is part of the repository and is committed with the code. It lists variable names with empty values:

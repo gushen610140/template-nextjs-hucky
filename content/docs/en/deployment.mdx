@@ -13,6 +13,7 @@ Deploying to Vercel is recommended. The `vercel-build` script in `package.json` 
 - Logto: a production application whose redirect URI points to the production domain.
 - RustFS: an S3 API reachable from the browser, a private bucket, and CORS that allows the production origin.
 - Vercel: a project connected to the Git repository.
+- Optional services: Qdrant (RAG), OnlyOffice Document Server, and AI provider keys. You can leave them empty if you do not use those features, but they must be filled in before the features work.
 
 <Callout type="warn" title="Do not reuse development values in production">
 `LOGTO_BASE_URL`, `LOGTO_COOKIE_SECRET`, the database URLs, and `RUSTFS_*` all depend on the real domain or production environment. Copying `.env.development` as-is breaks sign-in redirects, session cookies, or direct file uploads in production.
@@ -32,11 +33,15 @@ bun run vercel-build
 
 Using only `next build` or `bun run build` skips Prisma Client generation, database migrations, and the seed, so the deployed app can fail immediately. You can set `buildCommand` in `vercel.json` instead, but do not configure it in both places.
 
-Leave Install Command on auto-detection. Vercel uses Bun after detecting `bun.lock`; set it to `bun ci` manually if needed. Choose Node.js 20 or newer.
+Leave Install Command on auto-detection. Vercel uses Bun after detecting `bun.lock`; set it to `bun ci` manually if needed. Choose Node.js 22: Next.js 16 requires 20.9 or newer, and 22 is the current LTS available in both the Vercel build image and runtime.
+
+Next.js 16 builds with Turbopack by default on Vercel, so `next.config.ts` no longer needs build-memory tuning. Only revisit worker limits if you move the build to a platform with less memory.
 
 ### Environment variables
 
-Add the variables under Project Settings → Environment Variables with the Production scope. The build also reads them, so do not keep the database variables in runtime-only configuration.
+Add the variables under Project Settings → Environment Variables with the Production scope. Production builds and the runtime share the same values: the build connects to the real database and runs migrations and the seed, so enter production values directly instead of placeholders.
+
+#### Required during the build
 
 | Variable | Production value |
 | --- | --- |
@@ -44,18 +49,34 @@ Add the variables under Project Settings → Environment Variables with the Prod
 | `MIGRATE_DATABASE_URL` | Direct URL for the production database, used by `migrate deploy` and the seed; must not be a PgBouncer transaction pooler |
 | `LOGTO_ENDPOINT` | Production Logto tenant URL |
 | `LOGTO_APP_ID` / `LOGTO_APP_SECRET` | Production Logto application; the secret stays server-side |
-| `LOGTO_BASE_URL` | `https://<production domain>`, and update the Logto redirect URI to the same domain |
-| `LOGTO_COOKIE_SECRET` | A newly generated random value, at least 32 characters |
+| `LOGTO_BASE_URL` | `https://<production domain>` without a trailing slash; register `<LOGTO_BASE_URL>/api/auth/callback` as the Logto Redirect URI |
+| `LOGTO_COOKIE_SECRET` | A newly generated random value, at least 32 characters; rotating it invalidates existing sessions |
 | `BOOTSTRAP_ADMIN_EMAILS` | Administrator emails for the first deployment, comma separated |
 | `RUSTFS_ENDPOINT` | Production S3 API address reachable from the browser, not the 9001 console |
 | `RUSTFS_ACCESS_KEY` / `RUSTFS_SECRET_KEY` | Production credentials, server-side only |
 | `RUSTFS_BUCKET` | Production private bucket with CORS allowing the production origin |
 
+#### Runtime variables for optional features
+
+These are not validated during the build. The app still starts without them, but the related feature fails:
+
+| Variable | Behavior when missing |
+| --- | --- |
+| `AI_SECRET_KEY` | Saving or updating an AI provider fails; do not rotate it after deployment or existing ciphertext cannot be decrypted |
+| `QDRANT_URL` / `QDRANT_API_KEY` | Knowledge base indexing and retrieval fail |
+| `QDRANT_COLLECTION` / `QDRANT_VECTOR_SIZE` | Same as above; the vector size must match the embedding model output and cannot change after the collection is created |
+| `ONLYOFFICE_DS_URL` / `ONLYOFFICE_JWT_SECRET` | Opening the document editor reports missing configuration |
+| `ONLYOFFICE_SAVE_CALLBACK_URL` | The editor opens but saving is disabled; production must use a public address, not loopback |
+
 <Callout type="warn" title="These values must be replaced for production">
-Reconfigure `DATABASE_URL`, `MIGRATE_DATABASE_URL`, `LOGTO_BASE_URL`, `LOGTO_COOKIE_SECRET`, the `LOGTO_*` application credentials, `RUSTFS_ENDPOINT`, `RUSTFS_BUCKET`, and the RustFS CORS for production. In particular, do not keep localhost, sample emails, or development secrets. Fill `BOOTSTRAP_ADMIN_EMAILS` with real administrator addresses.
+Reconfigure `DATABASE_URL`, `MIGRATE_DATABASE_URL`, `LOGTO_BASE_URL`, `LOGTO_COOKIE_SECRET`, the `LOGTO_*` application credentials, `RUSTFS_ENDPOINT`, `RUSTFS_BUCKET`, and the RustFS CORS for production. In particular, do not keep localhost, sample emails, or development secrets. Fill `BOOTSTRAP_ADMIN_EMAILS` with real administrator addresses, and point `ONLYOFFICE_SAVE_CALLBACK_URL` at the production domain so OnlyOffice callbacks reach a routable address.
 </Callout>
 
-Vercel injects `NODE_ENV=production` for Production builds automatically; do not set it manually. Redeploy after changing environment variables.
+<Callout type="warn" title="Never add the NEXT_PUBLIC_ prefix">
+Variables prefixed with `NEXT_PUBLIC_` are bundled into the browser. `LOGTO_APP_SECRET`, `LOGTO_COOKIE_SECRET`, `RUSTFS_SECRET_KEY`, `AI_SECRET_KEY`, `QDRANT_API_KEY`, and `ONLYOFFICE_JWT_SECRET` must stay server-side.
+</Callout>
+
+Vercel injects `NODE_ENV=production` for Production builds automatically; do not set it manually. Variables are read at deploy time, so changing them requires a new deployment.
 
 ## What vercel-build does
 
@@ -110,7 +131,7 @@ The seed is idempotent: it runs on every deployment, but it does not insert dupl
 
 ## Preview deployments
 
-The Build Command applies to every deployment, so Preview deployments run `vercel-build` too. Either give Preview its own database and environment variables, or make Preview generate the client and build without applying migrations.
+The Build Command applies to every deployment, so Preview deployments run `vercel-build` too. Either give Preview its own database and environment variables, or make Preview generate the client and build without applying migrations. Environment variable scopes are separate: if only Production has values, the Preview build cannot read them and fails.
 
 To migrate only on Production, branch `vercel-build` on `VERCEL_ENV`: run the full `db:setup` for Production, and keep at least `prisma generate && next build` for Preview. Do not skip the database step entirely for Preview, or the preview build will lack the generated Prisma Client.
 
@@ -124,7 +145,8 @@ Every push creates a Preview deployment. If Preview shares the production `MIGRA
 2. Push to the production branch on Vercel and confirm the build log succeeds in the order `prisma generate` → `migrate deploy` → `RBAC seed completed.` → `next build`.
 3. Sign in with an email from `BOOTSTRAP_ADMIN_EMAILS` and confirm it receives the `admin` role. The variable stops having an effect once an administrator exists.
 4. Check the Logto redirect and file upload/download; they depend on the production domain and production RustFS CORS.
-5. Run `bunx prisma migrate status` locally against the production database and confirm there are no pending migrations.
+5. Verify the features you use: AI provider save (`AI_SECRET_KEY`), knowledge base retrieval (`QDRANT_*`), and document editing (`ONLYOFFICE_*`).
+6. Run `bunx prisma migrate status` locally against the production database and confirm there are no pending migrations.
 
 ## Common failures
 
@@ -135,6 +157,12 @@ Every push creates a Preview deployment. If Preview shares the production `MIGRA
 | Migration reports P3009 | A failed migration exists in production | Back up first, fix it, and mark it with `migrate resolve`; never run `migrate reset` in production |
 | Signed in but has no permissions | The seed did not run, or the email is not in `BOOTSTRAP_ADMIN_EMAILS` | Confirm `RBAC seed completed.` in the log and check the address |
 | Upload or download fails | `RUSTFS_ENDPOINT` is unreachable from the browser, or CORS lacks the production origin | Use the public S3 address and add CORS for `PUT`, `GET`, and `HEAD` |
+| Sign-in reports redirect_uri mismatch | The address registered in Logto differs from the deployed origin | Register exactly `<LOGTO_BASE_URL>/api/auth/callback`, including protocol and no trailing slash differences |
+| Document editor reports missing configuration | `ONLYOFFICE_DS_URL` or `ONLYOFFICE_JWT_SECRET` is missing, or the JWT secrets differ | Fill both and make the secret match the Document Server's `JWT_SECRET` exactly |
+| Saving a document does nothing | `ONLYOFFICE_SAVE_CALLBACK_URL` is missing or points to loopback | Use the production domain; the code appends `/api/onlyoffice/callback` |
+| Saving an AI provider fails | `AI_SECRET_KEY` is missing or was rotated after deployment | Restore the original value; old ciphertext cannot be decrypted with a new key |
+| RAG indexing or retrieval fails | `QDRANT_*` is missing, or `QDRANT_VECTOR_SIZE` does not match the model | Fill the variables; the dimension must match the embedding output and cannot change after collection creation |
+| Changed a variable but production is unchanged | Vercel reads variables at deploy time | Trigger a new Production deployment |
 
 ## Related docs
 

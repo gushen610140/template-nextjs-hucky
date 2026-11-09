@@ -84,6 +84,14 @@ Prisma CLI 优先使用 `MIGRATE_DATABASE_URL`，未设置时回退到 `DATABASE
 带 `NEXT_PUBLIC_` 前缀的变量会被打包进浏览器代码。`LOGTO_APP_SECRET` 和 `LOGTO_COOKIE_SECRET` 只能留在服务端。
 </Callout>
 
+## 生产环境
+
+部署到 Vercel 时，环境变量由平台注入，不读仓库里的 `.env.production`。凡是与生产域名、密钥、数据库、对象存储相关的值都必须重新生成或替换，包括 `DATABASE_URL`、`MIGRATE_DATABASE_URL`、`LOGTO_*`、`RUSTFS_*`、`AI_SECRET_KEY` 以及 `QDRANT_*`、`ONLYOFFICE_*`。逐项取值和缺失时的表现见[部署](/zh/docs/deployment#环境变量)。
+
+<Callout type="warn" title="生产与 Preview 的变量作用域分开">
+Vercel 的 Production 和 Preview 各自维护一份变量。只给 Production 配值时，Preview 构建读不到，会直接失败。
+</Callout>
+
 ## `.env.example` 是提交的模板
 
 `.env.example` 是仓库的一部分，会跟着代码一起提交。它只列出变量名，值留空：
