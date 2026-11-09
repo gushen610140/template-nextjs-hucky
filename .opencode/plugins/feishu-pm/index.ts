@@ -265,6 +265,29 @@ export default Plugin.define({
       return client;
     };
 
+    const parseModel = (value?: string) => {
+      const text = value?.trim();
+      if (!text) return undefined;
+      const index = text.indexOf("/");
+      if (index <= 0 || index === text.length - 1) return undefined;
+      return { providerID: text.slice(0, index), id: text.slice(index + 1) };
+    };
+
+    const applyTarget = async (sessionID: string) => {
+      const model = parseModel(process.env.FEISHU_PM_MODEL);
+      if (model) {
+        await ctx.session
+          .switchModel({ sessionID, model })
+          .catch((error) => log("switch model FAILED", error));
+      }
+      const agent = process.env.FEISHU_PM_AGENT?.trim();
+      if (agent) {
+        await ctx.session
+          .switchAgent({ sessionID, agent })
+          .catch((error) => log("switch agent FAILED", error));
+      }
+    };
+
     const sendText = async (to: NotifyTarget, text: string) => {
       const lark = await getClient();
       try {
@@ -323,6 +346,7 @@ export default Plugin.define({
         const created = await ctx.session.create({
           title: `feishu-pm 摘要 ${sha.slice(0, 7)}`,
         });
+        await applyTarget(created.id);
         await ctx.session.prompt({ sessionID: created.id, text: promptText });
         const finished = await Promise.race([
           ctx.session.wait({ sessionID: created.id }).then(() => true),
@@ -518,9 +542,12 @@ export default Plugin.define({
       const created = await ctx.session.create({
         title: `客户需求 ${new Date().toISOString().slice(0, 10)}`,
       });
-      await ctx.session
-        .switchAgent({ sessionID: created.id, agent: "plan" })
-        .catch(() => {});
+      await applyTarget(created.id);
+      if (!process.env.FEISHU_PM_AGENT?.trim()) {
+        await ctx.session
+          .switchAgent({ sessionID: created.id, agent: "plan" })
+          .catch(() => {});
+      }
       await ctx.session.prompt({ sessionID: created.id, text: promptText });
       const finished = await Promise.race([
         ctx.session.wait({ sessionID: created.id }).then(() => true),
