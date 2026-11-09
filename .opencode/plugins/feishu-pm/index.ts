@@ -189,6 +189,19 @@ function statusText(state: PmState) {
   ].join("\n");
 }
 
+function describeLarkError(error: unknown) {
+  const detail = error as {
+    message?: string;
+    response?: { status?: number; data?: { code?: number; msg?: string } };
+  };
+  const code = detail?.response?.data?.code;
+  const msg = detail?.response?.data?.msg;
+  if (code !== undefined) {
+    return `${detail.message ?? "request failed"} (code=${code} msg=${msg ?? "-"})`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
 export default Plugin.define({
   id: "hucky.feishu-pm",
 
@@ -230,34 +243,42 @@ export default Plugin.define({
 
     const sendText = async (to: NotifyTarget, text: string) => {
       const lark = await getClient();
-      await lark.im.message.create({
-        params: { receive_id_type: to.receiveIdType },
-        data: {
-          receive_id: to.receiveId,
-          msg_type: "text",
-          content: JSON.stringify({ text }),
-        },
-      });
+      try {
+        await lark.im.message.create({
+          params: { receive_id_type: to.receiveIdType },
+          data: {
+            receive_id: to.receiveId,
+            msg_type: "text",
+            content: JSON.stringify({ text: text.slice(0, 4000) }),
+          },
+        });
+      } catch (error) {
+        throw new Error(`发送文本失败：${describeLarkError(error)}`);
+      }
     };
 
     const sendImage = async (to: NotifyTarget, filePath: string) => {
       const lark = await getClient();
-      const uploaded = (await lark.im.image.create({
-        data: {
-          image_type: "message",
-          image: createReadStream(filePath),
-        },
-      })) as { image_key?: string; data?: { image_key?: string } };
-      const imageKey = uploaded?.image_key ?? uploaded?.data?.image_key;
-      if (!imageKey) throw new Error("图片上传失败：没有返回 image_key");
-      await lark.im.message.create({
-        params: { receive_id_type: to.receiveIdType },
-        data: {
-          receive_id: to.receiveId,
-          msg_type: "image",
-          content: JSON.stringify({ image_key: imageKey }),
-        },
-      });
+      try {
+        const uploaded = (await lark.im.image.create({
+          data: {
+            image_type: "message",
+            image: createReadStream(filePath),
+          },
+        })) as { image_key?: string; data?: { image_key?: string } };
+        const imageKey = uploaded?.image_key ?? uploaded?.data?.image_key;
+        if (!imageKey) throw new Error("图片上传失败：没有返回 image_key");
+        await lark.im.message.create({
+          params: { receive_id_type: to.receiveIdType },
+          data: {
+            receive_id: to.receiveId,
+            msg_type: "image",
+            content: JSON.stringify({ image_key: imageKey }),
+          },
+        });
+      } catch (error) {
+        throw new Error(`发送图片失败：${describeLarkError(error)}`);
+      }
     };
 
     const summarizeCommit = async (sha: string, subject: string) => {
@@ -293,7 +314,7 @@ export default Plugin.define({
           sessionID: created.id,
         })) as AnyMessage[];
         const answer = extractAnswer(messages, promptText);
-        return answer ? `${subject}\n\n${answer}` : undefined;
+        return answer ? `${subject}\n\n${answer.slice(0, 2000)}` : undefined;
       } catch (error) {
         log("summarize FAILED", error);
         return undefined;
