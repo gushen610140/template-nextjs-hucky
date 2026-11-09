@@ -26,6 +26,8 @@ export type ScreenshotWatcherOptions = {
   getTarget: () => Promise<NotifyTarget | undefined>;
   sendImage: (target: NotifyTarget, filePath: string) => Promise<void>;
   sendText: (target: NotifyTarget, text: string) => Promise<void>;
+  /** 根据提交内容生成推送摘要；返回空时回退到固定格式。 */
+  summarize?: (sha: string, subject: string) => Promise<string | undefined>;
   onStatus: (status: ScreenshotStatus) => void;
 };
 
@@ -299,9 +301,10 @@ export function startScreenshotWatcher(options: ScreenshotWatcherOptions) {
       await mkdir(outDir, { recursive: true });
 
       server = await ensureServer(options.directory, baseUrl, options.log);
+      const pages = defaultPages();
       const shots: Array<{ page: string; path: string }> = [];
 
-      for (const page of defaultPages()) {
+      for (const page of pages) {
         const path = join(outDir, `${pageSlug(page)}.png`);
         await capturePage(
           options.directory,
@@ -311,11 +314,18 @@ export function startScreenshotWatcher(options: ScreenshotWatcherOptions) {
         shots.push({ page, path });
       }
 
+      const summaryPromise = options.summarize
+        ? options.summarize(sha, subject).catch((error) => {
+            options.log("screenshot: summarize failed", error);
+            return undefined;
+          })
+        : Promise.resolve(undefined);
+      const generated = await summaryPromise;
+      const summary = generated ?? `main 更新 ${subject}`;
+
       await options.sendText(
         target,
-        `main 新提交：${subject}\n已自动截取 ${shots.length} 个页面：${shots
-          .map((shot) => shot.page)
-          .join("、")}`,
+        `${summary}\n\n截图页面：${pages.join("、")}`,
       );
       for (const shot of shots) {
         await options.sendImage(target, shot.path);

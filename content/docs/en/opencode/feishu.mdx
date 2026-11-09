@@ -21,6 +21,7 @@ new main commit
 ## How it works
 
 - The first start records the current HEAD as a baseline and does not backfill old commits.
+- Each new commit is summarized by OpenCode's AI in 2-4 customer-facing sentences; failures or timeouts fall back to the commit title.
 - Screenshots live in `.screenshots/commits/` and are overwritten each run.
 - On failure it sends a text error and writes to `debug.log`.
 - There is no Feishu long connection, no event subscription, and no card callback; it works whenever the OpenCode server runs.
@@ -79,6 +80,7 @@ FEISHU_NOTIFY_OPEN_ID=
 
 # optional
 FEISHU_PM_ENABLED=1
+FEISHU_PM_SUMMARY=1
 FEISHU_SCREENSHOT_PAGES=/,/docs,/login
 FEISHU_SCREENSHOT_BASE=http://localhost:3000
 FEISHU_SCREENSHOT_MATCH=Hucky
@@ -92,6 +94,7 @@ FEISHU_SCREENSHOT_POLL_MS=20000
 | `FEISHU_NOTIFY_CHAT_ID` | one of two | Group or DM chat_id, preferred |
 | `FEISHU_NOTIFY_OPEN_ID` | one of two | DM user open_id |
 | `FEISHU_PM_ENABLED` | No | Set to `0` to disable |
+| `FEISHU_PM_SUMMARY` | No | Set to `0` to disable AI summaries |
 | `FEISHU_SCREENSHOT_PAGES` | No | Pages to capture; defaults to `/`, `/docs`, `/login` |
 | `FEISHU_SCREENSHOT_BASE` | No | Dev or preview URL; defaults to `http://localhost:3000` |
 | `FEISHU_SCREENSHOT_MATCH` | No | Text the page must contain to confirm it belongs to this project |
