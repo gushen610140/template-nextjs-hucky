@@ -9,6 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { Plugin } from "@opencode/plugin";
+import { FeishuPm } from "./rpc";
 import { type NotifyTarget, startScreenshotWatcher } from "./screenshot";
 
 const execFileAsync = promisify(execFile);
@@ -17,10 +18,24 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const LOG_FILE = join(HERE, "debug.log");
 const ENV_FILE = join(HERE, ".env");
 const GLOBAL_KEY = "__hucky_feishu_pm__";
+const ENABLED_KEY = "feishu-pm/enabled";
+const INITIALIZED_KEY = "feishu-pm/initialized";
 
 type PmState = {
   owner?: symbol;
   watcher?: { stop: () => void };
+  enabled: boolean;
+  watching: boolean;
+  target: string | null;
+  lastCommit?: string;
+  lastAt?: string;
+  lastError?: string;
+};
+
+type AnyMessage = {
+  type?: string;
+  text?: string;
+  content?: Array<{ type?: string; text?: string }>;
 };
 
 function log(message: string, extra?: unknown) {
@@ -69,8 +84,32 @@ function loadEnvFile() {
 
 function getState(): PmState {
   const holder = globalThis as Record<string, unknown>;
-  if (!holder[GLOBAL_KEY]) holder[GLOBAL_KEY] = {};
+  if (!holder[GLOBAL_KEY]) {
+    holder[GLOBAL_KEY] = {
+      enabled: false,
+      watching: false,
+      target: null,
+    } satisfies PmState;
+  }
   return holder[GLOBAL_KEY] as PmState;
+}
+
+function pagesFromEnv() {
+  return (process.env.FEISHU_SCREENSHOT_PAGES ?? "/,/docs,/login")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function baseFromEnv() {
+  return process.env.FEISHU_SCREENSHOT_BASE ?? "http://localhost:3000";
+}
+
+function pollFromEnv() {
+  return Math.max(
+    5000,
+    Number(process.env.FEISHU_SCREENSHOT_POLL_MS ?? 20000) || 20000,
+  );
 }
 
 /**
@@ -83,12 +122,6 @@ function resolveTarget(): NotifyTarget | undefined {
   if (openId) return { receiveIdType: "open_id", receiveId: openId };
   return undefined;
 }
-
-type AnyMessage = {
-  type?: string;
-  text?: string;
-  content?: Array<{ type?: string; text?: string }>;
-};
 
 async function readCommitDiff(directory: string, sha: string) {
   try {
@@ -129,49 +162,75 @@ function extractAnswer(messages: readonly AnyMessage[], promptText: string) {
   return parts.join("\n").trim();
 }
 
+function readLogTail(count: number) {
+  try {
+    if (!existsSync(LOG_FILE)) return "(empty)";
+    return readFileSync(LOG_FILE, "utf8")
+      .trimEnd()
+      .split(/\r?\n/)
+      .slice(-count)
+      .join("\n");
+  } catch (error) {
+    return `log read failed: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+function statusText(state: PmState) {
+  return [
+    `enabled: ${state.enabled}`,
+    `watching: ${state.watching}`,
+    `target: ${state.target ?? "-"}`,
+    `pages: ${pagesFromEnv().join(", ")}`,
+    `base: ${baseFromEnv()}`,
+    `poll: ${pollFromEnv()}ms`,
+    `lastCommit: ${state.lastCommit ?? "-"}`,
+    `lastAt: ${state.lastAt ?? "-"}`,
+    `lastError: ${state.lastError ?? "-"}`,
+  ].join("\n");
+}
+
 export default Plugin.define({
   id: "hucky.feishu-pm",
 
   async setup(ctx) {
     loadEnvFile();
 
-    if (process.env.FEISHU_PM_ENABLED === "0") {
-      log("disabled by FEISHU_PM_ENABLED=0");
-      return;
-    }
-
-    const appId = process.env.FEISHU_APP_ID?.trim();
-    const appSecret = process.env.FEISHU_APP_SECRET?.trim();
-    if (!appId || !appSecret) {
-      log("missing FEISHU_APP_ID / FEISHU_APP_SECRET");
-      return;
-    }
-
-    const target = resolveTarget();
-    if (!target) {
-      log("missing FEISHU_NOTIFY_CHAT_ID / FEISHU_NOTIFY_OPEN_ID");
-      return;
-    }
-
-    let Lark: typeof import("@larksuiteoapi/node-sdk");
-    try {
-      Lark = await import("@larksuiteoapi/node-sdk");
-    } catch (error) {
-      log("sdk import FAILED", error);
-      return;
-    }
-
     const state = getState();
     const token = Symbol("feishu-pm");
     state.owner = token;
-    // 重载时先停掉旧 watcher，避免两个定时器同时触发。
-    state.watcher?.stop();
-    state.watcher = undefined;
 
-    const client = new Lark.Client({ appId, appSecret });
+    const say = async (sessionID: string, text: string) => {
+      await ctx.session.synthetic({ sessionID, text });
+    };
+
+    const appId = process.env.FEISHU_APP_ID?.trim();
+    const appSecret = process.env.FEISHU_APP_SECRET?.trim();
+    const target = resolveTarget();
+    state.target = target
+      ? `${target.receiveIdType}:${target.receiveId}`
+      : null;
+
+    let configError = "";
+    if (!appId || !appSecret) {
+      configError = "missing FEISHU_APP_ID / FEISHU_APP_SECRET";
+    } else if (!target) {
+      configError = "missing FEISHU_NOTIFY_CHAT_ID / FEISHU_NOTIFY_OPEN_ID";
+    }
+    if (configError) log(configError);
+
+    type LarkModule = typeof import("@larksuiteoapi/node-sdk");
+    type LarkClient = InstanceType<LarkModule["Client"]>;
+    let client: LarkClient | undefined;
+    const getClient = async (): Promise<LarkClient> => {
+      if (client) return client;
+      const Lark = await import("@larksuiteoapi/node-sdk");
+      client = new Lark.Client({ appId, appSecret });
+      return client;
+    };
 
     const sendText = async (to: NotifyTarget, text: string) => {
-      await client.im.message.create({
+      const lark = await getClient();
+      await lark.im.message.create({
         params: { receive_id_type: to.receiveIdType },
         data: {
           receive_id: to.receiveId,
@@ -182,7 +241,8 @@ export default Plugin.define({
     };
 
     const sendImage = async (to: NotifyTarget, filePath: string) => {
-      const uploaded = (await client.im.image.create({
+      const lark = await getClient();
+      const uploaded = (await lark.im.image.create({
         data: {
           image_type: "message",
           image: createReadStream(filePath),
@@ -190,7 +250,7 @@ export default Plugin.define({
       })) as { image_key?: string; data?: { image_key?: string } };
       const imageKey = uploaded?.image_key ?? uploaded?.data?.image_key;
       if (!imageKey) throw new Error("图片上传失败：没有返回 image_key");
-      await client.im.message.create({
+      await lark.im.message.create({
         params: { receive_id_type: to.receiveIdType },
         data: {
           receive_id: to.receiveId,
@@ -240,28 +300,125 @@ export default Plugin.define({
       }
     };
 
-    const watcher = startScreenshotWatcher({
-      directory: ctx.location.directory,
-      log,
-      storageGet: (key) => ctx.storage.get(key),
-      storageSet: (key, value) => ctx.storage.set(key, value),
-      getTarget: async () => resolveTarget(),
-      sendImage,
-      sendText,
-      summarize: summarizeCommit,
-      onStatus: () => {},
-    });
+    const stopWatcher = () => {
+      state.watcher?.stop();
+      state.watcher = undefined;
+      state.watching = false;
+    };
 
-    state.watcher = watcher;
-    log("watcher started", {
-      directory: ctx.location.directory,
-      target: target.receiveIdType,
+    const startWatcher = () => {
+      if (configError) {
+        log(`watcher not started: ${configError}`);
+        return false;
+      }
+      if (state.watcher) return true;
+      state.watcher = startScreenshotWatcher({
+        directory: ctx.location.directory,
+        log,
+        storageGet: (key) => ctx.storage.get(key),
+        storageSet: (key, value) => ctx.storage.set(key, value),
+        getTarget: async () => resolveTarget(),
+        sendImage,
+        sendText,
+        summarize: summarizeCommit,
+        onStatus: (status) => {
+          state.lastCommit = status.commit;
+          state.lastAt = status.at;
+          state.lastError = status.error;
+        },
+      });
+      state.watching = true;
+      log("watcher started", {
+        directory: ctx.location.directory,
+        target: target?.receiveIdType ?? "-",
+      });
+      return true;
+    };
+
+    const initialized = await ctx.storage.get(INITIALIZED_KEY);
+    if (initialized !== true) {
+      await ctx.storage.set(INITIALIZED_KEY, true);
+      await ctx.storage.set(ENABLED_KEY, true);
+      state.enabled = true;
+    } else {
+      state.enabled = (await ctx.storage.get(ENABLED_KEY)) !== false;
+    }
+    if (state.enabled) startWatcher();
+
+    try {
+      await ctx.rpc.register(FeishuPm, {
+        status: async () => ({
+          enabled: state.enabled,
+          watching: state.watching,
+          target: state.target,
+          pages: pagesFromEnv(),
+          base: baseFromEnv(),
+          pollMs: pollFromEnv(),
+          lastCommit: state.lastCommit ?? null,
+          lastAt: state.lastAt ?? null,
+          lastError: state.lastError ?? null,
+        }),
+      });
+      log("rpc registered", { id: FeishuPm.id });
+    } catch (error) {
+      log("rpc register FAILED", error);
+    }
+
+    await ctx.command.transform((editor) => {
+      editor.add({
+        name: "feishu-pm-status",
+        description: "查看飞书变更推送状态",
+        execute: async ({ sessionID }) => {
+          await say(sessionID, `[feishu-pm]\n${statusText(state)}`);
+        },
+      });
+      editor.add({
+        name: "feishu-pm-on",
+        description: "开启飞书变更推送",
+        execute: async ({ sessionID }) => {
+          await ctx.storage.set(ENABLED_KEY, true);
+          state.enabled = true;
+          const started = startWatcher();
+          await say(
+            sessionID,
+            `[feishu-pm] ${started ? "已开启" : "配置不完整，未启动"}\n${statusText(state)}`,
+          );
+        },
+      });
+      editor.add({
+        name: "feishu-pm-off",
+        description: "关闭飞书变更推送",
+        execute: async ({ sessionID }) => {
+          await ctx.storage.set(ENABLED_KEY, false);
+          state.enabled = false;
+          stopWatcher();
+          await say(sessionID, "[feishu-pm] 已关闭");
+        },
+      });
+      editor.add({
+        name: "feishu-pm-restart",
+        description: "重启飞书变更推送",
+        execute: async ({ sessionID }) => {
+          stopWatcher();
+          const started = startWatcher();
+          await say(
+            sessionID,
+            `[feishu-pm] ${started ? "已重启" : "配置不完整，未启动"}\n${statusText(state)}`,
+          );
+        },
+      });
+      editor.add({
+        name: "feishu-pm-log",
+        description: "查看飞书变更推送最近日志",
+        execute: async ({ sessionID }) => {
+          await say(sessionID, `[feishu-pm] 最近日志\n${readLogTail(20)}`);
+        },
+      });
     });
 
     return () => {
       if (state.owner !== token) return;
-      watcher.stop();
-      if (state.watcher === watcher) state.watcher = undefined;
+      stopWatcher();
       state.owner = undefined;
     };
   },
