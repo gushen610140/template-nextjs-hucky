@@ -67,3 +67,6 @@ next-env.d.ts
 
 # fumadocs
 /.source
+
+# customer requirements
+/requirements/
