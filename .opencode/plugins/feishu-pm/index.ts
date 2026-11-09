@@ -415,6 +415,46 @@ export default Plugin.define({
         process.env.FEISHU_PM_REQUIREMENTS_DIR?.trim() || "requirements",
       );
 
+    const chatNames = new Map<string, string>();
+    const userNames = new Map<string, string>();
+
+    const resolveNames = async (chatId: string, openId?: string) => {
+      const result: { chatName?: string; senderName?: string } = {};
+      try {
+        let name = chatNames.get(chatId);
+        if (!name) {
+          const lark = await getClient();
+          const chat = await lark.im.chat.get({
+            path: { chat_id: chatId },
+          });
+          name = (chat as { data?: { name?: string } })?.data?.name;
+          if (name) chatNames.set(chatId, name);
+        }
+        result.chatName = name;
+      } catch (error) {
+        log("chat name lookup FAILED", error);
+      }
+      if (openId) {
+        try {
+          let name = userNames.get(openId);
+          if (!name) {
+            const lark = await getClient();
+            const user = await lark.contact.user.get({
+              path: { user_id: openId },
+              params: { user_id_type: "open_id" },
+            });
+            name = (user as { data?: { user?: { name?: string } } })?.data?.user
+              ?.name;
+            if (name) userNames.set(openId, name);
+          }
+          result.senderName = name;
+        } catch (error) {
+          log("user name lookup FAILED", error);
+        }
+      }
+      return result;
+    };
+
     const handleIncoming = async (data: unknown) => {
       const event = data as {
         message?: {
@@ -462,10 +502,16 @@ export default Plugin.define({
       const text = messageText(message);
       if (!text) return;
 
+      const names = await resolveNames(
+        message.chat_id,
+        sender?.sender_id?.open_id,
+      );
       const source = {
         chatId: message.chat_id,
         senderId: sender?.sender_id?.open_id,
         messageId: message.message_id,
+        ...names,
+        createdAt: new Date(),
       };
       const promptText = buildRequirementPrompt(text, source);
 

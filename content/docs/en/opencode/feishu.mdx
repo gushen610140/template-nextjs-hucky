@@ -64,7 +64,8 @@ Create a custom app on the Feishu Open Platform, enable the bot capability, add 
 | `im:message:send_as_bot` | Send text and images |
 | `im:resource` | Upload screenshots |
 | `im:message.group_at_msg:readonly` | Receive group messages that mention the bot |
-| `im:chat:readonly` | List the chats the bot belongs to |
+| `im:chat:readonly` | List the bot's chats and read chat names |
+| `contact:contact.base:readonly` | Resolve the sender name |
 
 Subscribe to `im.message.receive_v1` over the long connection. No card callbacks or permission approvals are needed.
 
@@ -147,7 +148,7 @@ Targets come only from configuration. Credentials, target, and toggles use the `
 1. A customer @-mentions the bot in a group with text.
 2. Only chats in `FEISHU_PM_ALLOWED_CHAT_IDS` are processed; when empty, only `FEISHU_PM_NOTIFY_CHAT_ID` is accepted.
 3. The AI drafts a fixed structure and writes it to `FEISHU_PM_REQUIREMENTS_DIR` (default `requirements`): `requirements/<YYYYMMDD-HHmmss>-<title>.md`.
-4. The document has `source`, `chat_id`, `sender_id`, `message_id`, and `created_at` frontmatter, plus “Customer request / Requirements / Acceptance / Open questions”.
+4. The document has `source`, `chat_id`, `chat_name`, `sender_id`, `sender_name`, `message_id`, and `created_at` (local time) frontmatter, plus “Customer request / Requirements / Acceptance / Open questions”. Missing names fall back to ids.
 5. The bot replies with the file path and title.
 
 Security: customer text is passed to the model as data only; the prompt forbids following instructions inside it or calling tools. The plugin writes files into a fixed directory, and the model never touches the filesystem. Non-text messages get “text only for now”.

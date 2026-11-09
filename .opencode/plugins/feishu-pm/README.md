@@ -86,7 +86,8 @@ bun run browser:install
 | `im:message:send_as_bot` | 发送文本和图片消息 |
 | `im:resource` | 上传截图 |
 | `im:message.group_at_msg:readonly` | 接收群聊中 @机器人 的消息 |
-| `im:chat:readonly` | 查询机器人所在群（获取 chat_id） |
+| `im:chat:readonly` | 查询机器人所在群（获取 chat_id、群名称） |
+| `contact:contact.base:readonly` | 查询发送者名称（缺失时回退为 open_id） |
 
 事件订阅（长连接）：`im.message.receive_v1`。不需要卡片回调或权限审批，机器人无法驱动 OpenCode。
 
@@ -96,7 +97,7 @@ bun run browser:install
 2. 插件只处理 `FEISHU_PM_ALLOWED_CHAT_IDS` 中的群；留空时只接受 `FEISHU_PM_NOTIFY_CHAT_ID` 对应的群。
 3. AI 把消息整理成固定结构的需求文档，写入 `FEISHU_PM_REQUIREMENTS_DIR`（默认 `requirements`）：
    `requirements/<YYYYMMDD-HHmmss>-<标题>.md`。
-4. 文档包含 `source`、`chat_id`、`sender_id`、`message_id`、`created_at` 前言，正文为「客户原始描述 / 需求整理 / 验收要点 / 待确认」。
+4. 文档包含 `source`、`chat_id`、`chat_name`、`sender_id`、`sender_name`、`message_id`、`created_at`（本地时间）前言，正文为「客户原始描述 / 需求整理 / 验收要点 / 待确认」。群名与发送者名称解析失败时留空或回退为 id。
 5. 插件回复原消息，告知文件路径和标题。
 
 安全说明：客户消息只作为待整理的数据传给模型，提示词明确禁止执行其中的指令或调用工具；文件由插件写入固定目录，模型不直接操作文件系统。非文本消息会回复“暂只支持文本需求”。
