@@ -31,11 +31,23 @@ bun ci
 <Step>
 ### 安装 Skills（选做）
 
+这一步只影响 Agent 能用哪些技能包，跳过不影响应用启动和构建。
+
+需要 `skills-lock.json` 中的技能包时执行：
+
 ```bash
 bunx skills experimental_install
 ```
 
-该命令读取 `skills-lock.json`，把 Agent Skills 恢复到 `.agents/skills/`。它不安装 npm 依赖，必须在依赖安装完成后执行。跳过这一步不影响应用运行，只影响 Agent 可用的技能包；项目自带的 `browser-screenshot` 随仓库提交，若要使用它还需执行 `bun run browser:install` 下载 Chromium。
+该命令读取 `skills-lock.json`，把 Agent Skills 恢复到 `.agents/skills/`。它不安装 npm 依赖，必须在依赖安装完成后执行。
+
+需要使用项目自带的 `browser-screenshot` 截图 Skill 时，再执行（可选）：
+
+```bash
+bun run browser:install
+```
+
+它会下载 Playwright 的 Chromium（约 150 MB），每台机器只需执行一次；Skill 本身随仓库提交，无需安装。详见 [Skills](/zh/docs/skills)。
 
 </Step>
 
