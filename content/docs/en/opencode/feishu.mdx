@@ -1,11 +1,14 @@
 ---
-title: Feishu change feed (feishu-pm)
-description: Watch main commits, capture pages automatically, and push updates so customers and teammates see what changed
+title: Feishu change feed and requirement intake (feishu-pm)
+description: Push main-commit screenshots and turn @bot group messages into requirement documents inside the project
 ---
 
 import { Step, Steps } from "fumadocs-ui/components/steps";
 
-`feishu-pm` is a project-level OpenCode plugin for customer and team collaboration: it watches local `main` commits, captures pages, and pushes updates; it also receives @bot messages in customer groups and files them as requirement documents.
+`feishu-pm` is a project-level Feishu collaboration plugin with two jobs:
+
+- **Change feed**: watches local `main` and pushes screenshots after each new commit.
+- **Requirement intake**: receives @bot messages in customer groups, lets AI draft a structured requirement, and writes it into the project.
 
 It cannot drive OpenCode. The developer-facing control bot is a separate global plugin named `feishu-bridge`; the two must use **different Feishu apps**.
 
@@ -14,41 +17,45 @@ new main commit
   → poll refs/heads/main every 20 seconds
   → reuse or start the dev server
   → Playwright captures configured pages
-  → commit summary + screenshots
-  → configured Feishu group / DM
-```
+  → AI drafts the commit summary
+  → summary + screenshots to the configured chat
 
-```text
-customer @-mentions the bot in a group
+customer @-mentions the bot
   → long connection receives the message
   → AI drafts a structured requirement
-  → writes requirements/<time>-<title>.md
-  → replies with the file path
+  → requirements/<time>-<title>.md
+  → reply with the file path
 ```
 
 ## How it works
 
+### Change feed
+
 - The first start records the current HEAD as a baseline and does not backfill old commits.
-- Each new commit is summarized by OpenCode's AI in 2-4 customer-facing sentences; failures or timeouts fall back to the commit title.
+- Each new commit is summarized by AI in 2-4 customer-facing sentences; failures or timeouts fall back to the commit title.
 - Screenshots live in `.screenshots/commits/` and are overwritten each run.
-- On failure it sends a text error and writes to `debug.log`.
-- A Feishu long connection receives group messages, but only allowlisted chats with @bot text are processed.
+- Failures send a text explanation and are written to `debug.log`.
+
+### Requirement intake
+
+- The long connection only handles @bot text in allowlisted group chats.
+- AI drafts a fixed structure; the plugin writes the file.
+- Customer text is data only; the prompt forbids following instructions inside it or calling tools.
+- Timestamps keep new requirements from overwriting old documents.
 
 ## Control and status
 
-The `FEISHU-PM` sidebar block shows `watching` / `off`, the page count, and the latest commit. TUI commands:
+The `FEISHU-PM` sidebar shows the feed state, page count, latest commit, receiver state, and captured requirement count.
 
 | Command | Effect |
 | --- | --- |
-| `/feishu-pm-status` | Toggle state, target, pages, latest commit, and error |
-| `/feishu-pm-on` | Enable and persist |
-| `/feishu-pm-off` | Disable and persist |
-| `/feishu-pm-restart` | Restart watching |
+| `/feishu-pm-status` | Toggle, target, pages, latest commit, receiver, and errors |
+| `/feishu-pm-on` | Enable feed and intake, persist |
+| `/feishu-pm-off` | Disable feed and intake, persist |
+| `/feishu-pm-restart` | Restart feed and intake |
 | `/feishu-pm-log` | Last 20 log lines |
 
-Watching is enabled by default. `/feishu-pm-off` writes to plugin storage and stays off across restarts.
-
-The developer control bot is a separate global plugin with the `/feishu-bridge-*` command prefix.
+Enabled by default. `/feishu-pm-off` writes to plugin storage and stays off across restarts.
 
 ## Quick start
 
@@ -57,24 +64,13 @@ The developer control bot is a separate global plugin with the `/feishu-bridge-*
 <Step>
 ### Create a customer app
 
-Create a custom app on the Feishu Open Platform, enable the bot capability, add the send and group @-mention receive scopes, then publish a version. Do not reuse the developer control bot.
-
-| Scope | Purpose |
-| --- | --- |
-| `im:message:send_as_bot` | Send text and images |
-| `im:resource` | Upload screenshots |
-| `im:message.group_at_msg:readonly` | Receive group messages that mention the bot |
-| `im:chat:readonly` | List the bot's chats and read chat names |
-| `contact:contact.base:readonly` | Resolve the sender name |
-
-Subscribe to `im.message.receive_v1` over the long connection. No card callbacks or permission approvals are needed.
-
+Create a custom app on the Feishu Open Platform, enable the bot capability, add the permissions and event subscription below, then publish a version. Do not reuse the developer control bot.
 </Step>
 
 <Step>
 ### Fill in configuration
 
-Copy `.opencode/plugins/feishu-pm/.env.example` to `.env` and fill in the App ID, App Secret, and delivery target. `.env` is git-ignored.
+Copy `.opencode/plugins/feishu-pm/.env.example` to `.env` and fill in the App ID, App Secret, and delivery target.
 </Step>
 
 <Step>
@@ -91,13 +87,14 @@ bun run browser:install
 <Step>
 ### Restart OpenCode
 
-The plugin starts watching as soon as it loads; there is no `/feishu-on`. Commit to `main` and the summary and screenshots should arrive within 20 seconds.
-
+The plugin starts working after loading. A `main` commit triggers a push; an @bot message creates a requirement document.
 </Step>
 
 </Steps>
 
 ## Configuration
+
+`.opencode/plugins/feishu-pm/.env` (git-ignored):
 
 ```bash
 FEISHU_PM_APP_ID=cli_xxxxxxxx
@@ -110,6 +107,8 @@ FEISHU_PM_NOTIFY_OPEN_ID=
 # optional
 FEISHU_PM_ENABLED=1
 FEISHU_PM_SUMMARY=1
+FEISHU_PM_MODEL=
+FEISHU_PM_AGENT=
 FEISHU_PM_RECEIVE=1
 FEISHU_PM_ALLOWED_CHAT_IDS=
 FEISHU_PM_REQUIREMENTS_DIR=requirements
@@ -123,11 +122,13 @@ FEISHU_SCREENSHOT_POLL_MS=20000
 | --- | --- | --- |
 | `FEISHU_PM_APP_ID` | Yes | Customer app ID |
 | `FEISHU_PM_APP_SECRET` | Yes | Customer app secret |
-| `FEISHU_PM_NOTIFY_CHAT_ID` | one of two | Group or DM chat_id, preferred |
-| `FEISHU_PM_NOTIFY_OPEN_ID` | one of two | DM user open_id |
+| `FEISHU_PM_NOTIFY_CHAT_ID` | one of two | Group or DM chat_id for pushes |
+| `FEISHU_PM_NOTIFY_OPEN_ID` | one of two | DM open_id for pushes |
 | `FEISHU_PM_ENABLED` | No | Enabled by default; set to `0` to disable |
-| `FEISHU_PM_SUMMARY` | No | Set to `0` to disable AI summaries |
-| `FEISHU_PM_RECEIVE` | No | Set to `0` to disable group requirement intake |
+| `FEISHU_PM_SUMMARY` | No | Set to `0` to disable AI commit summaries |
+| `FEISHU_PM_MODEL` | No | Model as `providerID/modelID`; empty inherits the default |
+| `FEISHU_PM_AGENT` | No | Agent name; requirement intake defaults to `plan` |
+| `FEISHU_PM_RECEIVE` | No | Set to `0` to disable group intake |
 | `FEISHU_PM_ALLOWED_CHAT_IDS` | No | Chats allowed to submit requirements; empty means only `FEISHU_PM_NOTIFY_CHAT_ID` |
 | `FEISHU_PM_REQUIREMENTS_DIR` | No | Requirement directory, default `requirements` |
 | `FEISHU_SCREENSHOT_PAGES` | No | Pages to capture; defaults to `/`, `/docs`, `/login` |
@@ -135,23 +136,85 @@ FEISHU_SCREENSHOT_POLL_MS=20000
 | `FEISHU_SCREENSHOT_MATCH` | No | Text the page must contain to confirm it belongs to this project |
 | `FEISHU_SCREENSHOT_POLL_MS` | No | Poll interval, default 20000, minimum 5000 |
 
-Targets come only from configuration. Credentials, target, and toggles use the `FEISHU_PM_` prefix so they cannot collide with the global feishu-bridge in the same OpenCode process.
+Credentials, target, and toggles use the `FEISHU_PM_` prefix so they cannot collide with the global feishu-bridge in the same OpenCode process.
 
-## Getting a chat_id
+## AI model and agent
+
+`FEISHU_PM_MODEL` and `FEISHU_PM_AGENT` apply to both commit summaries and requirement drafting. When unset, the OpenCode default model is inherited; requirement intake defaults to the read-only `plan` agent when no agent is configured.
+
+```ini
+FEISHU_PM_MODEL=opencode-go/deepseek-v4.1-flash
+FEISHU_PM_AGENT=plan
+```
+
+## Feishu console setup
+
+### Permissions
+
+| Scope | Purpose |
+| --- | --- |
+| `im:message:send_as_bot` | Send text and images |
+| `im:resource` | Upload screenshots |
+| `im:message.group_at_msg:readonly` | Receive group messages that mention the bot |
+| `im:chat:readonly` | Read the bot's chats and chat names |
+| `contact:contact.base:readonly` | Resolve sender names |
+
+Without the contact scope it still works: `sender_name` stays empty and `sender_id` is used instead.
+
+### Event subscription
+
+**Events & Callbacks** → **Event Subscription**:
+
+1. Choose **Receive events through a long connection**.
+2. Add `im.message.receive_v1`.
+3. Create and publish a version.
+
+No card callbacks or permission approvals are needed.
+
+### Getting a chat_id
 
 1. Add the bot to the customer group.
-2. Call `GET /open-apis/im/v1/chats` in the Feishu API explorer (requires `im:chat:readonly`) and put the returned `chat_id` into `FEISHU_PM_NOTIFY_CHAT_ID`.
-3. For a DM smoke test, you can use `FEISHU_PM_NOTIFY_OPEN_ID` first.
+2. Call `GET /open-apis/im/v1/chats` (requires `im:chat:readonly`) and put the returned `chat_id` into `FEISHU_PM_NOTIFY_CHAT_ID`.
+3. For a DM test, use `FEISHU_PM_NOTIFY_OPEN_ID`.
 
-## Receiving customer requirements
+## Requirement documents
 
-1. A customer @-mentions the bot in a group with text.
-2. Only chats in `FEISHU_PM_ALLOWED_CHAT_IDS` are processed; when empty, only `FEISHU_PM_NOTIFY_CHAT_ID` is accepted.
-3. The AI drafts a fixed structure and writes it to `FEISHU_PM_REQUIREMENTS_DIR` (default `requirements`): `requirements/<YYYYMMDD-HHmmss>-<title>.md`.
-4. The document has `source`, `chat_id`, `chat_name`, `sender_id`, `sender_name`, `message_id`, and `created_at` (local time) frontmatter, plus “Customer request / Requirements / Acceptance / Open questions”. Missing names fall back to ids.
-5. The bot replies with the file path and title.
+Documents are written to `FEISHU_PM_REQUIREMENTS_DIR` (default `requirements`):
 
-Security: customer text is passed to the model as data only; the prompt forbids following instructions inside it or calling tools. The plugin writes files into a fixed directory, and the model never touches the filesystem. Non-text messages get “text only for now”.
+```text
+requirements/20261109-170030-customer-export.md
+```
+
+```md
+---
+source: feishu
+chat_id: oc_xxx
+chat_name: Customer group
+sender_id: ou_xxx
+sender_name: Alex
+message_id: om_xxx
+created_at: 2026-11-09 17:00:30
+---
+
+# Customer export
+
+## Customer request
+...
+
+## Requirements
+...
+
+## Acceptance
+- ...
+
+## Open questions
+- ...
+```
+
+- `created_at` uses the machine's local time.
+- Chat and sender names are cached; failures fall back to ids.
+- The directory is git-ignored by default and never enters Git.
+- Non-text messages get “text only for now”.
 
 ## Dev server and preview
 
@@ -163,7 +226,7 @@ Security: customer text is passed to the model as data only; the prompt forbids 
 
 ## Requirements
 
-- The OpenCode server must stay running; stopping it stops the feed.
+- The OpenCode server must stay running; stopping it stops both features.
 - Node.js, `bun`, and Playwright's Chromium are required.
 - Capture uses `scripts/screenshot.mjs`; you can also run `bun run screenshot` manually.
 
@@ -173,17 +236,24 @@ Security: customer text is passed to the model as data only; the prompt forbids 
 
 | Log | Meaning |
 | --- | --- |
-| `watcher started` | Watching has started |
-| `screenshot: baseline recorded` | First start recorded the baseline; expected |
+| `watcher started` | Commit watching has started |
+| `screenshot: baseline recorded` | First start recorded the baseline |
 | `screenshot: sent` | Delivery succeeded |
-| `screenshot: no feishu target` | Delivery target missing |
 | `screenshot: FAILED` | Capture or delivery failed |
-| `dev server 启动失败` | A `next dev` instance exists or ports conflict |
 | `receiver ready` | Group message long connection is up |
 | `requirement saved` | Requirement document written |
 | `requirement timeout` | AI drafting exceeded 90 seconds |
 | `requirement ignored: chat not allowed` | Chat not allowlisted, ignored |
 | `missing FEISHU_PM_APP_ID / FEISHU_PM_APP_SECRET` | Credentials are missing |
+
+## Boundary with feishu-bridge
+
+| | feishu-pm (project) | feishu-bridge (global) |
+| --- | --- | --- |
+| Feishu app | Customer app | Developer app |
+| Capabilities | Push changes, capture requirements | Drive OpenCode from Feishu |
+| Commands | `/feishu-pm-*` | `/feishu-bridge-*` |
+| Permissions | Minimal, sending and group intake | Broad, sessions and approvals |
 
 ## Roadmap
 
@@ -192,11 +262,9 @@ Security: customer text is passed to the model as data only; the prompt forbids 
 - **Requirement status sync**: connect requirement documents to the todo list and track delivery.
 - **Collaboration loop**: developers confirm requirements, progress, and acceptance with customers through Feishu and AI.
 
-These are not implemented yet; this page will be updated as they land.
-
 ## Limitations
 
 - Feishu and Lark only; no WeCom or DingTalk.
 - Only local commits on `main` are covered; remote updates and `git push` are not watched.
-- The delivery target must be configured in advance; there is no auto-discovery from messages.
+- Requirements are limited to @bot text in groups; images and files are not supported yet.
 - It depends on a running OpenCode server.

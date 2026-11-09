@@ -61,6 +61,8 @@ bun run browser:install
 | `FEISHU_PM_NOTIFY_OPEN_ID` | 二选一 | 私聊用户的 open_id |
 | `FEISHU_PM_ENABLED` | 否 | 默认开启；设为 `0` 关闭 |
 | `FEISHU_PM_SUMMARY` | 否 | 设为 `0` 关闭 AI 摘要，改用固定模板 |
+| `FEISHU_PM_MODEL` | 否 | AI 使用的模型，格式 `providerID/modelID`；留空继承默认 |
+| `FEISHU_PM_AGENT` | 否 | AI 使用的 agent，例如 `plan`；留空时需求整理默认 `plan` |
 | `FEISHU_PM_RECEIVE` | 否 | 设为 `0` 关闭群需求接收 |
 | `FEISHU_PM_ALLOWED_CHAT_IDS` | 否 | 允许接收需求的群，逗号分隔；留空则只允许 `FEISHU_PM_NOTIFY_CHAT_ID` |
 | `FEISHU_PM_REQUIREMENTS_DIR` | 否 | 需求文档目录，默认 `requirements` |
