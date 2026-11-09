@@ -11,6 +11,11 @@ import {
 import { createCommandHandler, type StoredChat } from "./commands";
 import { FeishuBridge } from "./rpc";
 import {
+  type NotifyTarget,
+  type ScreenshotStatus,
+  startScreenshotWatcher,
+} from "./screenshot";
+import {
   startScreenshotWatcher,
   type NotifyTarget,
   type ScreenshotStatus,
@@ -72,6 +77,7 @@ type BridgeState = {
     getConnectionStatus?: () => unknown;
   };
   screenshot?: ScreenshotStatus;
+  screenshotWatcher?: { stop: () => void };
 };
 
 type FeishuMessageEvent = {
@@ -224,6 +230,8 @@ export default Plugin.define({
 
     const state = getState();
     const token = Symbol("feishu-instance");
+    // 先抢占 owner：旧实例的 cleanup 看到 token 不匹配后不会再停掉本次连接。
+    state.owner = token;
     log("setup start", {
       opencode: ctx.app.version,
       directory: ctx.location.directory,
@@ -1232,11 +1240,8 @@ export default Plugin.define({
         })();
       };
 
-      let screenshotWatcher: { stop: () => void } | undefined;
-
-      const start = async () => {
-        if (state.wsState === "connected" || state.wsState === "starting") return;
-        screenshotWatcher ??= startScreenshotWatcher({
+      const ensureScreenshotWatcher = () => {
+        state.screenshotWatcher ??= startScreenshotWatcher({
           directory: ctx.location.directory,
           log,
           storageGet: (key) => ctx.storage.get(key),
@@ -1248,6 +1253,11 @@ export default Plugin.define({
             state.screenshot = status;
           },
         });
+      };
+
+      const start = async () => {
+        ensureScreenshotWatcher();
+        if (state.wsState === "connected" || state.wsState === "starting") return;
         const wsClient = new Lark.WSClient({
           appId,
           appSecret,
@@ -1285,21 +1295,24 @@ export default Plugin.define({
       };
 
       const stop = () => {
-        log("websocket stopping");
-        screenshotWatcher?.stop();
-        screenshotWatcher = undefined;
-        eventsAbort?.abort();
-        eventsAbort = undefined;
-        state.eventsAbort = undefined;
-        for (const stream of state.streams.values()) finishStream(stream);
-        state.streams.clear();
+        log("websocket stopping", { wsState: state.wsState });
         try {
-          state.ws?.close?.({ force: true });
-        } catch (error) {
-          log("websocket close failed", error);
+          state.screenshotWatcher?.stop();
+          state.screenshotWatcher = undefined;
+          eventsAbort?.abort();
+          eventsAbort = undefined;
+          state.eventsAbort = undefined;
+          for (const stream of state.streams.values()) finishStream(stream);
+          state.streams.clear();
+          try {
+            state.ws?.close?.({ force: true });
+          } catch (error) {
+            log("websocket close failed", error);
+          }
+        } finally {
+          state.ws = undefined;
+          state.wsState = "idle";
         }
-        state.ws = undefined;
-        state.wsState = "idle";
       };
 
       state.controller = { start, stop };
@@ -1322,9 +1335,18 @@ export default Plugin.define({
       }
     };
 
+    // 插件重载时旧 controller 的 stop 可能因异常中断，留下 idle 的僵尸连接。
+    // 不复用旧 controller：先停掉，再按当前上下文重建，保证 client、ctx 和 watcher 都是新的。
     if (state.controller) {
-      log("reuse existing bridge connection");
-    } else if (state.pending) {
+      log("replace stale bridge controller", { wsState: state.wsState });
+      try {
+        state.controller.stop();
+      } finally {
+        state.controller = undefined;
+      }
+    }
+
+    if (state.pending) {
       log("wait for pending bridge setup");
       await state.pending;
     } else {
@@ -1334,19 +1356,20 @@ export default Plugin.define({
       await state.pending;
     }
 
-    state.owner = token;
-
     return () => {
       if (state.owner !== token) {
         log("cleanup skipped, instance superseded");
         return;
       }
-      log("cleanup");
-      state.controller?.stop();
-      state.started = false;
-      state.busyChats = [];
-      state.controller = undefined;
-      state.owner = undefined;
+      try {
+        log("cleanup");
+        state.controller?.stop();
+      } finally {
+        state.started = false;
+        state.busyChats = [];
+        state.controller = undefined;
+        state.owner = undefined;
+      }
     };
   },
 });
