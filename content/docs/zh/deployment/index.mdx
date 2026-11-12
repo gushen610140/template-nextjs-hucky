@@ -1,0 +1,133 @@
+---
+title: 部署
+description: 选择 Vercel 托管或 GitHub Actions + 自建服务器，并准备生产环境
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+项目支持两种生产部署方式：
+
+| 方式 | 适用场景 | 构建位置 | 运行形态 |
+| --- | --- | --- | --- |
+| [Vercel](/zh/docs/deployment/vercel) | 首选，免运维 | Vercel 构建镜像 | Serverless / Fluid Compute |
+| [自建服务器](/zh/docs/deployment/self-hosted) | 需要固定出口 IP、内网数据库、完全可控的进程 | GitHub Actions | `next build` standalone + systemd |
+
+两条路径都需要先完成本文的生产配置。自建服务器额外使用腾讯云 COS 中转构建产物，解决 GitHub Actions 跨境上传过慢的问题，配置见 [COS 中转](/zh/docs/deployment/cos)。
+
+## 共同前提
+
+- PostgreSQL：生产库同时提供 pooled 连接串（应用运行时）和直连串（迁移 / seed）。
+- Logto：生产应用，回调地址指向生产域名。
+- RustFS：浏览器可达的 S3 API、私有 bucket，以及允许生产域名的 CORS。
+- 可选服务：Qdrant（RAG）、OnlyOffice Document Server、AI 供应商密钥。只部署不使用对应功能时可以留空，但上线后要补齐才能启用。
+
+<Callout type="warn" title="生产配置不要复用开发值">
+`LOGTO_BASE_URL`、`LOGTO_COOKIE_SECRET`、数据库连接串和 `RUSTFS_*` 都依赖实际域名或生产环境。直接复制 `.env.development` 会让登录回调、会话 Cookie 或文件直传在生产失效。
+</Callout>
+
+## 环境变量
+
+生产构建和运行时使用同一组业务变量。Vercel 在 Project Settings 中填写；自建服务器在 GitHub Secrets 和服务器 systemd 中各放一份。
+
+### 构建阶段必须可用
+
+| 变量 | 生产环境取值 |
+| --- | --- |
+| `DATABASE_URL` | 生产库的 pooled / 连接池地址，应用运行时使用 |
+| `MIGRATE_DATABASE_URL` | 生产库的直连地址，`migrate deploy` 和 seed 使用；不能是 PgBouncer transaction 池 |
+| `LOGTO_ENDPOINT` | 生产 Logto 租户地址 |
+| `LOGTO_APP_ID` / `LOGTO_APP_SECRET` | 生产 Logto 应用；secret 仅服务端使用 |
+| `LOGTO_BASE_URL` | `https://<生产域名>`，不带结尾斜杠；Logto 控制台的 Redirect URI 填 `<LOGTO_BASE_URL>/api/auth/callback` |
+| `LOGTO_COOKIE_SECRET` | 重新生成的随机值，至少 32 个字符；更换后所有已签发会话立即失效 |
+| `BOOTSTRAP_ADMIN_EMAILS` | 首次部署的管理员邮箱，逗号分隔 |
+| `RUSTFS_ENDPOINT` | 浏览器可达的生产 S3 API 地址，不是 9001 控制台 |
+| `RUSTFS_ACCESS_KEY` / `RUSTFS_SECRET_KEY` | 生产凭据，仅服务端使用 |
+| `RUSTFS_BUCKET` | 生产私有 bucket，CORS 允许生产域名 |
+
+### 按功能启用的运行时变量
+
+这些变量构建阶段不会校验，缺失时应用仍能启动，但对应功能不可用：
+
+| 变量 | 缺失时的表现 |
+| --- | --- |
+| `AI_SECRET_KEY` | 保存或更新 AI 供应商失败；部署后不要更换，否则已有密文无法解密 |
+| `QDRANT_URL` / `QDRANT_API_KEY` | 知识库索引与检索失败 |
+| `QDRANT_COLLECTION` / `QDRANT_VECTOR_SIZE` | 同上；`QDRANT_VECTOR_SIZE` 必须与 embedding 模型输出维度一致，集合建好后不能改 |
+| `ONLYOFFICE_DS_URL` / `ONLYOFFICE_JWT_SECRET` | 打开文档编辑页时提示配置缺失 |
+| `ONLYOFFICE_SAVE_CALLBACK_URL` | 编辑器可以打开，但保存不可用；生产环境必须填公网可达地址，不能是 loopback |
+
+<Callout type="warn" title="这些变量必须换成生产值">
+`DATABASE_URL`、`MIGRATE_DATABASE_URL`、`LOGTO_BASE_URL`、`LOGTO_COOKIE_SECRET`、`LOGTO_*` 应用凭据、`RUSTFS_ENDPOINT`、`RUSTFS_BUCKET` 以及 RustFS 的 CORS 都应按生产环境重新配置。尤其不要保留 localhost、示例邮箱或开发密钥。`BOOTSTRAP_ADMIN_EMAILS` 也要填真实管理员邮箱。`ONLYOFFICE_SAVE_CALLBACK_URL` 必须指向生产域名，否则 OnlyOffice 的回调会写到不可达地址。
+</Callout>
+
+<Callout type="warn" title="不要加 NEXT_PUBLIC_ 前缀">
+带 `NEXT_PUBLIC_` 的变量会被打进浏览器 bundle。`LOGTO_APP_SECRET`、`LOGTO_COOKIE_SECRET`、`RUSTFS_SECRET_KEY`、`AI_SECRET_KEY`、`QDRANT_API_KEY`、`ONLYOFFICE_JWT_SECRET` 都只能留在服务端。
+</Callout>
+
+## 构建脚本
+
+`db:setup` 把数据库准备拆成三步，两个部署脚本都复用它：
+
+```json
+{
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:seed": "prisma db seed",
+    "db:setup": "prisma generate && prisma migrate deploy && prisma db seed",
+    "vercel-build": "bun run db:setup && next build",
+    "github-build": "bun run db:setup && next build"
+  }
+}
+```
+
+<Steps>
+
+<Step>
+### 生成 Prisma Client
+
+`prisma generate` 根据 `prisma/schema.prisma` 把客户端写到 `lib/generated/prisma`。该目录被 `.gitignore` 忽略，干净环境里必须先执行，否则 `next build` 会因为找不到生成的代码而失败。
+</Step>
+
+<Step>
+### 应用迁移
+
+`prisma migrate deploy` 只执行 `prisma/migrations` 中已提交的迁移，不会生成新迁移，也不会重置数据库。迁移失败时构建失败，不会把新版本切到线上。连接串优先读取 `MIGRATE_DATABASE_URL`，未设置时回退到 `DATABASE_URL`。
+</Step>
+
+<Step>
+### 同步 RBAC seed
+
+`prisma db seed` 读取 `prisma.config.ts` 中的 `migrations.seed` 配置，执行 `bun prisma/seed.ts`。脚本用 `MIGRATE_DATABASE_URL ?? DATABASE_URL` 建立直连，在一个事务里 upsert 权限和内置的 `admin` / `user` 角色，并把内置角色的权限对齐到 `lib/permissions`。
+
+seed 是幂等的：每次部署都会运行，但不会重复插入数据，也不会删除自定义角色或业务数据。
+
+**`migrate deploy` 不会自动执行 seed**。如果部署流程只跑迁移，内置角色和权限表会是空的，权限校验会把后台锁死。
+</Step>
+
+<Step>
+### 构建 Next.js
+
+`next build` 最后执行。此时 schema 已迁移、客户端已生成、RBAC 数据已就绪，构建产物可以直接上线。
+</Step>
+
+</Steps>
+
+<Callout title="本地 build 不会做这些">
+`bun run build` 只执行 `next build`。数据库准备只存在于 `vercel-build`、`github-build` 和 `db:setup` 中，所以部署平台必须指向带数据库准备的脚本。
+</Callout>
+
+<Callout type="warn" title="MIGRATE_DATABASE_URL 不能留空">
+`prisma.config.ts` 使用 `process.env.MIGRATE_DATABASE_URL ?? process.env.DATABASE_URL`。如果变量存在但值为空字符串，`??` 不会回退，`prisma migrate deploy` 会报 `datasource.url property is required`。只用一个地址时删掉该行，或填入与 `DATABASE_URL` 相同的值。
+</Callout>
+
+<Callout type="info" title="standalone 只影响自建服务器">
+`next.config.ts` 设置了 `output: "standalone"`，Vercel 会忽略这部分；自建服务器依赖它生成 `.next/standalone/server.js`，不需要上传完整 `node_modules`。
+</Callout>
+
+## 下一步
+
+- [部署到 Vercel](/zh/docs/deployment/vercel)
+- [部署到自建服务器](/zh/docs/deployment/self-hosted)
+- [COS 中转配置](/zh/docs/deployment/cos)
+- [环境变量](/zh/docs/infrastructure/environment-variables)
+- [迁移](/zh/docs/prisma/migrations)

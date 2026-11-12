@@ -1,0 +1,84 @@
+---
+title: Vercel
+description: Deploy to Vercel and run migrations and seed through vercel-build
+---
+
+Vercel is the default hosting path: connect the Git repository and every push builds, migrates, and publishes without server maintenance. See [Deployment overview](/en/docs/deployment#environment-variables) for production variables.
+
+## Project settings
+
+Choose Next.js as the Framework Preset and keep the repository root as the Root Directory.
+
+### Build Command
+
+The Next.js preset runs the `build` script, which is `next build`. Open Project Settings → Build and Deployment → Build Command, enable Override, and set:
+
+```text
+bun run vercel-build
+```
+
+Using only `next build` or `bun run build` skips Prisma Client generation, database migrations, and the seed, so the deployed app can fail immediately. You can set `buildCommand` in `vercel.json` instead, but do not configure it in both places.
+
+Leave Install Command on auto-detection. Vercel uses Bun after detecting `bun.lock`; set it to `bun ci` manually if needed. Choose Node.js 22: Next.js 16 requires 20.9 or newer, and 22 is the current LTS available in both the Vercel build image and runtime.
+
+Next.js 16 builds with Turbopack by default on Vercel, so `next.config.ts` no longer needs build-memory tuning. Only revisit worker limits if you move the build to a platform with less memory.
+
+### Environment variables
+
+Add variables under Project Settings → Environment Variables with the Production scope. Vercel shares one set between the Production build and the runtime: the build connects to the database and runs migrations and the seed, so the values must be real production values.
+
+The full table is in [Deployment overview](/en/docs/deployment#environment-variables). Vercel injects `NODE_ENV=production` automatically. Variables are read only during a deployment or redeploy, so trigger a new deployment after changing them.
+
+## vercel-build order
+
+`vercel-build` is `bun run db:setup && next build`. The log should show:
+
+1. `prisma generate`
+2. `prisma migrate deploy`
+3. `RBAC seed completed.`
+4. `next build`
+
+See [Deployment overview](/en/docs/deployment#build-scripts) for what each step does.
+
+## Preview deployments
+
+The Build Command applies to every deployment, so Preview also runs `vercel-build`. Either give Preview its own database and variables, or make Preview generate the client and build without migrating. Variable scopes are separate: when only Production has values, the Preview build cannot read them and fails.
+
+To migrate only in Production, branch `vercel-build` on `VERCEL_ENV`: run the full `db:setup` in Production and keep at least `prisma generate && next build` in Preview. Do not skip the client generation in Preview.
+
+<Callout type="error" title="Never point Preview at the production database">
+Every push triggers a Preview build. If Preview shares the production `MIGRATE_DATABASE_URL`, every push migrates and seeds production.
+</Callout>
+
+## First deployment
+
+1. Back up the production database.
+2. Push to the Vercel production branch and confirm the build log follows `prisma generate` → `migrate deploy` → `RBAC seed completed.` → `next build`.
+3. Sign in with an address from `BOOTSTRAP_ADMIN_EMAILS` and confirm the `admin` role. The variable stops applying once an administrator exists.
+4. Check the Logto callback and file uploads/downloads; they depend on the production domain and RustFS CORS.
+5. Verify AI provider saving (`AI_SECRET_KEY`), knowledge base retrieval (`QDRANT_*`), and document editing (`ONLYOFFICE_*`) as needed.
+6. Run `bunx prisma migrate status` against the production database and confirm there are no pending migrations.
+
+## Common failures
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Prisma Client not found during build | Build Command is still `next build` | Use `bun run vercel-build` |
+| `datasource.url property is required` | `MIGRATE_DATABASE_URL` exists but is empty | Remove the line or set it to `DATABASE_URL` |
+| Database connection timeout | The Vercel build cannot reach the database, or the URL is wrong | Check the network allowlist, SSL parameters, and `MIGRATE_DATABASE_URL` |
+| Migration fails with P3009 | The production database has a failed migration | Back up, fix, then mark it with `migrate resolve`; never run `migrate reset` in production |
+| Signed in without permissions | The seed did not run, or the email is not in `BOOTSTRAP_ADMIN_EMAILS` | Confirm `RBAC seed completed.` and check the address |
+| Upload or download fails | `RUSTFS_ENDPOINT` is unreachable from the browser, or CORS lacks the production origin | Use the public S3 address and allow `PUT`, `GET`, and `HEAD` in CORS |
+| redirect_uri mismatch on sign-in | The Logto console registration differs from the real domain | Register exactly `<LOGTO_BASE_URL>/api/auth/callback`, matching protocol and trailing slash |
+| Editor reports missing configuration | `ONLYOFFICE_DS_URL` or `ONLYOFFICE_JWT_SECRET` is missing or the JWT differs | Fill both and match the Document Server `JWT_SECRET` |
+| Saving a document does nothing | `ONLYOFFICE_SAVE_CALLBACK_URL` is missing or loopback | Use the production domain; the app appends `/api/onlyoffice/callback` |
+| Saving an AI provider fails | `AI_SECRET_KEY` is missing or changed after deployment | Restore the original value; old ciphertext cannot be decrypted after a change |
+| RAG indexing or retrieval fails | `QDRANT_*` is missing or the vector size mismatches | Fill the variables; the dimension must match the embedding model and cannot change later |
+| Variables changed but production is unchanged | Vercel reads variables only during deployment | Trigger a new Production deployment |
+
+## Related
+
+- [Deployment overview](/en/docs/deployment)
+- [Self-hosted server](/en/docs/deployment/self-hosted)
+- [Environment variables](/en/docs/infrastructure/environment-variables)
+- [Migrations](/en/docs/prisma/migrations)

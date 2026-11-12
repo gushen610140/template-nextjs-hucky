@@ -1,0 +1,314 @@
+---
+title: Self-hosted server
+description: Build a standalone artifact in GitHub Actions, relay it through COS, and run it with systemd on Tencent Cloud
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+This path keeps the GitHub build and publishes the artifact to your own Linux server. Use it when you need a fixed egress IP, access to an internal database, or full process control. See [Deployment overview](/en/docs/deployment#environment-variables) for production variables.
+
+## Flow
+
+```text
+GitHub Actions runner
+  bun install → bun run github-build → .next/standalone
+        │
+        │ public network + COS global acceleration
+        ▼
+Tencent Cloud COS (private bucket, same region as the server)
+        │
+        │ private network + presigned URL
+        ▼
+Tencent Cloud CVM
+  curl → extract releases/<timestamp>-<sha>
+        → switch current symlink → systemctl restart
+```
+
+Large files never travel over SSH directly: the GitHub runner is outside mainland China, and a single cross-border TCP stream often drops to tens of KB/s. COS handles the cross-border leg and the server pulls from the same-region private network. Setup is in [COS transfer](/en/docs/deployment/cos).
+
+## Server preparation
+
+Requirements:
+
+- Tencent Cloud CVM or Lighthouse in the **same region as the COS bucket** (for example, both in Guangzhou).
+- Linux with systemd and Node.js 22 (`node -v` must work).
+- Network access to PostgreSQL, Logto, RustFS, and other production dependencies.
+- Security group exposing only 22 / 80 / 443; the app port 3000 stays on localhost.
+
+### Create the deploy user
+
+CI signs in with a dedicated account, never root. Run these as an account with sudo:
+
+```bash
+sudo useradd --create-home --shell /bin/bash deploy
+sudo install -d -m 700 -o deploy -g deploy /home/deploy/.ssh
+sudo tee -a /home/deploy/.ssh/authorized_keys >/dev/null < deploy_key.pub
+sudo chown deploy:deploy /home/deploy/.ssh/authorized_keys
+sudo chmod 600 /home/deploy/.ssh/authorized_keys
+```
+
+`deploy_key.pub` matches the private key in the `SSH_PRIVATE_KEY` secret. The private key must include both the `-----BEGIN OPENSSH PRIVATE KEY-----` and closing lines.
+
+### Directory layout
+
+```bash
+sudo install -d -o deploy -g deploy /srv/app
+sudo install -d -o deploy -g deploy /srv/app/releases /srv/app/incoming
+```
+
+```text
+/srv/app
+├── .env.production     # runtime variables, 600, readable by deploy
+├── current -> /srv/app/releases/20261112040726-5c085b9
+├── incoming/           # CI downloads release.tar.gz here, then deletes it
+└── releases/
+    ├── 20261111090000-abc1234/
+    └── 20261112040726-5c085b9/
+        ├── server.js
+        ├── .next/
+        └── node_modules/
+```
+
+Each deployment creates `releases/<UTC timestamp>-<commit>`, and `current` points at the newest one. CI keeps the last five.
+
+### Runtime environment
+
+Write the same values used for the build into `/srv/app/.env.production`:
+
+```bash
+sudo install -m 600 -o deploy -g deploy /dev/null /srv/app/.env.production
+sudo -u deploy tee /srv/app/.env.production >/dev/null <<'EOF'
+DATABASE_URL=postgres://...
+MIGRATE_DATABASE_URL=postgres://...
+LOGTO_ENDPOINT=https://logto.example.com
+LOGTO_APP_ID=...
+LOGTO_APP_SECRET=...
+LOGTO_BASE_URL=https://app.example.com
+LOGTO_COOKIE_SECRET=...
+BOOTSTRAP_ADMIN_EMAILS=admin@example.com
+RUSTFS_ENDPOINT=https://s3.example.com
+RUSTFS_ACCESS_KEY=...
+RUSTFS_SECRET_KEY=...
+RUSTFS_BUCKET=app
+AI_SECRET_KEY=...
+QDRANT_URL=...
+QDRANT_API_KEY=...
+QDRANT_COLLECTION=...
+QDRANT_VECTOR_SIZE=...
+ONLYOFFICE_DS_URL=...
+ONLYOFFICE_JWT_SECRET=...
+ONLYOFFICE_SAVE_CALLBACK_URL=https://app.example.com/api/onlyoffice/callback
+PORT=3000
+EOF
+```
+
+<Callout type="warn" title="systemd EnvironmentFile is not a shell">
+`EnvironmentFile` parses only `KEY=VALUE`; it does not support `export`, command substitution, or multi-line values. Quote values that contain spaces. `AI_SECRET_KEY` and `LOGTO_COOKIE_SECRET` must match the build values, or encrypted data cannot be decrypted and all sessions are invalidated.
+</Callout>
+
+### systemd unit
+
+Create `/etc/systemd/system/app.service`:
+
+```ini
+[Unit]
+Description=Next.js app
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+WorkingDirectory=/srv/app/current
+Environment=NODE_ENV=production
+Environment=PORT=3000
+EnvironmentFile=/srv/app/.env.production
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Notes:
+
+- `WorkingDirectory` points at the `current` symlink, so switching releases takes effect after a restart.
+- `ExecStart` runs `server.js`, not `next start`; the standalone output provides that entry point.
+- Keep `Environment=NODE_ENV=production`; Next.js behaves differently outside production mode.
+- Verify the `node` path with `command -v node`. Node installed through nvm is not in `/usr/bin`, so use its absolute path.
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now app
+sudo systemctl status app
+journalctl -u app -f
+```
+
+### Allow deploy to restart the service
+
+CI runs `sudo systemctl restart app`. Grant exactly that command:
+
+```bash
+sudo visudo -f /etc/sudoers.d/deploy-app
+```
+
+```text
+deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart app, /usr/bin/systemctl status app
+```
+
+Check the path with `command -v systemctl`; CentOS often uses `/bin/systemctl`. A mismatched path makes the rule fail.
+
+### Reverse proxy (optional)
+
+If the app listens on `127.0.0.1:3000`, terminate TLS with Nginx:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name app.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/app.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+The standalone server listens on `0.0.0.0` by default. To bind it to localhost, add `Environment=HOSTNAME=127.0.0.1` to the unit.
+
+## GitHub configuration
+
+### Secrets
+
+| Name | Value |
+| --- | --- |
+| `PRODUCTION_ENV` | Full `.env.production` text, pasted as multiple lines |
+| `SSH_HOST` | Server public IP or hostname |
+| `SSH_USER` | `deploy` |
+| `SSH_PRIVATE_KEY` | Full OpenSSH private key for `deploy` |
+| `COS_SECRET_ID` / `COS_SECRET_KEY` | COS sub-user credentials, see [COS transfer](/en/docs/deployment/cos) |
+
+### Variables
+
+| Name | Example | Description |
+| --- | --- | --- |
+| `SSH_PORT` | `22` | Defaults to 22 when empty |
+| `DEPLOY_PATH` | `/srv/app` | Directory root from above |
+| `DEPLOY_SERVICE` | `app` | systemd service name, defaults to `app` |
+| `APP_PORT` | `3000` | Health check port |
+| `DEPLOY_URL` | `https://app.example.com` | Displayed by the GitHub Environment only |
+| `COS_BUCKET` | `nextjs-deploy-125xxxxxxx` | Full bucket name |
+| `COS_REGION` | `ap-guangzhou` | Matches the bucket and server region |
+
+### Environment scope
+
+Both the `build` and `deploy` jobs declare `environment: production`. If the variables live under an Environment rather than the Repository, a job without this declaration cannot read the secrets. An empty `PRODUCTION_ENV` fails the build with `datasource.url property is required`.
+
+## Workflow
+
+`.github/workflows/deploy.yml` runs on pushes to `main` or manual dispatch.
+
+<Steps>
+
+<Step>
+### Build
+
+1. `bun install --frozen-lockfile`
+2. Write `PRODUCTION_ENV` to `.env.production`
+3. `NODE_ENV=production bun run github-build`
+4. Copy `public` and `.next/static` into `.next/standalone`, then remove `.env*`
+5. Pack `release.tar.gz` and upload the artifact
+
+The build sets `NODE_OPTIONS=--max-old-space-size=4096` to avoid OOM during prerendering of large pages.
+</Step>
+
+<Step>
+### Upload to COS
+
+1. Install `coscli`
+2. Write `~/.cos.yaml` with the upload endpoint `cos.accelerate.myqcloud.com`
+3. `coscli cp` uploads to `releases/<run_number>-<sha>.tar.gz` with parallel multipart
+4. Generate a one-hour presigned URL on the default domain and output the SHA256
+</Step>
+
+<Step>
+### Activate
+
+1. `curl` the presigned URL into `incoming/`
+2. Verify with `sha256sum -c`
+3. Extract into `releases/<UTC timestamp>-<sha>`
+4. `ln -sfn` to switch `current`
+5. `sudo systemctl restart app`
+6. Poll `http://127.0.0.1:3000/` until it returns 2xx
+7. Delete releases beyond the newest five
+
+If the restart or health check fails, the job fails while `current` still points at the new release, so roll back manually.
+</Step>
+
+</Steps>
+
+## First deployment
+
+1. Create the database, Logto application, RustFS bucket, and CORS.
+2. Set up the deploy user, directories, environment file, and systemd on the server.
+3. Add the GitHub Secrets and Variables.
+4. Push to `main` and confirm both `Build` and `Deploy` pass.
+5. Open the site, sign in with an address from `BOOTSTRAP_ADMIN_EMAILS`, and check uploads, downloads, and the Logto callback.
+6. Run `journalctl -u app -n 100` and confirm there are no startup errors.
+
+## Rollback
+
+Switch back to a retained release:
+
+```bash
+ls -1dt /srv/app/releases/*
+sudo ln -sfn /srv/app/releases/<previous-release> /srv/app/current
+sudo systemctl restart app
+```
+
+Migrations do not roll back. If the new release contains a destructive migration, restore the database backup before switching.
+
+## Direct rsync (not recommended)
+
+The earlier pipeline uploaded `release.tar.gz` with `rsync`:
+
+```bash
+rsync -avz --partial --info=progress2 --stats \
+  -e "ssh -i ~/.ssh/id_deploy -p 22" \
+  release.tar.gz deploy@server:/srv/app/incoming/
+```
+
+From an overseas GitHub runner to a mainland server this measured 20–30 KB/s: a 40 MB artifact took over half an hour and was often cancelled. The workflow no longer uses it. Consider it only when the runner and server share a good network path, such as a self-hosted runner in the same region. `-z` adds nothing for an already compressed tarball.
+
+## Common failures
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `datasource.url property is required` | Empty `PRODUCTION_ENV`, or an empty `MIGRATE_DATABASE_URL=` | Fix the secret; remove the empty line or copy `DATABASE_URL` |
+| Build job cannot read secrets | Secrets live in an Environment and the job does not declare it | Keep `environment: production` on both jobs |
+| `ssh: no key found` | Incomplete or escaped private key, or a public key | Paste the complete OpenSSH private key |
+| `sudo: no tty present` or a password prompt | Missing sudoers rule or wrong binary path | Add the NOPASSWD rule with `visudo` |
+| Service exits immediately | Wrong `server.js` or Node path, or a bad environment file | Read `journalctl -u app -n 200` |
+| Missing styles or images | Standalone output lacks `.next/static` or `public` | Confirm the build copies both |
+| Health check times out | The app port differs from `APP_PORT` | Align systemd `PORT`, Nginx `proxy_pass`, and `APP_PORT` |
+| Nginx returns 502 | The app is down or bound to the wrong address | Check `ss -lntp` for port 3000 and the unit status |
+| COS upload or download returns 403 | The sub-user policy lacks an action | See [COS transfer](/en/docs/deployment/cos#permission-troubleshooting) |
+
+## Related
+
+- [Deployment overview](/en/docs/deployment)
+- [COS transfer](/en/docs/deployment/cos)
+- [Vercel](/en/docs/deployment/vercel)
+- [Environment variables](/en/docs/infrastructure/environment-variables)
