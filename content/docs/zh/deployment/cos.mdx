@@ -1,0 +1,189 @@
+---
+title: COS 中转
+description: 用腾讯云 COS 全球加速解决 GitHub Actions 到国内服务器的跨境传输过慢
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+GitHub Actions 的 runner 在境外，直接 `scp` / `rsync` 到国内服务器经常只有 20–30 KB/s。COS 中转把链路拆成两段：
+
+```text
+GitHub runner ──全球加速──▶ COS（与服务器同地域）──内网──▶ 服务器
+```
+
+CI 只负责上传，服务器用预签名 URL 从内网下载，不需要在服务器上保存 COS 密钥。工作流实现见 [`deploy.yml`](https://github.com/gushen610140/template-nextjs-hucky/blob/main/.github/workflows/deploy.yml)。
+
+## 创建存储桶
+
+<Steps>
+
+<Step>
+### 新建桶
+
+COS 控制台 → 存储桶列表 → 创建存储桶。
+
+- 名称：例如 `nextjs-deploy`。
+- 地域：**与服务器同地域**。服务器在广州就选 `ap-guangzhou`，这样默认域名会解析到内网。
+- 访问权限：私有读写。
+- 其他保持默认。
+
+创建后完整桶名为 `<名称>-<APPID>`，例如 `nextjs-deploy-1250000000`。APPID 在控制台账号信息里也能查。
+</Step>
+
+<Step>
+### 开启全球加速
+
+进入桶 → 左侧“域名与传输管理” → “全球加速” → 编辑 → 开启 → 保存。
+
+- 加速上传域名：`<BucketName-APPID>.cos.accelerate.myqcloud.com`
+- 生效时间约 15 分钟。
+- 只有使用加速域名的请求才会走加速链路，默认域名照常可用。
+- 金融云地域不支持。
+
+工作流的 `~/.cos.yaml` 只写 endpoint `cos.accelerate.myqcloud.com`，coscli 会自动拼接桶名。
+</Step>
+
+<Step>
+### 生命周期清理
+
+桶 → 基础配置 → 生命周期 → 新建规则：
+
+- 前缀：`releases/`
+- 对象创建 7 天后删除
+
+CI 每次发布都会生成一个新的 tarball，不清理会一直占用存储。服务器上本地只保留最近 5 个版本，COS 由生命周期兜底。
+</Step>
+
+</Steps>
+
+## 子用户与权限
+
+不要用主账号密钥。创建一个只能操作这个桶的子用户。
+
+<Steps>
+
+<Step>
+### 新建子用户
+
+访问管理 CAM → 用户 → 新建用户 → 编程访问（只勾 API 密钥）→ 不加入用户组 → 创建。
+
+保存 `SecretId` 和 `SecretKey`，SecretKey 只显示一次。
+</Step>
+
+<Step>
+### 自定义策略
+
+CAM → 策略 → 新建自定义策略 → 按策略语法创建，把下面三个占位值替换成实际值：
+
+- `ap-guangzhou`：桶地域
+- `1250000000`：APPID
+- `nextjs-deploy-1250000000`：完整桶名
+
+```json
+{
+  "version": "2.0",
+  "statement": [
+    {
+      "effect": "allow",
+      "action": [
+        "cos:HeadBucket",
+        "cos:GetBucket",
+        "cos:HeadObject",
+        "cos:GetObject",
+        "cos:PutObject",
+        "cos:InitiateMultipartUpload",
+        "cos:UploadPart",
+        "cos:CompleteMultipartUpload",
+        "cos:AbortMultipartUpload",
+        "cos:ListMultipartUploads",
+        "cos:ListParts"
+      ],
+      "resource": [
+        "qcs::cos:ap-guangzhou:uid/1250000000:nextjs-deploy-1250000000/",
+        "qcs::cos:ap-guangzhou:uid/1250000000:nextjs-deploy-1250000000/*"
+      ]
+    }
+  ]
+}
+```
+
+各动作用途：
+
+- `HeadBucket` / `GetBucket`：coscli 初始化与桶检查。
+- 分片上传四件套 + `ListParts` / `ListMultipartUploads`：大文件并发上传和断点续传。
+- `HeadObject` / `GetObject`：预签名 URL 下载。
+
+<Callout type="warn" title="GetObject 不能漏">
+预签名 URL 以生成它的子用户身份鉴权。只给上传权限时，CI 上传成功，但服务器 `curl` 预签名 URL 会返回 `403 AccessDenied`。
+</Callout>
+</Step>
+
+<Step>
+### 授权
+
+把策略授权给子用户。策略生效通常需要几十秒。
+
+建议再给该子用户开启操作保护或限制登录，CI 密钥只用于 API。
+</Step>
+
+</Steps>
+
+## GitHub 配置
+
+Secrets：
+
+| 名称 | 内容 |
+| --- | --- |
+| `COS_SECRET_ID` | 子用户 SecretId |
+| `COS_SECRET_KEY` | 子用户 SecretKey |
+
+Variables：
+
+| 名称 | 示例 |
+| --- | --- |
+| `COS_BUCKET` | `nextjs-deploy-1250000000` |
+| `COS_REGION` | `ap-guangzhou` |
+
+`COS_REGION` 必须与桶地域一致，否则 `signurl` 会签出错误 Host，服务器下载返回 403 或 404。
+
+## 工作流做了什么
+
+1. 从 GitHub Release 下载 `coscli` 二进制并安装到 `/usr/local/bin`。
+2. 用 Secret 生成 `~/.cos.yaml`，`disableencryption: "true"`，上传 endpoint 为 `cos.accelerate.myqcloud.com`。
+3. `coscli cp` 上传，`--thread-num 8 --part-size 8` 多分片并发。
+4. 用默认域名 `cos.<region>.myqcloud.com` 生成 1 小时预签名 URL，并 `::add-mask::` 防止日志泄露。
+5. SSH 到服务器后 `curl` 下载，校验 SHA256，再解压和切换版本。
+
+<Callout title="为什么下载不用加速域名">
+腾讯云 CVM 在**同地域**访问桶默认域名时会自动走内网，最快且不计外网下行流量。加速域名用于 CI 的跨境上传段。如果服务器与桶不同地域，可以改用内网全球加速域名 `<BucketName-APPID>.cos-internal.accelerate.tencentcos.cn`。
+</Callout>
+
+<Callout type="info" title="自定义域名不参与">
+工作流只用加速域名和桶默认域名。在“域名与传输管理”里添加的自定义域名、CDN 域名不影响上传下载；不要关闭默认域名，也不要配置强制跳转覆盖它。
+</Callout>
+
+## 费用
+
+按公开价估算，实际以账单为准：
+
+- 标准存储：约 0.118 元/GB/月。
+- 境外上传加速：约 1.25 元/GB。
+- 同地域内网下载：不计外网下行流量。
+
+一个 43 MB 的产物，每次上传加速费用约 0.05 元；每天发布一次约 1.5–2 元/月，加上存储通常不超过 3 元/月。开启生命周期后存储不会持续增长。
+
+## 权限排查
+
+| 现象 | 原因 | 处理 |
+| --- | --- | --- |
+| 上传时报 `AccessDenied` | 策略缺少 `PutObject` / 分片动作，或 resource 桶名写错 | 对照上面的 JSON 和桶名 |
+| 上传一直停在 `start` | 加速未生效或跨境链路异常 | 确认全球加速已开启满 15 分钟；看 COS 控制台是否出现对象 |
+| 服务器 `curl` 返回 403 | 策略缺少 `GetObject`；`COS_REGION` 与桶不一致；服务器时间偏差过大 | 补权限；核对地域；`timedatectl` 检查时间同步 |
+| 403 但看不出原因 | `curl -f` 隐藏了响应体 | 手动执行 `curl -i "<预签名URL>"`，看 `<Code>` 和 `<Message>` |
+| 预签名 URL 过期 | 有效期 1 小时，下载发生在过期后 | 重新跑部署；检查服务器到 COS 的连通性 |
+| 对象不存在 | 生命周期已删除，或 key 拼错 | 看上传步骤输出的 key，与服务器使用的保持一致 |
+
+## 相关文档
+
+- [部署到自建服务器](/zh/docs/deployment/self-hosted)
+- [部署概览](/zh/docs/deployment)

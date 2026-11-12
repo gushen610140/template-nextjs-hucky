@@ -1,0 +1,314 @@
+---
+title: 自建服务器
+description: 用 GitHub Actions 构建 standalone 产物，经 COS 中转后在腾讯云服务器上以 systemd 运行
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+这条路径保留 GitHub 构建，把产物发布到自己的 Linux 服务器。适合需要固定出口 IP、访问内网数据库、或者不想依赖 Vercel 的场景。生产环境变量见 [部署概览](/zh/docs/deployment#环境变量)。
+
+## 整体流程
+
+```text
+GitHub Actions runner
+  bun install → bun run github-build → .next/standalone
+        │
+        │ 公网 + COS 全球加速
+        ▼
+腾讯云 COS（私有桶，与服务器同地域）
+        │
+        │ 内网 + 预签名 URL
+        ▼
+腾讯云 CVM
+  curl → 解压 releases/<时间>-<sha>
+        → current 软链切换 → systemctl restart
+```
+
+不使用 SSH 直传大文件：GitHub runner 在境外，跨境单条 TCP 流经常只有几十 KB/s。COS 负责跨境段，服务器只从同地域内网拉取，详细配置见 [COS 中转](/zh/docs/deployment/cos)。
+
+## 服务器准备
+
+要求：
+
+- 腾讯云 CVM 或轻量应用服务器，**与 COS 桶同地域**（例如都在广州）。
+- Linux + systemd，Node.js 22（`node -v` 可用）。
+- 能访问 PostgreSQL、Logto、RustFS 等生产依赖。
+- 安全组只暴露 22 / 80 / 443，应用端口 3000 只监听本机。
+
+### 创建 deploy 用户
+
+CI 用独立账号 SSH 登录，不使用 root。以下命令在服务器上以有 sudo 权限的账号执行：
+
+```bash
+sudo useradd --create-home --shell /bin/bash deploy
+sudo install -d -m 700 -o deploy -g deploy /home/deploy/.ssh
+sudo tee -a /home/deploy/.ssh/authorized_keys >/dev/null < deploy_key.pub
+sudo chown deploy:deploy /home/deploy/.ssh/authorized_keys
+sudo chmod 600 /home/deploy/.ssh/authorized_keys
+```
+
+`deploy_key.pub` 对应 GitHub Secret `SSH_PRIVATE_KEY` 的私钥。私钥必须包含 `-----BEGIN OPENSSH PRIVATE KEY-----` 和结束行，不能只贴中间内容。
+
+### 目录布局
+
+```bash
+sudo install -d -o deploy -g deploy /srv/app
+sudo install -d -o deploy -g deploy /srv/app/releases /srv/app/incoming
+```
+
+```text
+/srv/app
+├── .env.production     # 运行时环境变量，600，deploy 可读
+├── current -> /srv/app/releases/20261112040726-5c085b9
+├── incoming/           # CI 下载的 release.tar.gz，解压后删除
+└── releases/
+    ├── 20261111090000-abc1234/
+    └── 20261112040726-5c085b9/
+        ├── server.js
+        ├── .next/
+        └── node_modules/
+```
+
+每次发布新建一个 `releases/<UTC 时间>-<commit>`，`current` 指向最新版本。CI 只保留最近 5 个版本。
+
+### 运行时环境变量
+
+把和构建时相同的内容写到 `/srv/app/.env.production`：
+
+```bash
+sudo install -m 600 -o deploy -g deploy /dev/null /srv/app/.env.production
+sudo -u deploy tee /srv/app/.env.production >/dev/null <<'EOF'
+DATABASE_URL=postgres://...
+MIGRATE_DATABASE_URL=postgres://...
+LOGTO_ENDPOINT=https://logto.example.com
+LOGTO_APP_ID=...
+LOGTO_APP_SECRET=...
+LOGTO_BASE_URL=https://app.example.com
+LOGTO_COOKIE_SECRET=...
+BOOTSTRAP_ADMIN_EMAILS=admin@example.com
+RUSTFS_ENDPOINT=https://s3.example.com
+RUSTFS_ACCESS_KEY=...
+RUSTFS_SECRET_KEY=...
+RUSTFS_BUCKET=app
+AI_SECRET_KEY=...
+QDRANT_URL=...
+QDRANT_API_KEY=...
+QDRANT_COLLECTION=...
+QDRANT_VECTOR_SIZE=...
+ONLYOFFICE_DS_URL=...
+ONLYOFFICE_JWT_SECRET=...
+ONLYOFFICE_SAVE_CALLBACK_URL=https://app.example.com/api/onlyoffice/callback
+PORT=3000
+EOF
+```
+
+<Callout type="warn" title="systemd EnvironmentFile 不是 shell">
+`EnvironmentFile` 只解析 `KEY=VALUE`，不支持 `export`、命令替换或多行值。含空格的值用双引号包住。`AI_SECRET_KEY`、`LOGTO_COOKIE_SECRET` 必须与构建时一致，否则已加密数据无法解密、已有会话全部失效。
+</Callout>
+
+### systemd 服务
+
+创建 `/etc/systemd/system/app.service`：
+
+```ini
+[Unit]
+Description=Next.js app
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+WorkingDirectory=/srv/app/current
+Environment=NODE_ENV=production
+Environment=PORT=3000
+EnvironmentFile=/srv/app/.env.production
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+要点：
+
+- `WorkingDirectory` 指向 `current` 软链，切换版本后重启即可生效。
+- `ExecStart` 用 `server.js`，不是 `next start`；这是 standalone 产物自带的入口。
+- `Environment=NODE_ENV=production` 必须保留，Next.js 在非生产模式下行为不同。
+- `node` 路径用 `command -v node` 确认，nvm 安装的 Node 不在 `/usr/bin`，需要写绝对路径。
+
+启用并启动：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now app
+sudo systemctl status app
+journalctl -u app -f
+```
+
+### 允许 deploy 重启服务
+
+CI 执行 `sudo systemctl restart app`，只授权这一条命令：
+
+```bash
+sudo visudo -f /etc/sudoers.d/deploy-app
+```
+
+```text
+deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart app, /usr/bin/systemctl status app
+```
+
+`systemctl` 路径用 `command -v systemctl` 确认；CentOS 常见为 `/bin/systemctl`，写成不一致的路径会匹配失败。
+
+### 反向代理（可选）
+
+应用只监听 `127.0.0.1:3000` 时，用 Nginx 终止 TLS：
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name app.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/app.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/app.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+Standalone 默认监听 `0.0.0.0`，需要只监听本机时在服务里加 `Environment=HOSTNAME=127.0.0.1`。
+
+## GitHub 配置
+
+### Secrets
+
+| 名称 | 内容 |
+| --- | --- |
+| `PRODUCTION_ENV` | 完整 `.env.production` 文本，多行直接粘贴 |
+| `SSH_HOST` | 服务器公网 IP 或域名 |
+| `SSH_USER` | `deploy` |
+| `SSH_PRIVATE_KEY` | `deploy` 用户对应的 OpenSSH 私钥全文 |
+| `COS_SECRET_ID` / `COS_SECRET_KEY` | COS 子用户密钥，见 [COS 中转](/zh/docs/deployment/cos) |
+
+### Variables
+
+| 名称 | 示例 | 说明 |
+| --- | --- | --- |
+| `SSH_PORT` | `22` | 留空时工作流默认 22 |
+| `DEPLOY_PATH` | `/srv/app` | 上面的目录根 |
+| `DEPLOY_SERVICE` | `app` | systemd 服务名，留空默认 `app` |
+| `APP_PORT` | `3000` | 健康检查端口 |
+| `DEPLOY_URL` | `https://app.example.com` | 只用于 GitHub Environment 展示 |
+| `COS_BUCKET` | `nextjs-deploy-125xxxxxxx` | 完整桶名 |
+| `COS_REGION` | `ap-guangzhou` | 与桶、服务器一致 |
+
+### Environment 作用域
+
+工作流的 `build` 和 `deploy` 都声明了 `environment: production`。如果变量放在 Environment 而不是 Repository 下，缺少这个声明会导致 job 读不到 secret。`PRODUCTION_ENV` 为空时，构建阶段会直接报 `datasource.url property is required`。
+
+## 工作流
+
+`.github/workflows/deploy.yml` 在 `main` 推送或手动触发时运行。
+
+<Steps>
+
+<Step>
+### 构建
+
+1. `bun install --frozen-lockfile`
+2. 把 `PRODUCTION_ENV` 写成 `.env.production`
+3. `NODE_ENV=production bun run github-build`
+4. 复制 `public` 与 `.next/static` 到 `.next/standalone`，删除其中的 `.env*`
+5. 打包为 `release.tar.gz` 并上传 artifact
+
+构建环境设置 `NODE_OPTIONS=--max-old-space-size=4096`，防止大型页面预渲染时 OOM。
+</Step>
+
+<Step>
+### 上传 COS
+
+1. 安装 `coscli`
+2. 写入 `~/.cos.yaml`，上传域名固定为 `cos.accelerate.myqcloud.com`
+3. `coscli cp` 多分片并发上传到 `releases/<run_number>-<sha>.tar.gz`
+4. 用默认域名生成 1 小时预签名 URL，并输出 SHA256
+</Step>
+
+<Step>
+### 激活
+
+1. `curl` 从预签名 URL 下载到 `incoming/`
+2. `sha256sum -c` 校验
+3. 解压到 `releases/<UTC 时间>-<sha>`
+4. `ln -sfn` 切换 `current`
+5. `sudo systemctl restart app`
+6. 轮询 `http://127.0.0.1:3000/` 直到返回 2xx
+7. 删除超过 5 个的旧 release
+
+服务重启失败或健康检查超时会让 job 失败，`current` 仍指向新版本，需要手动回滚。
+</Step>
+
+</Steps>
+
+## 首次部署
+
+1. 建好数据库、Logto 应用、RustFS bucket 和 CORS。
+2. 在服务器完成 deploy 用户、目录、环境文件、systemd。
+3. 在 GitHub 配好 Secrets 与 Variables。
+4. 推送 `main`，确认 `Build` 和 `Deploy` 都通过。
+5. 打开站点，用 `BOOTSTRAP_ADMIN_EMAILS` 登录，检查上传下载、Logto 回调。
+6. `journalctl -u app -n 100` 确认没有启动报错。
+
+## 回滚
+
+保留的 release 可以直接切回：
+
+```bash
+ls -1dt /srv/app/releases/*
+sudo ln -sfn /srv/app/releases/<旧版本> /srv/app/current
+sudo systemctl restart app
+```
+
+数据库迁移不会回滚。若新版本包含破坏性迁移，先恢复数据库备份，再切旧版本。
+
+## 直连 rsync（不推荐）
+
+早期方案是 CI 直接 `rsync` 上传 `release.tar.gz`：
+
+```bash
+rsync -avz --partial --info=progress2 --stats \
+  -e "ssh -i ~/.ssh/id_deploy -p 22" \
+  release.tar.gz deploy@server:/srv/app/incoming/
+```
+
+从 GitHub 境外 runner 到国内服务器实测只有 20–30 KB/s，40 MB 产物要半小时以上，还容易中途被 job 取消。现在工作流不再使用它；只有在 runner 与服务器网络质量有保证（例如自托管 runner 同地域）时才考虑。`-z` 对已经压缩的 tar.gz 没有收益。
+
+## 常见失败
+
+| 现象 | 原因 | 处理 |
+| --- | --- | --- |
+| 构建报 `datasource.url property is required` | `PRODUCTION_ENV` 为空，或 `MIGRATE_DATABASE_URL=` 留空 | 补 secret；删掉空行或填同 `DATABASE_URL` |
+| build job 读不到 secret | secret 配在 Environment，job 没声明 `environment` | 保持两个 job 都有 `environment: production` |
+| `ssh: no key found` | 私钥不完整、被转义、或用了公钥 | 重新粘贴完整 OpenSSH 私钥 |
+| `sudo: no tty present` 或密码提示 | sudoers 规则缺失或路径不匹配 | 用 `visudo` 加 NOPASSWD 规则 |
+| 服务启动即退出 | `server.js` 路径、Node 路径或环境文件错误 | `journalctl -u app -n 200` 看报错 |
+| 页面样式或图片 404 | standalone 缺少 `.next/static` 或 `public` | 确认构建阶段复制了两个目录 |
+| 健康检查超时 | 应用端口与 `APP_PORT` 不一致 | 对齐 systemd `PORT`、Nginx `proxy_pass` 和 `APP_PORT` |
+| Nginx 502 | 应用没启动或只监听错误地址 | `ss -lntp` 看 3000 端口，检查 systemd 状态 |
+| COS 上传或下载 403 | 子用户策略缺少动作 | 见 [COS 中转](/zh/docs/deployment/cos#权限排查) |
+
+## 相关文档
+
+- [部署概览](/zh/docs/deployment)
+- [COS 中转](/zh/docs/deployment/cos)
+- [Vercel](/zh/docs/deployment/vercel)
+- [环境变量](/zh/docs/infrastructure/environment-variables)

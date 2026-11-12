@@ -1,0 +1,133 @@
+---
+title: Deployment
+description: Choose Vercel hosting or GitHub Actions with a self-hosted server, and prepare the production environment
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+Two production paths are supported:
+
+| Path | Use when | Build runs on | Runtime |
+| --- | --- | --- | --- |
+| [Vercel](/en/docs/deployment/vercel) | Default, no server maintenance | Vercel build image | Serverless / Fluid Compute |
+| [Self-hosted](/en/docs/deployment/self-hosted) | You need a fixed egress IP, an internal database, or full process control | GitHub Actions | `next build` standalone + systemd |
+
+Both paths need the production configuration on this page. The self-hosted path additionally uses Tencent Cloud COS to move the build artifact, because GitHub Actions uploads to mainland China are slow; see [COS transfer](/en/docs/deployment/cos).
+
+## Shared prerequisites
+
+- PostgreSQL: the production database provides both a pooled connection string for the runtime and a direct connection string for migrations and the seed.
+- Logto: a production application whose redirect URI points to the production domain.
+- RustFS: an S3 API reachable from the browser, a private bucket, and CORS that allows the production origin.
+- Optional services: Qdrant (RAG), OnlyOffice Document Server, and AI provider keys. You can leave them empty if you do not use those features, but they must be filled in before the features work.
+
+<Callout type="warn" title="Do not reuse development values in production">
+`LOGTO_BASE_URL`, `LOGTO_COOKIE_SECRET`, the database URLs, and `RUSTFS_*` all depend on the real domain or production environment. Copying `.env.development` as-is breaks sign-in redirects, session cookies, or direct file uploads in production.
+</Callout>
+
+## Environment variables
+
+Production builds and the runtime share the same application variables. On Vercel, set them in Project Settings. On a self-hosted server, keep one copy in GitHub Secrets for the build and one in systemd for the runtime.
+
+### Required during build
+
+| Variable | Production value |
+| --- | --- |
+| `DATABASE_URL` | Pooled connection string used by the runtime |
+| `MIGRATE_DATABASE_URL` | Direct connection used by `migrate deploy` and the seed; must not be a PgBouncer transaction pool |
+| `LOGTO_ENDPOINT` | Production Logto tenant URL |
+| `LOGTO_APP_ID` / `LOGTO_APP_SECRET` | Production Logto application; the secret stays server-side |
+| `LOGTO_BASE_URL` | `https://<production-domain>` without a trailing slash; register `<LOGTO_BASE_URL>/api/auth/callback` as the Logto redirect URI |
+| `LOGTO_COOKIE_SECRET` | New random value, at least 32 characters; changing it invalidates every issued session |
+| `BOOTSTRAP_ADMIN_EMAILS` | Comma-separated administrator emails for the first deployment |
+| `RUSTFS_ENDPOINT` | Browser-reachable production S3 API, not the 9001 console |
+| `RUSTFS_ACCESS_KEY` / `RUSTFS_SECRET_KEY` | Production credentials, server-side only |
+| `RUSTFS_BUCKET` | Private production bucket with CORS for the production origin |
+
+### Runtime variables by feature
+
+These are not validated during build. The app still starts without them, but the matching feature is unavailable:
+
+| Variable | Behavior when missing |
+| --- | --- |
+| `AI_SECRET_KEY` | Saving or updating AI providers fails; never change it after deployment or existing ciphertext cannot be decrypted |
+| `QDRANT_URL` / `QDRANT_API_KEY` | Knowledge base indexing and retrieval fail |
+| `QDRANT_COLLECTION` / `QDRANT_VECTOR_SIZE` | Same as above; the vector size must match the embedding model and cannot change after the collection is created |
+| `ONLYOFFICE_DS_URL` / `ONLYOFFICE_JWT_SECRET` | The document editor reports missing configuration |
+| `ONLYOFFICE_SAVE_CALLBACK_URL` | The editor opens but saving fails; production must use a public URL, not loopback |
+
+<Callout type="warn" title="Replace every value with production data">
+`DATABASE_URL`, `MIGRATE_DATABASE_URL`, `LOGTO_BASE_URL`, `LOGTO_COOKIE_SECRET`, the `LOGTO_*` application credentials, `RUSTFS_ENDPOINT`, `RUSTFS_BUCKET`, and the RustFS CORS rules all need production values. Do not keep localhost, example emails, or development secrets. `BOOTSTRAP_ADMIN_EMAILS` must contain real administrators. `ONLYOFFICE_SAVE_CALLBACK_URL` must point at the production domain, otherwise OnlyOffice callbacks go to an unreachable address.
+</Callout>
+
+<Callout type="warn" title="Do not add a NEXT_PUBLIC_ prefix">
+Variables prefixed with `NEXT_PUBLIC_` are embedded in the browser bundle. `LOGTO_APP_SECRET`, `LOGTO_COOKIE_SECRET`, `RUSTFS_SECRET_KEY`, `AI_SECRET_KEY`, `QDRANT_API_KEY`, and `ONLYOFFICE_JWT_SECRET` must stay server-side.
+</Callout>
+
+## Build scripts
+
+`db:setup` splits database preparation into three steps, and both deployment scripts reuse it:
+
+```json
+{
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:seed": "prisma db seed",
+    "db:setup": "prisma generate && prisma migrate deploy && prisma db seed",
+    "vercel-build": "bun run db:setup && next build",
+    "github-build": "bun run db:setup && next build"
+  }
+}
+```
+
+<Steps>
+
+<Step>
+### Generate the Prisma Client
+
+`prisma generate` writes the client from `prisma/schema.prisma` into `lib/generated/prisma`. The directory is gitignored, so a clean environment must generate it before `next build`.
+</Step>
+
+<Step>
+### Apply migrations
+
+`prisma migrate deploy` applies committed migrations only. It never creates migrations or resets the database. A failed migration fails the build, so the new version is not published. The connection string prefers `MIGRATE_DATABASE_URL` and falls back to `DATABASE_URL`.
+</Step>
+
+<Step>
+### Sync the RBAC seed
+
+`prisma db seed` runs `bun prisma/seed.ts` from the `migrations.seed` entry in `prisma.config.ts`. It opens a direct connection with `MIGRATE_DATABASE_URL ?? DATABASE_URL`, upserts permissions and the built-in `admin` / `user` roles in one transaction, and aligns built-in role permissions with `lib/permissions`.
+
+The seed is idempotent: it runs on every deployment without duplicating rows or deleting custom roles and business data.
+
+**`migrate deploy` does not run the seed automatically.** A pipeline that only migrates leaves the role and permission tables empty, which locks the dashboard.
+</Step>
+
+<Step>
+### Build Next.js
+
+`next build` runs last, after the schema is migrated, the client is generated, and RBAC data exists.
+</Step>
+
+</Steps>
+
+<Callout title="A local build skips all of this">
+`bun run build` runs `next build` only. Database preparation exists only in `vercel-build`, `github-build`, and `db:setup`, so the deployment platform must call a script that includes it.
+</Callout>
+
+<Callout type="warn" title="MIGRATE_DATABASE_URL must not be empty">
+`prisma.config.ts` uses `process.env.MIGRATE_DATABASE_URL ?? process.env.DATABASE_URL`. An empty string is not nullish, so `??` does not fall back and `prisma migrate deploy` fails with `datasource.url property is required`. Remove the line when you only have one URL, or set it to the same value as `DATABASE_URL`.
+</Callout>
+
+<Callout type="info" title="standalone only affects self-hosting">
+`next.config.ts` sets `output: "standalone"`. Vercel ignores it; the self-hosted path relies on it to produce `.next/standalone/server.js` without shipping the full `node_modules`.
+</Callout>
+
+## Next steps
+
+- [Deploy to Vercel](/en/docs/deployment/vercel)
+- [Deploy to a self-hosted server](/en/docs/deployment/self-hosted)
+- [Configure COS transfer](/en/docs/deployment/cos)
+- [Environment variables](/en/docs/infrastructure/environment-variables)
+- [Migrations](/en/docs/prisma/migrations)

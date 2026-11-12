@@ -1,0 +1,189 @@
+---
+title: COS transfer
+description: Use Tencent Cloud COS global acceleration to fix slow GitHub Actions uploads to mainland China
+---
+
+import { Step, Steps } from "fumadocs-ui/components/steps";
+
+GitHub Actions runners are outside mainland China, and direct `scp` / `rsync` to a mainland server often drops to 20–30 KB/s. COS splits the path in two:
+
+```text
+GitHub runner ──global acceleration──▶ COS (same region as server) ──private network──▶ server
+```
+
+CI uploads only; the server downloads through a presigned URL on the private network, so no COS credentials live on the server. The implementation is in [`deploy.yml`](https://github.com/gushen610140/template-nextjs-hucky/blob/main/.github/workflows/deploy.yml).
+
+## Create a bucket
+
+<Steps>
+
+<Step>
+### Create the bucket
+
+COS console → Bucket list → Create bucket.
+
+- Name: for example `nextjs-deploy`.
+- Region: **the same region as the server**. A Guangzhou server should use `ap-guangzhou` so the default domain resolves to the private network.
+- Access: private read/write.
+- Keep the other defaults.
+
+The full bucket name is `<name>-<APPID>`, for example `nextjs-deploy-1250000000`. The APPID is also shown in the console account information.
+</Step>
+
+<Step>
+### Enable global acceleration
+
+Open the bucket → Domain and Transfer Management → Global Acceleration → Edit → enable → save.
+
+- Accelerated upload domain: `<BucketName-APPID>.cos.accelerate.myqcloud.com`
+- Enabling takes about 15 minutes.
+- Only requests using the accelerated domain use the accelerated path; the default domain keeps working.
+- Financial cloud regions are not supported.
+
+The workflow writes only the endpoint `cos.accelerate.myqcloud.com` to `~/.cos.yaml`; coscli prepends the bucket name.
+</Step>
+
+<Step>
+### Add a lifecycle rule
+
+Bucket → Basic Configuration → Lifecycle → Create rule:
+
+- Prefix: `releases/`
+- Delete objects 7 days after creation
+
+Every deployment creates a new tarball. Without cleanup, storage keeps growing. The server keeps five local releases; COS uses the lifecycle rule as a backstop.
+</Step>
+
+</Steps>
+
+## Sub-user and permissions
+
+Do not use the root account key. Create a sub-user that can only operate this bucket.
+
+<Steps>
+
+<Step>
+### Create the sub-user
+
+Access Management CAM → Users → Create user → Programmatic access (API key only) → no user group → create.
+
+Save the `SecretId` and `SecretKey`; the secret is shown once.
+</Step>
+
+<Step>
+### Custom policy
+
+CAM → Policies → Create custom policy → Create by policy syntax. Replace the three placeholders:
+
+- `ap-guangzhou`: bucket region
+- `1250000000`: APPID
+- `nextjs-deploy-1250000000`: full bucket name
+
+```json
+{
+  "version": "2.0",
+  "statement": [
+    {
+      "effect": "allow",
+      "action": [
+        "cos:HeadBucket",
+        "cos:GetBucket",
+        "cos:HeadObject",
+        "cos:GetObject",
+        "cos:PutObject",
+        "cos:InitiateMultipartUpload",
+        "cos:UploadPart",
+        "cos:CompleteMultipartUpload",
+        "cos:AbortMultipartUpload",
+        "cos:ListMultipartUploads",
+        "cos:ListParts"
+      ],
+      "resource": [
+        "qcs::cos:ap-guangzhou:uid/1250000000:nextjs-deploy-1250000000/",
+        "qcs::cos:ap-guangzhou:uid/1250000000:nextjs-deploy-1250000000/*"
+      ]
+    }
+  ]
+}
+```
+
+What the actions cover:
+
+- `HeadBucket` / `GetBucket`: coscli initialization and bucket checks.
+- The multipart actions plus `ListParts` / `ListMultipartUploads`: parallel upload and resumable upload.
+- `HeadObject` / `GetObject`: presigned URL download.
+
+<Callout type="warn" title="Do not omit GetObject">
+A presigned URL authenticates as the sub-user that signed it. With upload-only permissions, CI uploads successfully but the server `curl` receives `403 AccessDenied`.
+</Callout>
+</Step>
+
+<Step>
+### Grant the policy
+
+Attach the policy to the sub-user. Changes usually take effect within a minute.
+
+Consider enabling operation protection or blocking console login for this account; the key is used by CI only.
+</Step>
+
+</Steps>
+
+## GitHub configuration
+
+Secrets:
+
+| Name | Value |
+| --- | --- |
+| `COS_SECRET_ID` | Sub-user SecretId |
+| `COS_SECRET_KEY` | Sub-user SecretKey |
+
+Variables:
+
+| Name | Example |
+| --- | --- |
+| `COS_BUCKET` | `nextjs-deploy-1250000000` |
+| `COS_REGION` | `ap-guangzhou` |
+
+`COS_REGION` must match the bucket region. Otherwise `signurl` signs the wrong host and the server download returns 403 or 404.
+
+## What the workflow does
+
+1. Downloads the `coscli` binary from GitHub Releases into `/usr/local/bin`.
+2. Writes `~/.cos.yaml` from the secrets with `disableencryption: "true"` and upload endpoint `cos.accelerate.myqcloud.com`.
+3. Runs `coscli cp` with `--thread-num 8 --part-size 8` for parallel multipart upload.
+4. Generates a one-hour presigned URL on the default `cos.<region>.myqcloud.com` domain and applies `::add-mask::` to keep it out of logs.
+5. After SSH, the server `curl`s the URL, verifies the SHA256, extracts the release, and switches versions.
+
+<Callout title="Why the download avoids the accelerated domain">
+A Tencent Cloud CVM in the **same region** reaches the bucket default domain over the private network, which is fastest and does not bill public downstream traffic. The accelerated domain is for the cross-border CI upload. If the server and bucket are in different regions, use the internal accelerated domain `<BucketName-APPID>.cos-internal.accelerate.tencentcos.cn`.
+</Callout>
+
+<Callout type="info" title="Custom domains are not involved">
+The workflow only uses the accelerated domain and the bucket default domain. Custom or CDN domains added under Domain and Transfer Management do not affect upload or download. Do not disable the default domain or add a forced redirect over it.
+</Callout>
+
+## Cost
+
+Approximate public pricing; check your bill for the real numbers:
+
+- Standard storage: about CNY 0.118 per GB per month.
+- Cross-border upload acceleration: about CNY 1.25 per GB.
+- Same-region private network download: no public downstream traffic charge.
+
+A 43 MB artifact costs roughly CNY 0.05 per accelerated upload. Daily deployments cost about CNY 1.5–2 per month, and storage usually stays under CNY 3 per month in total. With the lifecycle rule, storage does not grow indefinitely.
+
+## Permission troubleshooting
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `AccessDenied` during upload | Policy lacks `PutObject` or multipart actions, or the resource bucket name is wrong | Compare against the JSON and the bucket name |
+| Upload stays at `start` | Acceleration is not active or the cross-border path is unhealthy | Confirm acceleration has been enabled for 15 minutes; check the object in the console |
+| Server `curl` returns 403 | Policy lacks `GetObject`; `COS_REGION` differs from the bucket; server clock skew | Add the permission; check the region; run `timedatectl` |
+| 403 without a reason | `curl -f` hides the response body | Run `curl -i "<presigned URL>"` and read `<Code>` and `<Message>` |
+| Presigned URL expired | It is valid for one hour and the download happened later | Re-run the deployment; check server connectivity to COS |
+| Object not found | The lifecycle rule deleted it or the key is wrong | Compare the key from the upload step with the one used by the server |
+
+## Related
+
+- [Self-hosted server](/en/docs/deployment/self-hosted)
+- [Deployment overview](/en/docs/deployment)
