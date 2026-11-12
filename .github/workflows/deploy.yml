@@ -1,0 +1,123 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Write production env
+        env:
+          PRODUCTION_ENV: ${{ secrets.PRODUCTION_ENV }}
+        run: printf '%s\n' "$PRODUCTION_ENV" > .env.production
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run github-build
+        env:
+          NODE_ENV: production
+          NODE_OPTIONS: --max-old-space-size=4096
+
+      - name: Assemble standalone release
+        run: |
+          set -euo pipefail
+          test -f .next/standalone/server.js
+          cp -r public .next/standalone/
+          mkdir -p .next/standalone/.next
+          cp -r .next/static .next/standalone/.next/static
+          rm -f .next/standalone/.env .next/standalone/.env.*
+          tar -czf release.tar.gz -C .next/standalone .
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: release.tar.gz
+          if-no-files-found: error
+          retention-days: 3
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: ${{ vars.DEPLOY_URL }}
+    steps:
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release
+
+      - name: Upload release to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ vars.SSH_PORT || '22' }}
+          source: release.tar.gz
+          target: ${{ vars.DEPLOY_PATH }}/incoming
+          overwrite: true
+          timeout: 120s
+
+      - name: Activate release
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ vars.SSH_PORT || '22' }}
+          command_timeout: 10m
+          script_stop: true
+          script: |
+            set -euo pipefail
+            BASE="${{ vars.DEPLOY_PATH }}"
+            SERVICE="${{ vars.DEPLOY_SERVICE || 'app' }}"
+            PORT="${{ vars.APP_PORT || '3000' }}"
+            RELEASE="$(date -u +%Y%m%d%H%M%S)-${{ github.sha }}"
+
+            mkdir -p "$BASE/releases/$RELEASE"
+            tar -xzf "$BASE/incoming/release.tar.gz" -C "$BASE/releases/$RELEASE"
+            rm -f "$BASE/incoming/release.tar.gz"
+
+            ln -sfn "$BASE/releases/$RELEASE" "$BASE/current"
+            sudo systemctl restart "$SERVICE"
+
+            for _ in $(seq 1 20); do
+              if curl -fsS "http://127.0.0.1:$PORT/" >/dev/null; then
+                break
+              fi
+              sleep 3
+            done
+            curl -fsS "http://127.0.0.1:$PORT/" >/dev/null
+
+            ls -1dt "$BASE"/releases/* 2>/dev/null | tail -n +6 | xargs -r rm -rf

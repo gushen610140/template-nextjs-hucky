@@ -6,6 +6,7 @@ const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 const withMDX = createMDX();
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   reactCompiler: true,
   async headers() {
     return [
