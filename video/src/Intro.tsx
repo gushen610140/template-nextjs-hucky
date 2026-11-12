@@ -97,9 +97,9 @@ export const Intro = () => (
     </TransitionSeries>
 
     <Chrome
-      chapters={scenes.map((scene) => ({
+      chapters={scenes.map((scene, index) => ({
         label: scene.chapter,
-        start: scene.start,
+        start: index === 0 ? 0 : scene.start + TRANSITION,
       }))}
     />
     <Captions lines={captions} />

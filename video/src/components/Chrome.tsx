@@ -26,13 +26,22 @@ export const Chrome = ({
   const fadeIn = interpolate(frame, [0, 24], [0, 1], {
     extrapolateRight: "clamp",
   });
+  const fadeOut = interpolate(
+    frame,
+    [durationInFrames - 28, durationInFrames - 2],
+    [1, 0],
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+    },
+  );
 
   return (
     <div
       style={{
         position: "absolute",
         inset: 0,
-        opacity: fadeIn,
+        opacity: Math.min(fadeIn, fadeOut),
         pointerEvents: "none",
       }}
     >
