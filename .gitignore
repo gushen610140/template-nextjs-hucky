@@ -20,6 +20,10 @@
 # screenshots
 /.screenshots/
 
+# intro video (子项目独立依赖与渲染产物)
+/video/node_modules
+/video/out
+
 # next.js
 /.next/
 /out/
