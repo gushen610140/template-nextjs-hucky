@@ -46,6 +46,11 @@ export default async function RootLayout({
       className="h-full antialiased"
     >
       <body className="min-h-full flex flex-col">
+        {/* 搜索命中的高亮样式：不能写进 globals.css，lightningcss 会对 ::highlight() 报警告 */}
+        <style>{`::highlight(fd-search) {
+          color: var(--color-fd-primary);
+          text-decoration-line: underline;
+        }`}</style>
         <ThemeProvider>
           <ThemeCustomizerProvider>
             <FontProvider>
