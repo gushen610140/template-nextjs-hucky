@@ -5,6 +5,11 @@
 @import "fumadocs-ui/css/shadcn.css";
 @import "fumadocs-ui/css/preset.css";
 
+/* lightningcss 不认识 CSS Custom Highlight 的 ::highlight() 伪元素，会把 fumadocs
+   safelist 中的这两条工具类报成 “not recognized as a valid pseudo-element”。
+   这里把它们从 safelist 排除，同样的规则改由 layout.tsx 的内联 <style> 输出。 */
+@source not inline("[&_::highlight(fd-search)]:text-fd-primary [&_::highlight(fd-search)]:underline");
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
