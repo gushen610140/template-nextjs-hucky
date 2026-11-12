@@ -69,7 +69,7 @@ jobs:
     name: Deploy
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     environment:
       name: production
       url: ${{ vars.DEPLOY_URL }}
@@ -79,17 +79,35 @@ jobs:
         with:
           name: release
 
+      - name: Report release
+        run: |
+          set -euo pipefail
+          ls -lh release.tar.gz
+          sha256sum release.tar.gz
+
       - name: Upload release to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ vars.SSH_PORT || '22' }}
-          source: release.tar.gz
-          target: ${{ vars.DEPLOY_PATH }}/incoming
-          overwrite: true
-          timeout: 120s
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ vars.SSH_PORT || '22' }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          SSH_OPTS="-i $HOME/.ssh/id_deploy -p $SSH_PORT -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ServerAliveCountMax=10"
+
+          echo "target: $SSH_USER@$SSH_HOST:$DEPLOY_PATH/incoming"
+          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" \
+            "command -v rsync >/dev/null || { echo 'rsync not installed on server' >&2; exit 1; }; mkdir -p '$DEPLOY_PATH/incoming'; df -h '$DEPLOY_PATH'"
+
+          time rsync -av --partial --info=progress2 --stats \
+            -e "ssh $SSH_OPTS" \
+            release.tar.gz "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/incoming/"
+
+          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" "ls -lh '$DEPLOY_PATH/incoming/release.tar.gz'"
 
       - name: Activate release
         uses: appleboy/ssh-action@v1.2.0
