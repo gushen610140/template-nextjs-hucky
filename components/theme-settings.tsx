@@ -497,6 +497,20 @@ function FontPicker({
   );
 }
 
+const BINARY_SEARCH_SNIPPET = `function binarySearch(nums: number[], target: number): number {
+  let low = 0;
+  let high = nums.length - 1;
+
+  while (low <= high) {
+    const mid = low + Math.floor((high - low) / 2);
+    if (nums[mid] === target) return mid;
+    if (nums[mid] < target) low = mid + 1;
+    else high = mid - 1;
+  }
+
+  return -1;
+}`;
+
 function ThemePreview({
   baseColor,
   primaryColor,
@@ -619,6 +633,20 @@ function ThemePreview({
               </span>
             </div>
           </div>
+        </div>
+
+        <div className="mt-3 overflow-hidden rounded-[var(--radius)] border border-border bg-muted/40">
+          <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+            <span className="text-muted-foreground text-[11px]">
+              {t("previewCode")}
+            </span>
+            <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
+              ts
+            </span>
+          </div>
+          <pre className="overflow-x-auto p-3 font-mono text-[11px] leading-relaxed">
+            <code>{BINARY_SEARCH_SNIPPET}</code>
+          </pre>
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-xs">

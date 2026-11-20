@@ -28,15 +28,34 @@ export const FONT_FILE_EXTENSION = "ttf";
 /** 字体清单: key 即文件名去掉 .ttf, 同时是全局唯一 id */
 export const FONT_LIBRARY = {
   "SarasaGothicSC-Regular": { weight: "400" },
+  "SarasaMonoSC-Regular": { weight: "400" },
+  "Yozai-Regular": { weight: "400" },
+  "LXGWWenKai-Regular": { weight: "400" },
+  "LXGWWenKaiMono-Regular": { weight: "400" },
+  "DelaGothicOne-Regular": { weight: "400" },
+  nzgrKangxi: { weight: "400" },
 } as const satisfies Record<string, { weight: string }>;
 
 export type FontId = keyof typeof FONT_LIBRARY;
 
 /** 每个角色可选的字体; "system" 表示不加载 webfont */
 export const FONT_OPTIONS = {
-  sans: ["system", "SarasaGothicSC-Regular"],
-  heading: ["system"],
-  mono: ["system"],
+  sans: [
+    "system",
+    "SarasaGothicSC-Regular",
+    "Yozai-Regular",
+    "LXGWWenKai-Regular",
+  ],
+  heading: [
+    "system",
+    "DelaGothicOne-Regular",
+    "nzgrKangxi",
+  ],
+  mono: [
+    "system",
+    "SarasaMonoSC-Regular",
+    "LXGWWenKaiMono-Regular",
+  ],
 } as const satisfies Record<FontRole, readonly (FontId | "system")[]>;
 
 export type FontOption<R extends FontRole> = (typeof FONT_OPTIONS)[R][number];
