@@ -33,6 +33,7 @@ export const FONT_LIBRARY = {
   "LXGWWenKai-Regular": { weight: "400" },
   "LXGWWenKaiMono-Regular": { weight: "400" },
   "DelaGothicOne-Regular": { weight: "400" },
+  "LXGWNeoZhiSong": { weight: "400" },
   nzgrKangxi: { weight: "400" },
 } as const satisfies Record<string, { weight: string }>;
 
@@ -49,6 +50,7 @@ export const FONT_OPTIONS = {
   heading: [
     "system",
     "DelaGothicOne-Regular",
+    "LXGWNeoZhiSong",
     "nzgrKangxi",
   ],
   mono: [
