@@ -69,8 +69,14 @@ Setting `NODE_ENV=production` inside `.env.development` puts the file-loading lo
 | `ONLYOFFICE_DS_URL` | Document Server URL | Reachable by both the browser and DS, e.g. `https://office.example.com` |
 | `ONLYOFFICE_JWT_SECRET` | OnlyOffice JWT secret | Must match the DS `JWT_SECRET` exactly |
 | `ONLYOFFICE_SAVE_CALLBACK_URL` | Save callback URL (optional) | In production use a publicly reachable deployment address; empty or loopback still opens the editor but disables saving |
+| `FONT_COS_SECRET_ID` | Font COS SecretId | A separate role from the deploy pipeline's `COS_SECRET_ID`; never share them |
+| `FONT_COS_SECRET_KEY` | Font COS SecretKey | Server-side only; a leak grants read access to the font bucket |
+| `FONT_COS_BUCKET` | Private font bucket | For example `hucky-fonts-1301215062`; CORS must allow `GET` and `HEAD` for the site origin and expose `Content-Length` |
+| `FONT_COS_REGION` | Font bucket region | For example `ap-shanghai`; must match the bucket's actual region |
 
 The region is fixed to `us-east-1` and presign expiry to 15 minutes, both in `lib/storage/client.ts` rather than environment variables. The app still boots without `RUSTFS_*`; only upload, confirm, and download fail. See [File storage](/en/docs/files) for the full module guide.
+
+Without `FONT_COS_*` the app still boots: font options render, but downloads fail and the UI keeps system fonts. See [Fonts](/en/docs/fonts) for the bucket, CORS, and the files to upload.
 
 `AI_SECRET_KEY` is optional at boot, but creating or updating an AI provider fails without it; see [AI](/en/docs/ai) for details.
 
@@ -123,6 +129,11 @@ QDRANT_VECTOR_SIZE=
 ONLYOFFICE_DS_URL=
 ONLYOFFICE_JWT_SECRET=
 ONLYOFFICE_SAVE_CALLBACK_URL=
+
+FONT_COS_SECRET_ID=
+FONT_COS_SECRET_KEY=
+FONT_COS_BUCKET=
+FONT_COS_REGION=
 ```
 
 The app never loads it. Its job is to tell a new contributor which variables are needed. To start developing, copy it and fill in real values:

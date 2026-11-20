@@ -2,18 +2,11 @@
 
 import { RotateCcw } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { FontCacheIcon } from "@/components/font-cache-icon";
+import { FontDownloadDialog } from "@/components/font-download-dialog";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import {
-  BODY_FONT_OPTIONS,
-  type BodyFontId,
-  FONT_OPTIONS,
-  getBodyFontId,
-  getBodyFontRole,
-  getBodyFontSettings,
-  type HeadingFontId,
-  type MonoFontId,
-} from "@/lib/font-presets";
+import { FONT_OPTIONS, type FontOption } from "@/lib/font-presets";
 import {
   BASE_COLORS,
   type BaseColor,
@@ -37,7 +30,7 @@ export function ThemeCustomizerControls({ className }: { className?: string }) {
   const t = useTranslations("ThemeCustomizer");
   const { customization, updateCustomization, resetCustomization } =
     useThemeCustomizer();
-  const { settings, setFont, preloadFont, resetFonts } = useFont();
+  const { settings, selectFont, resetFonts } = useFont();
 
   return (
     <div className={cn("flex flex-col gap-5", className)}>
@@ -177,25 +170,14 @@ export function ThemeCustomizerControls({ className }: { className?: string }) {
           type="single"
           variant="outline"
           size="sm"
-          value={getBodyFontId(settings)}
+          value={settings.sans}
           onValueChange={(value) => {
-            if (!value) return;
-            const next = getBodyFontSettings(value as BodyFontId);
-            setFont("sans", next.sans);
-            setFont("cjk", next.cjk);
+            if (value) selectFont("sans", value as FontOption<"sans">);
           }}
           className="grid w-full grid-cols-2 gap-1.5"
         >
-          {BODY_FONT_OPTIONS.map((font) => (
-            <ToggleGroupItem
-              key={font}
-              value={font}
-              onPointerEnter={() => preloadFont(getBodyFontRole(font), font)}
-              onFocus={() => preloadFont(getBodyFontRole(font), font)}
-              className="h-auto w-full px-2 py-1.5 text-xs font-normal tracking-normal normal-case data-[state=on]:border-primary data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
-            >
-              {t(`fonts.${font}`)}
-            </ToggleGroupItem>
+          {FONT_OPTIONS.sans.map((font) => (
+            <FontToggleItem key={font} font={font} />
           ))}
         </ToggleGroup>
       </section>
@@ -210,22 +192,12 @@ export function ThemeCustomizerControls({ className }: { className?: string }) {
           size="sm"
           value={settings.heading}
           onValueChange={(value) => {
-            if (value) {
-              setFont("heading", value as HeadingFontId);
-            }
+            if (value) selectFont("heading", value as FontOption<"heading">);
           }}
           className="grid w-full grid-cols-2 gap-1.5"
         >
           {FONT_OPTIONS.heading.map((font) => (
-            <ToggleGroupItem
-              key={font}
-              value={font}
-              onPointerEnter={() => preloadFont("heading", font)}
-              onFocus={() => preloadFont("heading", font)}
-              className="h-auto w-full px-2 py-1.5 text-xs font-normal tracking-normal normal-case data-[state=on]:border-primary data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
-            >
-              {t(`fonts.${font}`)}
-            </ToggleGroupItem>
+            <FontToggleItem key={font} font={font} />
           ))}
         </ToggleGroup>
       </section>
@@ -240,25 +212,31 @@ export function ThemeCustomizerControls({ className }: { className?: string }) {
           size="sm"
           value={settings.mono}
           onValueChange={(value) => {
-            if (value) {
-              setFont("mono", value as MonoFontId);
-            }
+            if (value) selectFont("mono", value as FontOption<"mono">);
           }}
           className="grid w-full grid-cols-2 gap-1.5"
         >
           {FONT_OPTIONS.mono.map((font) => (
-            <ToggleGroupItem
-              key={font}
-              value={font}
-              onPointerEnter={() => preloadFont("mono", font)}
-              onFocus={() => preloadFont("mono", font)}
-              className="h-auto w-full px-2 py-1.5 text-xs font-normal tracking-normal normal-case data-[state=on]:border-primary data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
-            >
-              {t(`fonts.${font}`)}
-            </ToggleGroupItem>
+            <FontToggleItem key={font} font={font} />
           ))}
         </ToggleGroup>
       </section>
+
+      <FontDownloadDialog />
     </div>
+  );
+}
+
+function FontToggleItem({ font }: { font: string }) {
+  const t = useTranslations("ThemeCustomizer");
+
+  return (
+    <ToggleGroupItem
+      value={font}
+      className="h-auto w-full gap-1 px-2 py-1.5 text-xs font-normal tracking-normal normal-case data-[state=on]:border-primary data-[state=on]:bg-accent data-[state=on]:text-accent-foreground"
+    >
+      {font === "system" ? null : <FontCacheIcon id={font} />}
+      <span className="truncate">{t(`fonts.${font}`)}</span>
+    </ToggleGroupItem>
   );
 }

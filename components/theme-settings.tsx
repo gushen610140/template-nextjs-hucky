@@ -13,20 +13,13 @@ import {
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import type * as React from "react";
+import { FontCacheIcon } from "@/components/font-cache-icon";
+import { FontDownloadDialog } from "@/components/font-download-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  BODY_FONT_OPTIONS,
-  type BodyFontId,
-  FONT_OPTIONS,
-  getBodyFontId,
-  getBodyFontRole,
-  getBodyFontSettings,
-  type HeadingFontId,
-  type MonoFontId,
-} from "@/lib/font-presets";
+import { FONT_OPTIONS, type FontOption } from "@/lib/font-presets";
 import {
   BASE_COLORS,
   type BaseColor,
@@ -59,7 +52,7 @@ export function ThemeSettings() {
   const { theme, setTheme } = useTheme();
   const { customization, updateCustomization, resetCustomization } =
     useThemeCustomizer();
-  const { settings, setFont, preloadFont, resetFonts } = useFont();
+  const { settings, selectFont, resetFonts } = useFont();
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-4 pt-0">
@@ -324,18 +317,12 @@ export function ThemeSettings() {
                   </span>
                 </div>
                 <FontPicker
-                  options={BODY_FONT_OPTIONS}
-                  value={getBodyFontId(settings)}
+                  options={FONT_OPTIONS.sans}
+                  value={settings.sans}
                   label={(font) => tCustomizer(`fonts.${font}`)}
-                  onSelect={(value) => {
-                    const body = getBodyFontSettings(value as BodyFontId);
-                    setFont("sans", body.sans);
-                    setFont("cjk", body.cjk);
-                  }}
-                  onPreload={(value) => {
-                    const font = value as BodyFontId;
-                    preloadFont(getBodyFontRole(font), font);
-                  }}
+                  onSelect={(font) =>
+                    selectFont("sans", font as FontOption<"sans">)
+                  }
                   columns="grid-cols-2 sm:grid-cols-4"
                 />
               </div>
@@ -349,10 +336,9 @@ export function ThemeSettings() {
                     options={FONT_OPTIONS.heading}
                     value={settings.heading}
                     label={(font) => tCustomizer(`fonts.${font}`)}
-                    onSelect={(value) =>
-                      setFont("heading", value as HeadingFontId)
+                    onSelect={(font) =>
+                      selectFont("heading", font as FontOption<"heading">)
                     }
-                    onPreload={(value) => preloadFont("heading", value)}
                     columns="grid-cols-2"
                   />
                 </div>
@@ -364,8 +350,9 @@ export function ThemeSettings() {
                     options={FONT_OPTIONS.mono}
                     value={settings.mono}
                     label={(font) => tCustomizer(`fonts.${font}`)}
-                    onSelect={(value) => setFont("mono", value as MonoFontId)}
-                    onPreload={(value) => preloadFont("mono", value)}
+                    onSelect={(font) =>
+                      selectFont("mono", font as FontOption<"mono">)
+                    }
                     columns="grid-cols-2"
                   />
                 </div>
@@ -381,6 +368,8 @@ export function ThemeSettings() {
           shadow={customization.shadow}
         />
       </div>
+
+      <FontDownloadDialog />
     </div>
   );
 }
@@ -452,21 +441,27 @@ function ModePreview({ mode }: { mode: "light" | "dark" | "system" }) {
   );
 }
 
-function FontPicker<T extends string>({
+function FontPicker({
   options,
   value,
   label,
   onSelect,
-  onPreload,
   columns,
 }: {
-  options: readonly T[];
+  options: readonly string[];
   value: string;
-  label: (font: T) => string;
-  onSelect: (font: T) => void;
-  onPreload: (font: T) => void;
+  label: (font: string) => string;
+  onSelect: (font: string) => void;
   columns: string;
 }) {
+  if (options.every((font) => font === "system")) {
+    return (
+      <p className="rounded-xl border border-border border-dashed px-3 py-2.5 text-muted-foreground text-xs">
+        {label("system")}
+      </p>
+    );
+  }
+
   return (
     <div className={cn("grid gap-2", columns)}>
       {options.map((font) => {
@@ -478,8 +473,6 @@ function FontPicker<T extends string>({
             type="button"
             aria-pressed={selected}
             onClick={() => onSelect(font)}
-            onPointerEnter={() => onPreload(font)}
-            onFocus={() => onPreload(font)}
             className={cn(
               "flex flex-col items-start gap-1 rounded-xl border px-3 py-2.5 text-left transition",
               "hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
@@ -488,7 +481,11 @@ function FontPicker<T extends string>({
           >
             <span className="flex w-full items-center justify-between gap-2">
               <span className="text-base leading-none">Aa 文</span>
-              {selected && <Check className="size-3.5 text-primary" />}
+              {font === "system" ? (
+                selected && <Check className="size-3.5 text-primary" />
+              ) : (
+                <FontCacheIcon id={font} />
+              )}
             </span>
             <span className="w-full truncate text-muted-foreground text-xs">
               {label(font)}
@@ -499,6 +496,20 @@ function FontPicker<T extends string>({
     </div>
   );
 }
+
+const BINARY_SEARCH_SNIPPET = `function binarySearch(nums: number[], target: number): number {
+  let low = 0;
+  let high = nums.length - 1;
+
+  while (low <= high) {
+    const mid = low + Math.floor((high - low) / 2);
+    if (nums[mid] === target) return mid;
+    if (nums[mid] < target) low = mid + 1;
+    else high = mid - 1;
+  }
+
+  return -1;
+}`;
 
 function ThemePreview({
   baseColor,
@@ -622,6 +633,20 @@ function ThemePreview({
               </span>
             </div>
           </div>
+        </div>
+
+        <div className="mt-3 overflow-hidden rounded-[var(--radius)] border border-border bg-muted/40">
+          <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
+            <span className="text-muted-foreground text-[11px]">
+              {t("previewCode")}
+            </span>
+            <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider">
+              ts
+            </span>
+          </div>
+          <pre className="overflow-x-auto p-3 font-mono text-[11px] leading-relaxed">
+            <code>{BINARY_SEARCH_SNIPPET}</code>
+          </pre>
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-xs">

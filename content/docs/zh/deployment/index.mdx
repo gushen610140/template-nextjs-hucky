@@ -19,6 +19,7 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 - PostgreSQL：生产库同时提供 pooled 连接串（应用运行时）和直连串（迁移 / seed）。
 - Logto：生产应用，回调地址指向生产域名。
 - RustFS：浏览器可达的 S3 API、私有 bucket，以及允许生产域名的 CORS。
+- 字体 COS：私有桶内的 `fonts/` 目录与已上传的 ttf、允许生产域名的 CORS，以及独立的 `FONT_COS_*` 凭据。清单见[字体](/zh/docs/fonts#需要上传的字体)。
 - 可选服务：Qdrant（RAG）、OnlyOffice Document Server、AI 供应商密钥。只部署不使用对应功能时可以留空，但上线后要补齐才能启用。
 
 <Callout type="warn" title="生产配置不要复用开发值">
@@ -55,6 +56,8 @@ import { Step, Steps } from "fumadocs-ui/components/steps";
 | `QDRANT_COLLECTION` / `QDRANT_VECTOR_SIZE` | 同上；`QDRANT_VECTOR_SIZE` 必须与 embedding 模型输出维度一致，集合建好后不能改 |
 | `ONLYOFFICE_DS_URL` / `ONLYOFFICE_JWT_SECRET` | 打开文档编辑页时提示配置缺失 |
 | `ONLYOFFICE_SAVE_CALLBACK_URL` | 编辑器可以打开，但保存不可用；生产环境必须填公网可达地址，不能是 loopback |
+| `FONT_COS_SECRET_ID` / `FONT_COS_SECRET_KEY` | 主题页字体无法下载，界面继续使用系统字体 |
+| `FONT_COS_BUCKET` / `FONT_COS_REGION` | 同上；必须指向字体桶，不能复用部署流水线的 `COS_*` |
 
 <Callout type="warn" title="这些变量必须换成生产值">
 `DATABASE_URL`、`MIGRATE_DATABASE_URL`、`LOGTO_BASE_URL`、`LOGTO_COOKIE_SECRET`、`LOGTO_*` 应用凭据、`RUSTFS_ENDPOINT`、`RUSTFS_BUCKET` 以及 RustFS 的 CORS 都应按生产环境重新配置。尤其不要保留 localhost、示例邮箱或开发密钥。`BOOTSTRAP_ADMIN_EMAILS` 也要填真实管理员邮箱。`ONLYOFFICE_SAVE_CALLBACK_URL` 必须指向生产域名，否则 OnlyOffice 的回调会写到不可达地址。
