@@ -52,7 +52,7 @@ The provider selects the light or dark palette from `resolvedTheme`, then applie
 
 Fonts default to the system stack and trigger no webfont request. The first time a custom face is selected, the browser exchanges `/api/fonts/[id]` for a short-lived signed URL on the private COS bucket, downloads the `.ttf` directly, and stores it in Cache Storage. Later switches reuse the cached file.
 
-One custom face covers both Chinese and Latin glyphs, so `sans`, `heading`, and `mono` each offer "system default" plus at most one custom font. See [Typography](/en/docs/shadcn/typography).
+One custom face covers both Chinese and Latin glyphs, so `sans`, `heading`, and `mono` each offer "system default" plus at most one custom font. See [Fonts](/en/docs/fonts).
 
 ## shadcn tokens
 

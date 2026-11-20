@@ -85,6 +85,12 @@ RUSTFS_ENDPOINT=https://s3.example.com
 RUSTFS_ACCESS_KEY=your-access-key
 RUSTFS_SECRET_KEY=your-secret-key
 RUSTFS_BUCKET=your-bucket
+
+# Font COS (private bucket, server-side only)
+FONT_COS_SECRET_ID=your-font-secret-id
+FONT_COS_SECRET_KEY=your-font-secret-key
+FONT_COS_BUCKET=hucky-fonts-1301215062
+FONT_COS_REGION=ap-shanghai
 ```
 
 `DATABASE_URL` is used by the application at runtime; in production it should be the managed database's pooled connection string. `MIGRATE_DATABASE_URL` is only for migrations, seeding, and Prisma Studio, and must be a direct connection. In local development both can use the same value.
@@ -94,6 +100,8 @@ RUSTFS_BUCKET=your-bucket
 `BOOTSTRAP_ADMIN_EMAILS` bootstraps the first deployment: while the system has no administrator, these verified emails receive the `admin` role on sign-in. Once an administrator exists, the variable has no effect and can be kept or removed.
 
 `RUSTFS_*` powers the file module: `RUSTFS_ENDPOINT` must be an S3 API address the browser can reach directly (usually port 9000, not the 9001 console), the bucket must be private, and CORS must allow `PUT`, `GET`, and `HEAD`. The region is fixed to `us-east-1` and is not configurable. See [File storage](/en/docs/files).
+
+`FONT_COS_*` powers font downloads on the theme page: a private bucket with a `fonts/` prefix, CORS allowing `GET` / `HEAD` and exposing `Content-Length`. These are a separate bucket and role from the deploy pipeline's `COS_*`. See [Fonts](/en/docs/fonts) for the files to upload and how to create the credentials.
 
 </Step>
 

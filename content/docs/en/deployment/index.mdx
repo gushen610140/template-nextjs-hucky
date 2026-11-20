@@ -19,6 +19,7 @@ Both paths need the production configuration on this page. The self-hosted path 
 - PostgreSQL: the production database provides both a pooled connection string for the runtime and a direct connection string for migrations and the seed.
 - Logto: a production application whose redirect URI points to the production domain.
 - RustFS: an S3 API reachable from the browser, a private bucket, and CORS that allows the production origin.
+- Font COS: a private bucket with the `fonts/` prefix and uploaded ttf files, CORS for the production origin, and separate `FONT_COS_*` credentials. See [Fonts](/en/docs/fonts#fonts-to-upload) for the list.
 - Optional services: Qdrant (RAG), OnlyOffice Document Server, and AI provider keys. You can leave them empty if you do not use those features, but they must be filled in before the features work.
 
 <Callout type="warn" title="Do not reuse development values in production">
@@ -55,6 +56,8 @@ These are not validated during build. The app still starts without them, but the
 | `QDRANT_COLLECTION` / `QDRANT_VECTOR_SIZE` | Same as above; the vector size must match the embedding model and cannot change after the collection is created |
 | `ONLYOFFICE_DS_URL` / `ONLYOFFICE_JWT_SECRET` | The document editor reports missing configuration |
 | `ONLYOFFICE_SAVE_CALLBACK_URL` | The editor opens but saving fails; production must use a public URL, not loopback |
+| `FONT_COS_SECRET_ID` / `FONT_COS_SECRET_KEY` | Font downloads on the theme page fail and the UI keeps system fonts |
+| `FONT_COS_BUCKET` / `FONT_COS_REGION` | Same as above; must point at the font bucket, never reuse the deploy pipeline's `COS_*` |
 
 <Callout type="warn" title="Replace every value with production data">
 `DATABASE_URL`, `MIGRATE_DATABASE_URL`, `LOGTO_BASE_URL`, `LOGTO_COOKIE_SECRET`, the `LOGTO_*` application credentials, `RUSTFS_ENDPOINT`, `RUSTFS_BUCKET`, and the RustFS CORS rules all need production values. Do not keep localhost, example emails, or development secrets. `BOOTSTRAP_ADMIN_EMAILS` must contain real administrators. `ONLYOFFICE_SAVE_CALLBACK_URL` must point at the production domain, otherwise OnlyOffice callbacks go to an unreachable address.

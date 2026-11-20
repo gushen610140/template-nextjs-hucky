@@ -1,0 +1,131 @@
+---
+title: Fonts
+description: Custom faces live in a private COS bucket, download on demand, and stay cached; configure FONT_COS_* and upload the ttf files listed here
+---
+
+The project ships with system fonts only. On the theme page, `sans`, `heading`, and `mono` can each be switched to one custom face. Font files are not part of the repository: they live in a private Tencent COS bucket, download on first selection, and are cached in the browser.
+
+One custom face covers Chinese and Latin glyphs together.
+
+## Slots and variables
+
+| Slot | CSS variable | Tailwind utility | Used by |
+| --- | --- | --- | --- |
+| `sans` | `--font-custom-sans` | `font-sans` | Global default, inherited everywhere |
+| `heading` | `--font-custom-heading` | `font-heading` | `CardTitle`, `SheetTitle`, Fumadocs and MDX headings |
+| `mono` | `--font-custom-mono` | `font-mono` | `font-mono`, code blocks |
+
+Each slot offers "system default" plus at most one custom face. The custom family goes first, followed by the system fallback:
+
+```css
+--app-font-sans: var(--font-custom-sans, var(--font-system-sans));
+```
+
+## Fonts to upload
+
+Files live under the `fonts/` prefix, flat, `.ttf` only. The filename without the extension is the registered id.
+
+| id | Slot | Chinese name | English name |
+| --- | --- | --- | --- |
+| `SarasaGothicSC-Regular` | sans | 更纱黑体 | SarasaGothic |
+| `Yozai-Regular` | sans | 悠哉字体 | Yozai |
+| `LXGWWenKai-Regular` | sans | 霞鹜文楷 | LXGW WenKai |
+| `DelaGothicOne-Regular` | heading | 德拉黑体 | Dela Gothic One |
+| `LXGWNeoZhiSong` | heading | 霞鹜新致宋 | LXGW Neo ZhiSong |
+| `nzgrKangxi` | heading | 康熙字典体 | Kangxi Dictionary |
+| `SarasaMonoSC-Regular` | mono | 更纱等宽黑体 | Sarasa Mono SC |
+| `LXGWWenKaiMono-Regular` | mono | 霞鹜文楷等宽 | LXGW WenKai Mono |
+
+Object keys:
+
+```text
+fonts/SarasaGothicSC-Regular.ttf
+fonts/Yozai-Regular.ttf
+fonts/LXGWWenKai-Regular.ttf
+fonts/DelaGothicOne-Regular.ttf
+fonts/LXGWNeoZhiSong.ttf
+fonts/nzgrKangxi.ttf
+fonts/SarasaMonoSC-Regular.ttf
+fonts/LXGWWenKaiMono-Regular.ttf
+```
+
+A missing file does not break the build; selecting it shows a download error and the UI keeps the system font. Keep the bundled license (OFL and similar) intact — do not trim the font `name` table.
+
+## Environment variables
+
+The server reads four variables, provided through `.env.development`, `.env.production`, or your deployment platform:
+
+```dotenv
+FONT_COS_SECRET_ID=
+FONT_COS_SECRET_KEY=
+FONT_COS_BUCKET=hucky-fonts-1301215062
+FONT_COS_REGION=ap-shanghai
+```
+
+| Variable | Purpose |
+| --- | --- |
+| `FONT_COS_SECRET_ID` | SecretId of the font-only role |
+| `FONT_COS_SECRET_KEY` | Matching secret; server-side only, never `NEXT_PUBLIC_` |
+| `FONT_COS_BUCKET` | Private bucket name, e.g. `hucky-fonts-1301215062` |
+| `FONT_COS_REGION` | Bucket region, e.g. `ap-shanghai` |
+
+<Callout type="warn" title="Keep FONT_COS_* separate from deploy COS_*">
+`.github/workflows/deploy.yml` uses `COS_SECRET_ID` / `COS_SECRET_KEY` / `COS_BUCKET` / `COS_REGION` to upload build artifacts — a different bucket and a different role. Fonts always use the `FONT_COS_*` names so the two never collide.
+</Callout>
+
+Without these variables the app still boots: font options render, downloads return 503, and the UI falls back to system fonts.
+
+## Bucket setup
+
+1. Create a bucket with private read/write access; do not enable public read.
+2. Create the `fonts/` prefix and upload the `.ttf` files listed above.
+3. Configure bucket CORS for the site origin:
+   - origins: `https://<production-domain>` plus `http://localhost:3000` for local dev;
+   - methods: `GET`, `HEAD`;
+   - exposed headers: `Content-Length` (without it the progress bar falls back to indeterminate).
+4. Create a custom policy that only allows reading `fonts/*` in this bucket, bind it to a dedicated sub-account, and put those credentials into `FONT_COS_*`.
+
+The browser never sees the secret. `GET /api/fonts/[id]` validates the id, signs a 10-minute URL, and the browser downloads directly from COS.
+
+## Runtime behaviour
+
+- All slots start as `system`; startup fetches no font files.
+- Cached faces apply immediately; if the cache was evicted, the slot resets to `system`.
+- First selection of an uncached face opens a progress dialog, writes the file to Cache Storage (`hucky-fonts-v1`, key `/__fonts/<id>.ttf`), then applies it.
+- Option icons: cloud download = not cached, cloud check = cached, spinner = downloading.
+- Cache keys use the stable filename, so rotating signed URLs never duplicates entries.
+
+The theme preview includes a TypeScript binary-search block so mono choices are visible immediately.
+
+## Adding a font
+
+1. Upload `xxx.ttf` to the COS `fonts/` prefix; the filename is the id;
+2. Register the id and weight in `FONT_LIBRARY` (`lib/font-presets.ts`);
+3. Append the id under the relevant `FONT_OPTIONS` slots — it may appear in several;
+4. Add a display name under `ThemeCustomizer.fonts` in `messages/{en,zh}.json`.
+
+`layout.tsx` and `globals.css` stay untouched.
+
+## FAQ
+
+**No network request after switching?**
+
+The face is already cached, or you picked "system default".
+
+**Why do Chinese and Latin glyphs change together?**
+
+By design. One custom face owns both scripts.
+
+**Why are headings still serif?**
+
+The `heading` fallback is serif; it switches only after a custom heading face is applied.
+
+**How do I debug a failed download?**
+
+Check that `FONT_COS_*` reaches the runtime, that the object exists under `fonts/`, and that bucket CORS allows the site origin and exposes `Content-Length`.
+
+## Related
+
+- [Theme](/en/docs/theme): runtime colors, radius, shadows, and fonts.
+- [Environment variables](/en/docs/infrastructure/environment-variables): the full list.
+- [Deployment](/en/docs/deployment): production variables and CORS.

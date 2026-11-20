@@ -1,0 +1,131 @@
+---
+title: 字体
+description: 自定义字体放在私有 COS 桶按需下载并缓存；配置 FONT_COS_*，并上传本文列出的 ttf
+---
+
+项目默认只使用系统字体。用户可以在主题页把 `sans` / `heading` / `mono` 三个角色分别换成自定义字体；字体文件不随仓库发布，统一放在腾讯云 COS 的私有桶里，第一次选择时下载并缓存到浏览器。
+
+一个自定义字体同时接管中文和拉丁字形，不再区分中英两套字体。
+
+## 分组与变量
+
+| 角色 | CSS 变量 | Tailwind utility | 用在哪 |
+| --- | --- | --- | --- |
+| `sans` | `--font-custom-sans` | `font-sans` | 全局默认，所有组件继承 |
+| `heading` | `--font-custom-heading` | `font-heading` | `CardTitle`、`SheetTitle`，以及 Fumadocs 与 MDX 标题 |
+| `mono` | `--font-custom-mono` | `font-mono` | `font-mono`、代码块 |
+
+每个角色只有「系统默认 + 最多一个自定义字体」。自定义字体写在字体栈最前面，后面接系统兜底：
+
+```css
+--app-font-sans: var(--font-custom-sans, var(--font-system-sans));
+```
+
+## 需要上传的字体
+
+字体文件固定放在桶内 `fonts/` 目录，平铺不建子目录，扩展名统一 `.ttf`。文件名（去掉 `.ttf`）就是代码里注册的 id。
+
+| id | 角色 | 中文名 | 英文名 |
+| --- | --- | --- | --- |
+| `SarasaGothicSC-Regular` | sans | 更纱黑体 | SarasaGothic |
+| `Yozai-Regular` | sans | 悠哉字体 | Yozai |
+| `LXGWWenKai-Regular` | sans | 霞鹜文楷 | LXGW WenKai |
+| `DelaGothicOne-Regular` | heading | 德拉黑体 | Dela Gothic One |
+| `LXGWNeoZhiSong` | heading | 霞鹜新致宋 | LXGW Neo ZhiSong |
+| `nzgrKangxi` | heading | 康熙字典体 | Kangxi Dictionary |
+| `SarasaMonoSC-Regular` | mono | 更纱等宽黑体 | Sarasa Mono SC |
+| `LXGWWenKaiMono-Regular` | mono | 霞鹜文楷等宽 | LXGW WenKai Mono |
+
+对应的对象 key：
+
+```text
+fonts/SarasaGothicSC-Regular.ttf
+fonts/Yozai-Regular.ttf
+fonts/LXGWWenKai-Regular.ttf
+fonts/DelaGothicOne-Regular.ttf
+fonts/LXGWNeoZhiSong.ttf
+fonts/nzgrKangxi.ttf
+fonts/SarasaMonoSC-Regular.ttf
+fonts/LXGWWenKaiMono-Regular.ttf
+```
+
+少传某个文件不会影响构建，但用户点选该字体时会提示下载失败，界面继续使用系统字体。字体许可（OFL 等）由上传方随文件保留，不要裁剪字体的 `name` 表。
+
+## 配置环境变量
+
+服务端需要四个变量，填入 `.env.development`、`.env.production` 或部署平台的环境变量面板：
+
+```dotenv
+FONT_COS_SECRET_ID=
+FONT_COS_SECRET_KEY=
+FONT_COS_BUCKET=hucky-fonts-1301215062
+FONT_COS_REGION=ap-shanghai
+```
+
+| 变量 | 说明 |
+| --- | --- |
+| `FONT_COS_SECRET_ID` | 字体桶专用角色的 SecretId |
+| `FONT_COS_SECRET_KEY` | 同上，仅服务端使用，不能加 `NEXT_PUBLIC_` |
+| `FONT_COS_BUCKET` | 私有桶名，例如 `hucky-fonts-1301215062` |
+| `FONT_COS_REGION` | 桶所在地域，例如 `ap-shanghai` |
+
+<Callout type="warn" title="不要和部署流水线的 COS_* 混用">
+`.github/workflows/deploy.yml` 使用 `COS_SECRET_ID` / `COS_SECRET_KEY` / `COS_BUCKET` / `COS_REGION` 上传构建产物，那是另一个桶、另一个角色。字体统一使用 `FONT_COS_*` 前缀，两套配置互不影响。
+</Callout>
+
+变量缺失时应用仍能启动：字体选项照常显示，点击下载会遇到 503，界面回落到系统字体。
+
+## 准备 COS 桶
+
+1. 创建私有读写桶，权限保持「私有读写」，不要开公有读。
+2. 在桶内创建 `fonts/` 目录，上传上面列出的 `.ttf`。
+3. 给桶配置 CORS，允许站点域名访问：
+   - 来源：`https://<生产域名>`，本地开发再加 `http://localhost:3000`；
+   - 方法：`GET`、`HEAD`；
+   - 暴露响应头：`Content-Length`（缺少时下载进度会降级为不确定态）。
+4. 创建只允许读取该桶 `fonts/*` 的自定义策略，绑定到独立子账号，把密钥填进 `FONT_COS_*`。
+
+浏览器不会拿到密钥。下载流程是：`GET /api/fonts/[id]` 校验 id 后用密钥签发 10 分钟有效的地址，浏览器再直连 COS 下载。
+
+## 运行时行为
+
+- 默认所有角色都是 `system`，启动时不请求任何字体文件。
+- 已缓存的字体启动时直接应用；缓存被清掉后自动回落到 `system`。
+- 第一次选择未缓存的字体：弹窗显示下载进度，完成后写入 Cache Storage（`hucky-fonts-v1`，key `/__fonts/<id>.ttf`），随后立刻应用。
+- 字体选项右侧的状态图标：云朵下载 = 未缓存，云朵勾选 = 已缓存，旋转 = 下载中。
+- 缓存 key 使用稳定文件名，签名 URL 每次变化不会造成重复缓存。
+
+预览区域下方有一个 TypeScript 二分查找代码块，专门用来观察 `mono` 字体的实际效果。
+
+## 新增字体
+
+1. 把 `xxx.ttf` 上传到 COS 的 `fonts/` 目录，文件名就是 id；
+2. 在 `lib/font-presets.ts` 的 `FONT_LIBRARY` 里登记 id 与字重；
+3. 在 `FONT_OPTIONS` 对应角色里追加 id，可以同时出现在多个角色里；
+4. 在 `messages/{en,zh}.json` 的 `ThemeCustomizer.fonts` 下补显示名。
+
+不需要改 `layout.tsx` 或 `globals.css`。
+
+## 常见问题
+
+**切换字体后没有网络请求？**
+
+该字体已经缓存，或者你选的是「系统默认」。
+
+**为什么中英文一起变了？**
+
+设计如此。一个自定义字体同时承担中文和拉丁字形。
+
+**标题为什么还是衬线？**
+
+`heading` 的兜底栈是衬线体系，只有选择自定义 heading 字体后才会整体切换。
+
+**下载失败怎么排查？**
+
+依次检查 `FONT_COS_*` 是否注入到运行进程、桶里是否存在对应对象、桶 CORS 是否放行站点域名并暴露 `Content-Length`。
+
+## 相关
+
+- [主题配置](/zh/docs/theme)：颜色、圆角、阴影与字体的运行时切换。
+- [环境变量](/zh/docs/infrastructure/environment-variables)：全部变量清单。
+- [部署](/zh/docs/deployment)：生产环境变量与 CORS 配置。

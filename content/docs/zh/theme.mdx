@@ -52,7 +52,7 @@ hucky-font-settings
 
 字体默认全部使用系统字体，不会请求任何 webfont。用户第一次选择某个自定义字体时，浏览器通过 `/api/fonts/[id]` 换取私有 COS 桶的短时效签名地址，直接下载 `.ttf` 并写入 Cache Storage；之后切换同一字体只读本地缓存。
 
-一个自定义字体同时接管中文和拉丁字形，所以 `sans` / `heading` / `mono` 三个角色各自只有「系统默认 + 最多一个自定义字体」。详见[字体](/zh/docs/shadcn/typography)。
+一个自定义字体同时接管中文和拉丁字形，所以 `sans` / `heading` / `mono` 三个角色各自只有「系统默认 + 最多一个自定义字体」。详见[字体](/zh/docs/fonts)。
 
 ## shadcn token
 

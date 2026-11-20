@@ -76,7 +76,7 @@ dotenv.config({ path: envFile, quiet: true });
 
 区域固定为 `us-east-1`，预签名有效期固定 15 分钟，两者都写在 `lib/storage/client.ts`，不通过环境变量配置。`RUSTFS_*` 缺失时应用仍能启动，只有上传、确认和下载会失败；文件模块的完整说明见[文件存储](/zh/docs/files)。
 
-`FONT_COS_*` 缺失时应用仍能启动，主题页的字体选项会出现但点击下载会失败，界面继续使用系统字体。字体桶的说明见[字体](/zh/docs/shadcn/typography#字体存储)。
+`FONT_COS_*` 缺失时应用仍能启动，主题页的字体选项会出现但点击下载会失败，界面继续使用系统字体。字体桶、CORS 和需要上传的文件见[字体](/zh/docs/fonts)。
 
 `AI_SECRET_KEY` 缺失时应用仍能启动，但创建或更新 AI 供应商会失败；完整说明见 [AI 模块](/zh/docs/ai)。
 
