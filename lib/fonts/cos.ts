@@ -21,23 +21,28 @@ export const FONT_URL_TTL_SECONDS = 10 * 60;
 
 let client: COS | null = null;
 
+/** 环境变量缺失时抛出, 路由据此返回 503 而不是把原因混进上游错误 */
+export class FontCosConfigError extends Error {
+  constructor(missing: string[]) {
+    super(`字体 COS 未配置, 缺少: ${missing.join(", ")}`);
+    this.name = "FontCosConfigError";
+  }
+}
+
 export function getFontCosConfig(): FontCosConfig {
   const secretId = process.env.FONT_COS_SECRET_ID;
   const secretKey = process.env.FONT_COS_SECRET_KEY;
   const bucket = process.env.FONT_COS_BUCKET;
   const region = process.env.FONT_COS_REGION;
 
-  const missing = [
-    ["FONT_COS_SECRET_ID", secretId],
-    ["FONT_COS_SECRET_KEY", secretKey],
-    ["FONT_COS_BUCKET", bucket],
-    ["FONT_COS_REGION", region],
-  ]
-    .filter(([, value]) => !value)
-    .map(([name]) => name);
+  const missing: string[] = [];
+  if (!secretId) missing.push("FONT_COS_SECRET_ID");
+  if (!secretKey) missing.push("FONT_COS_SECRET_KEY");
+  if (!bucket) missing.push("FONT_COS_BUCKET");
+  if (!region) missing.push("FONT_COS_REGION");
 
   if (missing.length > 0) {
-    throw new Error(`字体 COS 未配置, 缺少: ${missing.join(", ")}`);
+    throw new FontCosConfigError(missing);
   }
 
   return {
@@ -96,9 +101,11 @@ export async function getFontDownloadTarget(
     const raw = head.headers?.["content-length"];
     size = raw ? Number(raw) : 0;
   } catch (error) {
-    // 文件不存在时让 POST/GET 请求自己失败, 这里只负责给出可读状态
-    throw new Error(
-      `字体对象不存在或不可读: ${key} (${error instanceof Error ? error.message : String(error)})`,
+    // HeadObject 只用来给进度条补一个总大小。签名本身不依赖网络,
+    // 即使策略没有授予 HeadObject 权限也照常返回地址, 让浏览器上报 404。
+    console.warn(
+      `[fonts] HeadObject 失败, 跳过大小探测: ${key}`,
+      error instanceof Error ? error.message : error,
     );
   }
 
