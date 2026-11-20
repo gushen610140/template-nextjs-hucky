@@ -15,8 +15,8 @@ import { ThemeProvider } from "@/providers/theme-provider";
 /**
  * 字体分工（详见 content/docs/zh/shadcn/typography.mdx）：
  * - 默认使用系统字体栈，不加载任何 webfont。
- * - 用户可在主题面板切换拉丁字体，FontProvider 按需加载 public/fonts 下的文件。
- * - 中文字形始终由 globals.css 里的系统字体栈接管。
+ * - 用户可在主题面板切换 sans / heading / mono，FontProvider 按需从 COS 下载并本地缓存。
+ * - 一个自定义字体同时覆盖中英文字形，不再区分中英两套字体。
  */
 
 export const metadata: Metadata = {

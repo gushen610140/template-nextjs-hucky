@@ -146,12 +146,20 @@
       "heading": "Heading",
       "mono": "Mono",
       "system": "System",
-      "neosanspro": "Neo Sans Pro",
-      "erasmd": "Eras",
-      "din": "DIN 1451",
-      "notosansmono": "Noto Sans Mono",
-      "zhoufangriming": "ZhouFang RiMing",
-      "lxgwwenkai": "LXGW WenKai"
+      "SarasaGothicSC-Regular": "SarasaGothic"
+    },
+    "fontDownload": {
+      "title": "Downloading {name}",
+      "description": "The font downloads once, then stays cached on this device.",
+      "cached": "Cached, select to apply instantly",
+      "notCached": "Not cached, select to download",
+      "downloading": "Downloading",
+      "preparing": "Preparing download…",
+      "progress": "{loaded} / {total}",
+      "cancel": "Cancel",
+      "errorTitle": "Font download failed",
+      "errorDescription": "System fonts stay active. Check your connection and try again.",
+      "close": "Close"
     }
   },
   "ThemePage": {
@@ -168,8 +176,8 @@
     "radiusDescription": "Unifies component corners. The preview updates instantly.",
     "shadowDescription": "Adjust shadow depth for cards, popovers, and buttons.",
     "typography": "Typography",
-    "typographyDescription": "Body merges Latin and Chinese fonts; heading and mono remain independent.",
-    "bodyFontHint": "Chinese and Latin share one body setting",
+    "typographyDescription": "Body, heading, and mono each take at most one custom face, shared by Chinese and Latin glyphs. Leave unset to use system fonts.",
+    "bodyFontHint": "One face covers Chinese and Latin",
     "preview": "Live preview",
     "previewDescription": "Changes apply immediately",
     "livePreview": "LIVE",

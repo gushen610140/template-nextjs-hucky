@@ -146,12 +146,20 @@
       "heading": "标题",
       "mono": "等宽",
       "system": "系统默认",
-      "neosanspro": "Neo Sans Pro",
-      "erasmd": "Eras",
-      "din": "DIN 1451",
-      "notosansmono": "Noto Sans Mono",
-      "zhoufangriming": "舟方日明体",
-      "lxgwwenkai": "霞鹜文楷"
+      "SarasaGothicSC-Regular": "更纱黑体"
+    },
+    "fontDownload": {
+      "title": "正在下载 {name}",
+      "description": "字体只下载一次，完成后缓存在本机，之后切换立即生效。",
+      "cached": "已缓存，点击切换立即生效",
+      "notCached": "未缓存，点击后从云端下载",
+      "downloading": "下载中",
+      "preparing": "正在准备下载…",
+      "progress": "{loaded} / {total}",
+      "cancel": "取消下载",
+      "errorTitle": "字体下载失败",
+      "errorDescription": "当前仍使用系统字体，请检查网络后重新选择。",
+      "close": "关闭"
     }
   },
   "ThemePage": {
@@ -168,8 +176,8 @@
     "radiusDescription": "统一组件圆角，预览会立即更新。",
     "shadowDescription": "调整卡片、弹层和按钮的阴影强度。",
     "typography": "字体",
-    "typographyDescription": "正文合并了拉丁与中文字体，标题和等宽字体仍可单独设置。",
-    "bodyFontHint": "中文与英文共用正文设置",
+    "typographyDescription": "正文、标题、等宽各自最多选一种自定义字体，中英文共用一套字形；不选则使用系统字体。",
+    "bodyFontHint": "中英文共用，字体自带英文字形",
     "preview": "实时预览",
     "previewDescription": "所有改动会立即应用",
     "livePreview": "LIVE",
