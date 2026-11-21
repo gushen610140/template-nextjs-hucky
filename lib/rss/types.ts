@@ -113,3 +113,14 @@ export type RssAdminSite = {
   isEnabled: boolean;
   channels: RssAdminChannel[];
 };
+
+export type RssAdminSiteCard = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  homepageUrl: string;
+  isEnabled: boolean;
+  channelCount: number;
+  enabledChannelCount: number;
+};

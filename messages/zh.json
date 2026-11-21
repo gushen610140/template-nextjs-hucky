@@ -859,6 +859,9 @@
     "subscription": "订阅状态",
     "actions": "操作",
     "channelsTitle": "频道管理",
-    "channelsDescription": "控制站点和频道是否对订阅者开放；关闭后不再抓取新文章。"
+    "channelsDescription": "控制站点和频道是否对订阅者开放；关闭后不再抓取新文章。",
+    "enabled": "启用状态",
+    "enabledChannelCount": "{count} 个已启用",
+    "manageChannels": "管理频道"
   }
 }

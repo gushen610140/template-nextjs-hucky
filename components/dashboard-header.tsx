@@ -111,6 +111,16 @@ function resolveRssCrumbs(
   }
 
   if (section === "channels") {
+    if (segments[4]) {
+      return [
+        overview,
+        {
+          label: tSidebar("rssChannels"),
+          href: `${base}/channels`,
+        },
+        { label: siteName ?? "…" },
+      ];
+    }
     return [overview, { label: tSidebar("rssChannels") }];
   }
 
@@ -206,11 +216,12 @@ export function DashboardHeader({
   const segments = pathname.split("/").filter(Boolean);
   const ragId = segments[2] === "rag" ? segments[3] : undefined;
   const rssSiteId =
-    segments[2] === "rss" &&
-    segments[3] &&
-    segments[3] !== "channels" &&
-    segments[3] !== "read"
-      ? segments[3]
+    segments[2] === "rss"
+      ? segments[3] === "channels"
+        ? segments[4]
+        : segments[3] && segments[3] !== "read"
+          ? segments[3]
+          : undefined
       : undefined;
 
   useEffect(() => {

@@ -859,6 +859,9 @@
     "subscription": "Subscription",
     "actions": "Actions",
     "channelsTitle": "Channel management",
-    "channelsDescription": "Control which sites and channels are available to subscribers."
+    "channelsDescription": "Control which sites and channels are available to subscribers.",
+    "enabled": "Status",
+    "enabledChannelCount": "{count} enabled",
+    "manageChannels": "Manage channels"
   }
 }

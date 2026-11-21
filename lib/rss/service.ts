@@ -2,7 +2,9 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getRssAdapter } from "./adapters";
 import type {
+  RssAdminChannel,
   RssAdminSite,
+  RssAdminSiteCard,
   RssArticleRow,
   RssChannelRow,
   RssFeedItem,
@@ -408,9 +410,42 @@ export async function setSubscription(
   }
 }
 
-export async function listAdminChannelTree(): Promise<RssAdminSite[]> {
+export async function listAdminSiteCards(): Promise<RssAdminSiteCard[]> {
   const sites = await prisma.rssSite.findMany({
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      description: true,
+      homepageUrl: true,
+      isEnabled: true,
+      _count: { select: { channels: true } },
+      channels: {
+        where: { isEnabled: true },
+        select: { id: true },
+      },
+    },
+  });
+
+  return sites.map((site) => ({
+    id: site.id,
+    slug: site.slug,
+    name: site.name,
+    description: site.description,
+    homepageUrl: site.homepageUrl,
+    isEnabled: site.isEnabled,
+    channelCount: site._count.channels,
+    enabledChannelCount: site.channels.length,
+  }));
+}
+
+export async function getAdminSiteWithChannels(siteId: string): Promise<{
+  site: Omit<RssAdminSite, "channels">;
+  channels: RssAdminChannel[];
+} | null> {
+  const site = await prisma.rssSite.findUnique({
+    where: { id: siteId },
     select: {
       id: true,
       slug: true,
@@ -432,14 +467,17 @@ export async function listAdminChannelTree(): Promise<RssAdminSite[]> {
       },
     },
   });
+  if (!site) return null;
 
-  return sites.map((site) => ({
-    id: site.id,
-    slug: site.slug,
-    name: site.name,
-    description: site.description,
-    homepageUrl: site.homepageUrl,
-    isEnabled: site.isEnabled,
+  return {
+    site: {
+      id: site.id,
+      slug: site.slug,
+      name: site.name,
+      description: site.description,
+      homepageUrl: site.homepageUrl,
+      isEnabled: site.isEnabled,
+    },
     channels: site.channels.map((channel) => ({
       id: channel.id,
       slug: channel.slug,
@@ -449,7 +487,7 @@ export async function listAdminChannelTree(): Promise<RssAdminSite[]> {
       lastFetchedAt: channel.lastFetchedAt?.toISOString() ?? null,
       lastError: channel.lastError,
     })),
-  }));
+  };
 }
 
 export async function setSiteEnabled(siteId: string, enabled: boolean) {
