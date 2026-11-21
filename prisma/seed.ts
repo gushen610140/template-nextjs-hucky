@@ -272,7 +272,9 @@ async function main() {
       }
     });
 
-    await prisma.$transaction(seedRssCatalog);
+    // 目录是纯幂等 upsert, 不需要交互式事务;
+    // 远端库上 19 次往返会超过 Prisma 默认 5s 的事务超时。
+    await seedRssCatalog(prisma);
 
     console.log("RBAC seed completed.");
   } finally {
