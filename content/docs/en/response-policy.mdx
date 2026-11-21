@@ -1,6 +1,6 @@
 ---
 title: AI Response Policy
-description: How the repo-level AGENTS.md constrains agent tone, length, and expression
+description: How the repo-level AGENTS.md constrains agent tone, length, expression, and Git branch workflow
 ---
 
 `AGENTS.md` at the repository root is a project-level instruction file that OpenCode loads automatically at session start and applies to every turn. No manual reference is needed. This page records what it constrains.
@@ -11,6 +11,7 @@ Applies to all OpenCode output in this repository:
 
 - Chat replies, plans, change summaries, and task summaries.
 - Generated text such as code comments and commit messages.
+- Branch selection, merge targets, and push scope.
 
 ## Tone and expression
 
@@ -42,6 +43,23 @@ Exceeding a limit counts as a violation unless the user explicitly asks for deta
 - Do not paste full files or repeat the diff; include code only when requested or when a key snippet is essential.
 - Do not narrate tool calls such as "I am now running..." or "Next I will...".
 - Report verification as facts: command, pass or fail, key error line.
+
+## Git branch workflow
+
+The branch topology is fixed at `main` ← `dev` ← feature branches. The agent picks its action from the current branch:
+
+| Current branch | When the user asks for a change |
+| --- | --- |
+| `main` | Switch to `dev`, then create a feature branch from `dev`; never edit `main` directly |
+| `dev` | Create a feature branch from `dev` |
+| Another feature branch | Continue if the request belongs to that branch; otherwise ask whether to merge the current branch first or create a new branch from `dev` |
+
+Default merge and push rules:
+
+- Wait for the user to confirm before merging; the default target is `dev`.
+- If the user only asks to merge a branch and does not name `main`, merge into `dev` and push `dev` by default.
+- Every `main` operation (merge, push, direct commit) requires an explicit user instruction.
+- A feature branch never merges into `main` directly; it must land in `dev` first, and only an explicit user request can merge `dev` into `main`.
 
 ## Uncertainty and exceptions
 
