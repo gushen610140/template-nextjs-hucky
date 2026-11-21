@@ -8,6 +8,7 @@ import { useState, useTransition } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { RssArticleRow } from "@/lib/rss/types";
 import { cn } from "@/lib/utils";
 import { refreshAllSubscriptions } from "../actions";
@@ -24,11 +25,25 @@ function formatTime(value: string | null, locale: string): string {
   }).format(new Date(value));
 }
 
+function filterHref(
+  base: string,
+  filter: Filter,
+  date: string,
+  page?: number,
+): string {
+  const params = new URLSearchParams();
+  if (filter !== "all") params.set("filter", filter);
+  params.set("date", date);
+  if (page && page > 1) params.set("page", String(page));
+  return `${base}?${params.toString()}`;
+}
+
 export function RssReadClient({
   rows,
   total,
   unread,
   filter,
+  date,
   page,
   pageSize,
 }: {
@@ -36,6 +51,7 @@ export function RssReadClient({
   total: number;
   unread: number;
   filter: Filter;
+  date: string;
   page: number;
   pageSize: number;
 }) {
@@ -103,19 +119,30 @@ export function RssReadClient({
               key={item.key}
               asChild
               size="sm"
-              variant={filter === item.key ? "secondary" : "ghost"}
+              variant={filter === item.key ? "default" : "ghost"}
             >
-              <Link
-                href={item.key === "all" ? base : `${base}?filter=${item.key}`}
-              >
-                {item.label}
-              </Link>
+              <Link href={filterHref(base, item.key, date)}>{item.label}</Link>
             </Button>
           ))}
         </div>
-        <span className="text-muted-foreground text-xs">
-          {t("read.total", { count: total })}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground text-xs">
+            {t("read.date")}
+          </span>
+          <Input
+            type="date"
+            value={date}
+            aria-label={t("read.date")}
+            className="h-8 w-auto"
+            onChange={(event) => {
+              const next = event.target.value;
+              if (next) router.push(filterHref(base, filter, next));
+            }}
+          />
+          <span className="text-muted-foreground text-xs">
+            {t("read.total", { count: total })}
+          </span>
+        </div>
       </div>
 
       {rows.length === 0 ? (
@@ -128,7 +155,7 @@ export function RssReadClient({
         </div>
       ) : (
         <ul className="divide-y overflow-hidden rounded-xl border bg-card">
-          {rows.map((row) => (
+          {rows.map((row, index) => (
             <li key={row.id}>
               <Link
                 href={`${base}/${row.id}`}
@@ -163,9 +190,8 @@ export function RssReadClient({
                   )}
                   <div className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs">
                     <Badge variant="outline">{row.siteName}</Badge>
-                    <span>{row.channelName}</span>
-                    {row.author && <span>· {row.author}</span>}
-                    <span>· {formatTime(row.publishedAt, locale)}</span>
+                    <Badge variant="secondary">{row.channelName}</Badge>
+                    <span>{formatTime(row.publishedAt, locale)}</span>
                   </div>
                 </div>
                 {row.imageUrl && (
@@ -173,8 +199,11 @@ export function RssReadClient({
                   <img
                     src={row.imageUrl}
                     alt=""
-                    loading="lazy"
-                    className="hidden size-16 shrink-0 rounded-md object-cover sm:block"
+                    loading={index < 4 ? "eager" : "lazy"}
+                    onError={(event) => {
+                      event.currentTarget.style.display = "none";
+                    }}
+                    className="hidden h-16 w-24 shrink-0 rounded-md border bg-muted object-contain sm:block"
                   />
                 )}
               </Link>
@@ -184,26 +213,22 @@ export function RssReadClient({
       )}
 
       {pageCount > 1 && (
-        <div className="flex items-center justify-between">
-          <Button asChild size="sm" variant="outline" disabled={page <= 1}>
-            <Link
-              href={`${base}?filter=${filter}&page=${Math.max(1, page - 1)}`}
-            >
-              {t("read.prev")}
-            </Link>
-          </Button>
+        <div className="flex items-center justify-end gap-2">
           <span className="text-muted-foreground text-xs">
             {t("read.page", { page })} / {pageCount}
           </span>
+          <Button asChild size="sm" variant="outline" disabled={page <= 1}>
+            <Link href={filterHref(base, filter, date, page - 1)}>
+              {t("read.prev")}
+            </Link>
+          </Button>
           <Button
             asChild
             size="sm"
             variant="outline"
             disabled={page >= pageCount}
           >
-            <Link
-              href={`${base}?filter=${filter}&page=${Math.min(pageCount, page + 1)}`}
-            >
+            <Link href={filterHref(base, filter, date, page + 1)}>
               {t("read.next")}
             </Link>
           </Button>

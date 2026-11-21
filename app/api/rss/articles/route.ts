@@ -12,11 +12,13 @@ export const GET = withAuth(async (request, _context, user) => {
   const params = new URL(request.url).searchParams;
   const filter = params.get("filter");
   const channelId = params.get("channelId") ?? undefined;
+  const date = params.get("date") ?? undefined;
   const page = Number(params.get("page") ?? "1");
 
   const result = await listUserArticles(user.id, {
     filter: filter === "unread" || filter === "saved" ? filter : "all",
     channelId,
+    date,
     page: Number.isFinite(page) && page > 0 ? page : 1,
   });
 

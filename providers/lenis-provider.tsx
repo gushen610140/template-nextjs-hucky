@@ -38,7 +38,16 @@ export function LenisProvider({ children }: { children: React.ReactNode }) {
     }
     rafId = requestAnimationFrame(raf);
 
+    // 图片、异步内容和路由切换都会改变页面高度；
+    // Lenis 缓存的滚动上限如果不更新，就会看起来“滚不到底”。
+    const resize = () => lenis.resize();
+    const observer = new ResizeObserver(resize);
+    observer.observe(document.body);
+    window.addEventListener("load", resize);
+
     return () => {
+      observer.disconnect();
+      window.removeEventListener("load", resize);
       cancelAnimationFrame(rafId);
       lenis.destroy();
     };

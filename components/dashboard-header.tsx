@@ -92,6 +92,49 @@ function resolveFileCrumbs(
   return crumbs;
 }
 
+function resolveRssCrumbs(
+  segments: string[],
+  locale: string,
+  t: (key: string) => string,
+  tSidebar: (key: string) => string,
+  siteName: string | null,
+): Crumb[] {
+  const base = `/${locale}/dashboard/rss`;
+  const overview: Crumb = {
+    label: t("overview"),
+    href: `/${locale}/dashboard`,
+  };
+  const section = segments[3];
+
+  if (!section) {
+    return [overview, { label: tSidebar("rssCatalog") }];
+  }
+
+  if (section === "channels") {
+    return [overview, { label: tSidebar("rssChannels") }];
+  }
+
+  if (section === "read") {
+    if (segments[4]) {
+      return [
+        overview,
+        {
+          label: tSidebar("rssRead"),
+          href: `${base}/read`,
+        },
+        { label: t("article") },
+      ];
+    }
+    return [overview, { label: tSidebar("rssRead") }];
+  }
+
+  return [
+    overview,
+    { label: tSidebar("rssCatalog"), href: base },
+    { label: siteName ?? "…" },
+  ];
+}
+
 function resolveCrumbs(
   pathname: string,
   locale: string,
@@ -100,6 +143,7 @@ function resolveCrumbs(
   canUseFiles: boolean,
   canManageFiles: boolean,
   ragName: string | null,
+  rssSiteName: string | null,
 ): Crumb[] {
   const segments = pathname.split("/").filter(Boolean);
   const section = segments[2];
@@ -113,6 +157,10 @@ function resolveCrumbs(
       canUseFiles,
       canManageFiles,
     );
+  }
+
+  if (section === "rss") {
+    return resolveRssCrumbs(segments, locale, t, tSidebar, rssSiteName);
   }
 
   const overview: Crumb = {
@@ -153,9 +201,17 @@ export function DashboardHeader({
   const t = useTranslations("Dashboard");
   const tSidebar = useTranslations("Sidebar");
   const [ragName, setRagName] = useState<string | null>(null);
+  const [rssSiteName, setRssSiteName] = useState<string | null>(null);
 
   const segments = pathname.split("/").filter(Boolean);
   const ragId = segments[2] === "rag" ? segments[3] : undefined;
+  const rssSiteId =
+    segments[2] === "rss" &&
+    segments[3] &&
+    segments[3] !== "channels" &&
+    segments[3] !== "read"
+      ? segments[3]
+      : undefined;
 
   useEffect(() => {
     if (!ragId) {
@@ -183,6 +239,30 @@ export function DashboardHeader({
     };
   }, [ragId]);
 
+  useEffect(() => {
+    if (!rssSiteId) {
+      setRssSiteName(null);
+      return;
+    }
+
+    let cancelled = false;
+    async function load() {
+      const response = await fetch("/api/rss/catalog");
+      const data = (await response.json().catch(() => null)) as {
+        sites?: Array<{ id: string; name: string }>;
+      } | null;
+      const site = data?.sites?.find((item) => item.id === rssSiteId);
+      if (!cancelled) {
+        setRssSiteName(site?.name ?? null);
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [rssSiteId]);
+
   const crumbs = resolveCrumbs(
     pathname,
     locale,
@@ -191,6 +271,7 @@ export function DashboardHeader({
     canUseFiles,
     canManageFiles,
     ragName,
+    rssSiteName,
   );
 
   return (
