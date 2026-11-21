@@ -124,3 +124,31 @@ export type RssAdminSiteCard = {
   channelCount: number;
   enabledChannelCount: number;
 };
+
+export type RssAdminArticleRow = {
+  id: string;
+  title: string;
+  summary: string | null;
+  siteId: string;
+  siteName: string;
+  channels: string[];
+  author: string | null;
+  publishedAt: string | null;
+  fetchedAt: string;
+  url: string;
+};
+
+export type RssAdminArticleDetail = {
+  id: string;
+  title: string;
+  content: string | null;
+  summary: string | null;
+  author: string | null;
+  url: string;
+  imageUrl: string | null;
+  publishedAt: string | null;
+  fetchedAt: string;
+  createdAt: string;
+  siteName: string;
+  channels: string[];
+};

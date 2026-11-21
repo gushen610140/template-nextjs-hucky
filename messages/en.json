@@ -105,7 +105,8 @@
         "skills": "Skills"
       }
     },
-    "article": "Article"
+    "article": "Article",
+    "articles": "Article management"
   },
   "Sidebar": {
     "brandName": "Hucky",
@@ -130,7 +131,8 @@
     "rssGroup": "RSS",
     "rssCatalog": "Subscriptions",
     "rssRead": "Reading",
-    "rssChannels": "Channels"
+    "rssChannels": "Channels",
+    "rssArticles": "Articles"
   },
   "User": {
     "profile": "Profile",
@@ -862,6 +864,17 @@
     "channelsDescription": "Control which sites and channels are available to subscribers.",
     "enabled": "Status",
     "enabledChannelCount": "{count} enabled",
-    "manageChannels": "Manage channels"
+    "manageChannels": "Manage channels",
+    "articlesTitle": "Article management",
+    "articlesDescription": "All fetched articles across the site. Read only.",
+    "articlesEmpty": "No articles have been fetched yet.",
+    "article": "Article",
+    "source": "Source",
+    "author": "Author",
+    "publishedAt": "Published",
+    "fetchedAt": "Fetched",
+    "addedAt": "Added",
+    "view": "View",
+    "contentMissing": "No full text was fetched; only the summary is stored."
   }
 }

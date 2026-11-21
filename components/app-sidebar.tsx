@@ -5,6 +5,7 @@ import {
   Bot,
   Command,
   Database,
+  FileText,
   FolderOpen,
   Folders,
   LifeBuoy,
@@ -162,6 +163,13 @@ export function AppSidebar({
       url: `/${locale}/dashboard/rss/read`,
       icon: <Newspaper />,
     });
+    if (canManageRss) {
+      rssItems.splice(2, 0, {
+        title: t("rssArticles"),
+        url: `/${locale}/dashboard/rss/articles`,
+        icon: <FileText />,
+      });
+    }
 
     navGroups.push({
       label: t("rssGroup"),

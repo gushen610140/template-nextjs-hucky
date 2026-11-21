@@ -2,6 +2,8 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getRssAdapter } from "./adapters";
 import type {
+  RssAdminArticleDetail,
+  RssAdminArticleRow,
   RssAdminChannel,
   RssAdminSite,
   RssAdminSiteCard,
@@ -487,6 +489,92 @@ export async function getAdminSiteWithChannels(siteId: string): Promise<{
       lastFetchedAt: channel.lastFetchedAt?.toISOString() ?? null,
       lastError: channel.lastError,
     })),
+  };
+}
+
+export async function listAdminArticles(options?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<{ rows: RssAdminArticleRow[]; total: number }> {
+  const page = Math.max(1, options?.page ?? 1);
+  const pageSize = options?.pageSize ?? 20;
+
+  const [rows, total] = await Promise.all([
+    prisma.rssArticle.findMany({
+      orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: {
+        id: true,
+        title: true,
+        summary: true,
+        author: true,
+        publishedAt: true,
+        fetchedAt: true,
+        url: true,
+        site: { select: { id: true, name: true } },
+        channels: {
+          select: { channel: { select: { name: true } } },
+        },
+      },
+    }),
+    prisma.rssArticle.count(),
+  ]);
+
+  return {
+    total,
+    rows: rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      summary: row.summary,
+      siteId: row.site.id,
+      siteName: row.site.name,
+      channels: row.channels.map(({ channel }) => channel.name),
+      author: row.author,
+      publishedAt: row.publishedAt?.toISOString() ?? null,
+      fetchedAt: row.fetchedAt.toISOString(),
+      url: row.url,
+    })),
+  };
+}
+
+export async function getAdminArticle(
+  articleId: string,
+): Promise<RssAdminArticleDetail | null> {
+  const article = await prisma.rssArticle.findUnique({
+    where: { id: articleId },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      summary: true,
+      author: true,
+      url: true,
+      imageUrl: true,
+      publishedAt: true,
+      fetchedAt: true,
+      createdAt: true,
+      site: { select: { name: true } },
+      channels: {
+        select: { channel: { select: { name: true } } },
+      },
+    },
+  });
+  if (!article) return null;
+
+  return {
+    id: article.id,
+    title: article.title,
+    content: article.content,
+    summary: article.summary,
+    author: article.author,
+    url: article.url,
+    imageUrl: article.imageUrl,
+    publishedAt: article.publishedAt?.toISOString() ?? null,
+    fetchedAt: article.fetchedAt.toISOString(),
+    createdAt: article.createdAt.toISOString(),
+    siteName: article.site.name,
+    channels: article.channels.map(({ channel }) => channel.name),
   };
 }
 

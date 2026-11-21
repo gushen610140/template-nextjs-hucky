@@ -124,6 +124,20 @@ function resolveRssCrumbs(
     return [overview, { label: tSidebar("rssChannels") }];
   }
 
+  if (section === "articles") {
+    if (segments[4]) {
+      return [
+        overview,
+        {
+          label: t("articles"),
+          href: `${base}/articles`,
+        },
+        { label: t("article") },
+      ];
+    }
+    return [overview, { label: t("articles") }];
+  }
+
   if (section === "read") {
     if (segments[4]) {
       return [
@@ -219,7 +233,7 @@ export function DashboardHeader({
     segments[2] === "rss"
       ? segments[3] === "channels"
         ? segments[4]
-        : segments[3] && segments[3] !== "read"
+        : segments[3] && segments[3] !== "read" && segments[3] !== "articles"
           ? segments[3]
           : undefined
       : undefined;
