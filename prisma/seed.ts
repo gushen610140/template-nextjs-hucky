@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import {
   getPermissionModule,
   PERMISSIONS,
@@ -32,9 +33,190 @@ const SYSTEM_ROLES: ReadonlyArray<{
   {
     name: ROLES.user,
     description: "普通用户，可管理自己的文件并使用 AI 对话",
-    permissions: [PERMISSIONS.fileOwn, PERMISSIONS.aiOwn],
+    permissions: [PERMISSIONS.fileOwn, PERMISSIONS.aiOwn, PERMISSIONS.rssOwn],
   },
 ];
+
+/**
+ * 内置可订阅站点与频道。
+ *
+ * 只补齐缺失项: 已存在时更新名称 / 排序等展示字段, 但不覆盖
+ * `isEnabled`, 避免每次部署把管理员关闭的站点重新打开。
+ */
+const RSS_SITES: ReadonlyArray<{
+  slug: string;
+  name: string;
+  homepageUrl: string;
+  description: string;
+  adapter: string;
+  channels: ReadonlyArray<{
+    slug: string;
+    name: string;
+    adapterKey: string;
+    url: string;
+  }>;
+}> = [
+  {
+    slug: "36kr",
+    name: "36氪",
+    homepageUrl: "https://www.36kr.com/",
+    description: "科技与商业资讯",
+    adapter: "36kr",
+    channels: [
+      {
+        slug: "web_news",
+        name: "最新",
+        adapterKey: "web_news",
+        url: "https://www.36kr.com/information/web_news",
+      },
+      {
+        slug: "web_recommend",
+        name: "推荐",
+        adapterKey: "web_recommend",
+        url: "https://www.36kr.com/information/web_recommend",
+      },
+      {
+        slug: "contact",
+        name: "创投",
+        adapterKey: "contact",
+        url: "https://www.36kr.com/information/contact",
+      },
+      {
+        slug: "ccs",
+        name: "财经",
+        adapterKey: "ccs",
+        url: "https://www.36kr.com/information/ccs",
+      },
+      {
+        slug: "travel",
+        name: "汽车",
+        adapterKey: "travel",
+        url: "https://www.36kr.com/information/travel",
+      },
+      {
+        slug: "ai",
+        name: "AI",
+        adapterKey: "AI",
+        url: "https://www.36kr.com/information/AI",
+      },
+      {
+        slug: "technology",
+        name: "科技",
+        adapterKey: "technology",
+        url: "https://www.36kr.com/information/technology",
+      },
+      {
+        slug: "aireport",
+        name: "项目推荐",
+        adapterKey: "aireport",
+        url: "https://www.36kr.com/information/aireport",
+      },
+      {
+        slug: "shuzihua",
+        name: "专精特新",
+        adapterKey: "shuzihua",
+        url: "https://www.36kr.com/information/shuzihua",
+      },
+      {
+        slug: "innovate",
+        name: "创新",
+        adapterKey: "innovate",
+        url: "https://www.36kr.com/information/innovate",
+      },
+      {
+        slug: "enterpriseservice",
+        name: "企服",
+        adapterKey: "enterpriseservice",
+        url: "https://www.36kr.com/information/enterpriseservice",
+      },
+      {
+        slug: "happy_life",
+        name: "消费",
+        adapterKey: "happy_life",
+        url: "https://www.36kr.com/information/happy_life",
+      },
+      {
+        slug: "real_estate",
+        name: "城市",
+        adapterKey: "real_estate",
+        url: "https://www.36kr.com/information/real_estate",
+      },
+      {
+        slug: "web_zhichang",
+        name: "职场",
+        adapterKey: "web_zhichang",
+        url: "https://www.36kr.com/information/web_zhichang",
+      },
+      {
+        slug: "qiyehao",
+        name: "企业号",
+        adapterKey: "qiyehao",
+        url: "https://www.36kr.com/information/qiyehao",
+      },
+      {
+        slug: "sensation",
+        name: "看点",
+        adapterKey: "sensation",
+        url: "https://www.36kr.com/information/sensation",
+      },
+      {
+        slug: "other",
+        name: "其他",
+        adapterKey: "other",
+        url: "https://www.36kr.com/information/other",
+      },
+      {
+        slug: "newsflash",
+        name: "快讯",
+        adapterKey: "newsflash",
+        url: "https://www.36kr.com/newsflashes",
+      },
+    ],
+  },
+];
+
+async function seedRssCatalog(tx: Prisma.TransactionClient) {
+  for (const [siteIndex, site] of RSS_SITES.entries()) {
+    const row = await tx.rssSite.upsert({
+      where: { slug: site.slug },
+      update: {
+        name: site.name,
+        homepageUrl: site.homepageUrl,
+        description: site.description,
+        adapter: site.adapter,
+        sortOrder: siteIndex,
+      },
+      create: {
+        slug: site.slug,
+        name: site.name,
+        homepageUrl: site.homepageUrl,
+        description: site.description,
+        adapter: site.adapter,
+        sortOrder: siteIndex,
+      },
+    });
+
+    for (const [channelIndex, channel] of site.channels.entries()) {
+      await tx.rssChannel.upsert({
+        where: { siteId_slug: { siteId: row.id, slug: channel.slug } },
+        update: {
+          name: channel.name,
+          adapterKey: channel.adapterKey,
+          url: channel.url,
+          sortOrder: channelIndex,
+        },
+        create: {
+          siteId: row.id,
+          slug: channel.slug,
+          name: channel.name,
+          adapterKey: channel.adapterKey,
+          url: channel.url,
+          sortOrder: channelIndex,
+        },
+      });
+    }
+  }
+}
 
 async function main() {
   // seed 属于迁移/部署步骤, 使用直连地址; 本地只有一个连接串时回退到 DATABASE_URL。
@@ -89,6 +271,8 @@ async function main() {
         }
       }
     });
+
+    await prisma.$transaction(seedRssCatalog);
 
     console.log("RBAC seed completed.");
   } finally {

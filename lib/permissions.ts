@@ -7,6 +7,8 @@
  * - `ai:own`:       使用管理员配置的模型进行对话
  * - `file:own`:     管理自己上传的文件
  * - `file:manage`:  管理全站文件 (管理员)
+ * - `rss:own`:      使用 RSS 订阅与阅读
+ * - `rss:manage`:   管理可订阅站点 / 频道 (管理员)
  *
  * 主题配置和 dashboard 概览不做权限限制。
  * 新增页面或 API 默认不校验权限; 需要限制时再显式引用这里的常量。
@@ -22,6 +24,8 @@ export const PERMISSIONS = {
   aiOwn: "ai:own",
   fileOwn: "file:own",
   fileManage: "file:manage",
+  rssOwn: "rss:own",
+  rssManage: "rss:manage",
 } as const;
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
