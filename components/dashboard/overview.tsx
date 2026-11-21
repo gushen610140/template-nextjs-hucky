@@ -116,7 +116,7 @@ export function DashboardOverview() {
   const locale = useLocale();
 
   return (
-    <div className="flex flex-1 flex-col gap-14 p-4 pt-0 pb-10">
+    <div className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-14 px-4 pt-0 pb-10 sm:px-6 lg:px-8">
       {/* Hero */}
       <section className="border-b border-border pb-10">
         <div className="grid gap-8 lg:grid-cols-12 lg:gap-12">
