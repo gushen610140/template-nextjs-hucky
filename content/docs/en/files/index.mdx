@@ -53,7 +53,7 @@ RustFS has to be ready before the app can read or write files:
 The signature covers the request host. The server signs with `RUSTFS_ENDPOINT`, and the browser must call the same host, otherwise RustFS answers with `SignatureDoesNotMatch`.
 </Callout>
 
-The region is fixed to `us-east-1` and presign expiry to 15 minutes, both in `lib/storage/client.ts`. They are intentionally not environment variables. See [Environment variables](/en/docs/infrastructure/environment-variables) for the full list.
+The region is fixed to `us-east-1` and presign expiry to 15 minutes, both in `lib/storage/client.ts`. They are intentionally not environment variables. See [Environment variables](/en/docs/environment-variables) for the full list.
 
 ## Next
 

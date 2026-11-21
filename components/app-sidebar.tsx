@@ -5,11 +5,15 @@ import {
   Bot,
   Command,
   Database,
+  FileText,
   FolderOpen,
   Folders,
   LifeBuoy,
+  ListTree,
   MessageSquare,
+  Newspaper,
   Palette,
+  Rss,
   Send,
   Server,
   ShieldCheck,
@@ -52,6 +56,10 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   canUseAi: boolean;
   /** 是否可以管理供应商 / 模型 (ai:manage) */
   canManageAi: boolean;
+  /** 是否可以使用 RSS 订阅与阅读 (rss:own) */
+  canUseRss: boolean;
+  /** 是否可以管理站点 / 频道的启用状态 (rss:manage) */
+  canManageRss: boolean;
 };
 
 export function AppSidebar({
@@ -61,6 +69,8 @@ export function AppSidebar({
   canManageFiles,
   canUseAi,
   canManageAi,
+  canUseRss,
+  canManageRss,
   ...props
 }: AppSidebarProps) {
   const t = useTranslations("Sidebar");
@@ -130,6 +140,40 @@ export function AppSidebar({
     navGroups.push({
       label: t("filesGroup"),
       items: fileItems,
+    });
+  }
+
+  if (canUseRss) {
+    const rssItems: NavItem[] = [
+      {
+        title: t("rssCatalog"),
+        url: `/${locale}/dashboard/rss`,
+        icon: <Rss />,
+      },
+    ];
+    if (canManageRss) {
+      rssItems.push({
+        title: t("rssChannels"),
+        url: `/${locale}/dashboard/rss/channels`,
+        icon: <ListTree />,
+      });
+    }
+    rssItems.push({
+      title: t("rssRead"),
+      url: `/${locale}/dashboard/rss/read`,
+      icon: <Newspaper />,
+    });
+    if (canManageRss) {
+      rssItems.splice(2, 0, {
+        title: t("rssArticles"),
+        url: `/${locale}/dashboard/rss/articles`,
+        icon: <FileText />,
+      });
+    }
+
+    navGroups.push({
+      label: t("rssGroup"),
+      items: rssItems,
     });
   }
 

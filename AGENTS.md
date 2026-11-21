@@ -32,14 +32,28 @@
 - 复杂、开放或高风险任务（架构设计、跨模块重构、方案取舍、需求模糊）先调用 `grill-me` skill，用追问澄清目标、约束与边界，再给方案或动手。
 - 简单、边界明确的小改动不调用，避免无意义的反复提问。
 
+## 质疑与风险（强制）
+
+- 不把用户的要求当成已成立的结论。目标、约束或边界不清时，先追问最关键的缺失项，不自行补全。
+- 动手前检查改动是否影响现有行为、数据、安全、性能或其他模块；发现问题先指出，等用户确认后再改。
+- 评估长期影响：兼容性、迁移成本、回滚难度、是否锁死后续设计。说不清的地方直接说明不确定点。
+- 用户描述与代码事实冲突时，以代码和可复现证据为准，直接指出冲突，不顺着用户说。
+- 提出质疑只给三样东西：问题、依据、可选方向，各一句；质疑同样受长度限制，不写成分析报告。
+- 风险提示不算“主动扩展”，但只保留影响正确性的内容。
+- 用户明确要求“照做 / 不要质疑”时执行，但仍用一句话标注已知风险。
+
 ## Git 分支与提交（强制）
 
-- 任何代码改动都必须先建立或切换到对应分支，不直接在 `main` 上修改；用户在 `main` 提出功能需求时，默认新建分支再动手。
-- 当前分支已有明确的功能方向。新改动与该方向不同时，先询问用户是否另开分支，不把无关改动混进同一分支。
-- 分支上的功能完成后，提醒用户是否合并回 `main`；是否合并由用户决定，不自行合并。
+- 分支拓扑固定为 `main` ← `dev` ← 功能分支。功能分支只能合回 `dev`，不得直接合回 `main`；`dev` 合回 `main` 必须由用户明确要求。
+- 用户在 `main` 上提出需求时，不直接在 `main` 修改：先自动切换到 `dev`，再从 `dev` 新建功能分支实施。
+- 用户在 `dev` 上提出需求时，直接从 `dev` 新建功能分支实施。
+- 用户在功能分支上提出需求时，先判断是否属于该分支正在开发的功能。不属于时，询问用户是先将当前分支合并再开发，还是另开分支；另开的新分支必须从 `dev` 开出。
+- 功能完成后，等待用户确认后再合并；确认后默认合回 `dev`，不得自行合并回 `main`。
+- 用户只要求“合并分支”且未指明 `main` 时，只合并到 `dev`，并默认推送 `dev`；未明确要求推送 `main` 时，不推送 `main`。
+- 任何针对 `main` 的操作（合并、推送、直接提交）都必须由用户明确说明，否则默认只在 `dev` 或其功能分支上操作。
 - 修改过程中使用 `caveman-commit` skill 拆分多次小提交，每个可回退的完整步骤提交一次，提交信息遵循 Conventional Commits。
-- 合并回 `main` 时同样使用 `caveman-commit` skill 编写 merge 提交信息，不使用 Git 默认的 `Merge branch '...'`。
-- 只提交与本次改动相关的文件。不提交 `.env*`、构建产物、安装产物或用户未确认的本地改动；`git push` 仅在用户明确要求时执行。
+- 合并时同样使用 `caveman-commit` skill 编写 merge 提交信息，不使用 Git 默认的 `Merge branch '...'`。
+- 只提交与本次改动相关的文件。不提交 `.env*`、构建产物、安装产物或用户未确认的本地改动；`git push` 仅在用户明确要求时执行，唯一默认例外是“只要求合并”时按上一条推送 `dev`。
 
 ## 不确定性
 
@@ -63,3 +77,13 @@
 
 合规：
 > 改完。`lib/db.ts` 改用连接池，避免每次请求新建 client。
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

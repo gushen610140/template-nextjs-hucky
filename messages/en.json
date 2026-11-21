@@ -10,44 +10,103 @@
     "filePreview": "Preview",
     "fileEdit": "Online editing",
     "comingSoon": "This module is under construction",
-    "overviewTitle": "Overview",
-    "overviewSubtitle": "Key metrics, request volume, and model usage at a glance.",
-    "updatedJustNow": "Live",
-    "last30Days": "Last 30 days",
-    "kpiUsers": "Active users",
-    "kpiRequests": "Requests",
-    "kpiErrorRate": "Error rate",
-    "kpiLatency": "Avg. latency",
-    "requestVolume": "Request volume",
-    "requestVolumeDescription": "Inference requests over the last 24 hours",
-    "live": "Live",
-    "vsLastPeriod": "vs. previous period",
-    "requestStatus": "Request status",
-    "requestStatusDescription": "Split by completion type",
-    "successRate": "Success rate",
-    "status": {
-      "success": "Success",
-      "stream": "Streamed",
-      "cache": "Cache hit",
-      "error": "Errors"
+    "eyebrow": "Hucky / Product overview",
+    "title": "A production-ready full-stack backend, from users to AI.",
+    "description": "Users, files, the AI pipeline, and theme control share one permission model, one storage layer, and one set of design tokens. No demo data: every module talks to real APIs.",
+    "docsCta": "Read the docs",
+    "versionLabel": "Template v0.1",
+    "stack": {
+      "framework": "Framework",
+      "ui": "UI",
+      "data": "Data",
+      "styling": "Styling"
     },
-    "weeklyUsers": "Weekly active users",
-    "weeklyUsersDescription": "Grouped by calendar day",
-    "weekdays": {
-      "mon": "Mon",
-      "tue": "Tue",
-      "wed": "Wed",
-      "thu": "Thu",
-      "fri": "Fri",
-      "sat": "Sat",
-      "sun": "Sun"
+    "modules": {
+      "label": "Core modules",
+      "title": "Four tracks that cover most backend work",
+      "description": "Each module ships with pages, Server Actions, permission checks, and docs, so it can be lifted out and reused.",
+      "readMore": "Read docs",
+      "users": {
+        "title": "User management",
+        "lead": "Logto identity, local sessions, and RBAC form the account system.",
+        "points": [
+          "Single Logto OIDC entry; no local passwords",
+          "Layered roles and permissions checked in pages and APIs",
+          "Users, roles, permissions, and sessions managed together"
+        ]
+      },
+      "files": {
+        "title": "File management",
+        "lead": "RustFS presigned uploads keep the database to metadata and ownership.",
+        "points": [
+          "Browsers upload straight to object storage",
+          "Virtual folders, drag-and-drop moves, search, and paging",
+          "Inline preview and OnlyOffice co-editing"
+        ]
+      },
+      "ai": {
+        "title": "AI pipeline",
+        "lead": "Providers, models, agents, chat, and knowledge bases configured by admins.",
+        "points": [
+          "Provider keys are decrypted only on the server",
+          "Streaming output with LangChain and LangGraph",
+          "Qdrant vector search for RAG knowledge bases"
+        ]
+      },
+      "theme": {
+        "title": "Theme control",
+        "lead": "Colors, radius, shadows, and fonts switch at runtime without a rebuild.",
+        "points": [
+          "Base color, primary color, radius, and shadows apply live",
+          "Private COS fonts download on demand and stay cached",
+          "One token set serves both the app and the docs"
+        ]
+      }
     },
-    "topModels": "Top models",
-    "topModelsDescription": "By token consumption",
-    "activityHeatmap": "Activity heatmap",
-    "activityHeatmapDescription": "Request density over 18 weeks",
-    "less": "Less",
-    "more": "More"
+    "pipeline": {
+      "label": "AI pipeline",
+      "title": "One path from encrypted keys to streamed answers",
+      "description": "Admins own providers and models; regular users only see enabled agents. The two permission lines never cross.",
+      "providers": {
+        "title": "Providers",
+        "description": "API keys encrypted server-side"
+      },
+      "models": {
+        "title": "Models",
+        "description": "Adapters instantiated per provider"
+      },
+      "agents": {
+        "title": "Agents",
+        "description": "Prompt, model, and parameters"
+      },
+      "chat": {
+        "title": "Chat",
+        "description": "Tokens streamed over SSE"
+      },
+      "rag": {
+        "title": "Knowledge",
+        "description": "Qdrant retrieval-augmented context"
+      }
+    },
+    "docs": {
+      "label": "Documentation",
+      "title": "Keep reading",
+      "description": "From first run to deployment and module internals, docs live in the same repository as the code.",
+      "footnote": "Docs ship with the code",
+      "open": "Open full documentation",
+      "items": {
+        "gettingStarted": "Getting started",
+        "deployment": "Deployment",
+        "authentication": "Authentication",
+        "files": "File storage",
+        "ai": "AI chat",
+        "theme": "Theme",
+        "fonts": "Fonts",
+        "skills": "Skills"
+      }
+    },
+    "article": "Article",
+    "articles": "Article management"
   },
   "Sidebar": {
     "brandName": "Hucky",
@@ -68,7 +127,12 @@
     "filesAll": "All files",
     "support": "Support",
     "feedback": "Feedback",
-    "documentation": "Documentation"
+    "documentation": "Documentation",
+    "rssGroup": "RSS",
+    "rssCatalog": "Subscriptions",
+    "rssRead": "Reading",
+    "rssChannels": "Channels",
+    "rssArticles": "Articles"
   },
   "User": {
     "profile": "Profile",
@@ -732,5 +796,85 @@
       "not_found": "The conversation does not exist or was deleted.",
       "unknown": "Something went wrong. Please try again."
     }
+  },
+  "Rss": {
+    "title": "RSS Reader",
+    "description": "Subscribe to site channels; fetched articles land in your reading library.",
+    "catalogDescription": "Built-in sites. Open a site to choose which channels you subscribe to.",
+    "channels": "Channels",
+    "channelCount": "{count} channels",
+    "subscribedCount": "{count} subscribed",
+    "disabled": "Disabled",
+    "openSite": "View channels",
+    "emptyCatalog": "No sites available.",
+    "siteFallback": "Site",
+    "siteDisabledHint": "This site has been disabled by an administrator.",
+    "enableSite": "Enable site",
+    "disableSite": "Disable site",
+    "enableChannel": "Enable channel",
+    "disableChannel": "Disable channel",
+    "channelDisabledHint": "Channel is disabled; subscribers will not get new articles.",
+    "subscribe": "Subscribe",
+    "unsubscribe": "Unsubscribe",
+    "refresh": "Fetch now",
+    "refreshing": "Fetching...",
+    "refreshAll": "Refresh all subscriptions",
+    "newArticles": "{count} new articles",
+    "lastFetched": "Last fetched: {time}",
+    "neverFetched": "Never fetched",
+    "fetchError": "Last fetch failed: {message}",
+    "articleCount": "{count} articles",
+    "read": {
+      "title": "Reading",
+      "description": "Only articles from channels you subscribe to.",
+      "all": "All",
+      "unread": "Unread",
+      "saved": "Saved",
+      "empty": "No articles yet. Enable a channel on the subscriptions page, then refresh.",
+      "markRead": "Mark as read",
+      "markUnread": "Mark as unread",
+      "save": "Save",
+      "unsave": "Remove from saved",
+      "back": "Back to list",
+      "original": "View original",
+      "author": "Author",
+      "publishedAt": "Published",
+      "noContent": "No full text was fetched for this article. Open the original.",
+      "prev": "Previous",
+      "next": "Next",
+      "page": "Page {page}",
+      "total": "{count} articles",
+      "unreadCount": "{count} unread",
+      "filterAll": "All channels",
+      "markAllRead": "Mark all as read",
+      "date": "Date",
+      "backToTop": "Back to top"
+    },
+    "errors": {
+      "forbidden": "You are not allowed to do that.",
+      "channel_not_found": "Channel not found.",
+      "channel_disabled": "Channel or site is disabled.",
+      "adapter_unavailable": "The crawler for this site is not implemented yet.",
+      "unknown": "Something went wrong. Please try again."
+    },
+    "site": "Site",
+    "subscription": "Subscription",
+    "actions": "Actions",
+    "channelsTitle": "Channel management",
+    "channelsDescription": "Control which sites and channels are available to subscribers.",
+    "enabled": "Status",
+    "enabledChannelCount": "{count} enabled",
+    "manageChannels": "Manage channels",
+    "articlesTitle": "Article management",
+    "articlesDescription": "All fetched articles across the site. Read only.",
+    "articlesEmpty": "No articles have been fetched yet.",
+    "article": "Article",
+    "source": "Source",
+    "author": "Author",
+    "publishedAt": "Published",
+    "fetchedAt": "Fetched",
+    "addedAt": "Added",
+    "view": "View",
+    "contentMissing": "No full text was fetched; only the summary is stored."
   }
 }

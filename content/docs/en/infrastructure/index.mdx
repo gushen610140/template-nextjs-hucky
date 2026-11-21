@@ -1,6 +1,6 @@
 ---
 title: Infrastructure
-description: Package management, environment variables, and local workflow rules
+description: Package manager and local workflow rules
 ---
 
 Infrastructure is what keeps the project consistent across local machines and CI. This section covers the two rules that cause the most trouble when they are broken:
@@ -8,7 +8,6 @@ Infrastructure is what keeps the project consistent across local machines and CI
 | Topic | What it covers |
 | --- | --- |
 | [Package manager](/en/docs/infrastructure/package-manager) | Bun only, a committed `bun.lock`, and installing with `bun ci` |
-| [Environment variables](/en/docs/infrastructure/environment-variables) | The difference between `.env.<NODE_ENV>` and `.env.example`, plus required values |
 | [Formatting](/en/docs/infrastructure/formatting) | Biome and the VSCode extension for format-on-save |
 
 ## Rules at a glance
@@ -26,5 +25,4 @@ Mixing package managers gives local and CI environments different dependency tre
 ## Next
 
 - [Package manager](/en/docs/infrastructure/package-manager): why the project uses Bun, and how `bun ci` relates to `bun.lock`.
-- [Environment variables](/en/docs/infrastructure/environment-variables): copy `.env.example` first, then fill in values per environment.
 - [Formatting](/en/docs/infrastructure/formatting): keep the codebase consistent with Biome and the VSCode extension.

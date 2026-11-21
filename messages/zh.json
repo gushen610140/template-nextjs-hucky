@@ -10,44 +10,103 @@
     "filePreview": "预览",
     "fileEdit": "在线编辑",
     "comingSoon": "该模块正在建设中",
-    "overviewTitle": "概览",
-    "overviewSubtitle": "关键指标、请求量与模型使用情况一览。",
-    "updatedJustNow": "实时更新",
-    "last30Days": "最近 30 天",
-    "kpiUsers": "活跃用户",
-    "kpiRequests": "请求总量",
-    "kpiErrorRate": "错误率",
-    "kpiLatency": "平均延迟",
-    "requestVolume": "请求量",
-    "requestVolumeDescription": "过去 24 小时的推理请求",
-    "live": "实时",
-    "vsLastPeriod": "较上一周期",
-    "requestStatus": "请求状态",
-    "requestStatusDescription": "按结束方式拆分",
-    "successRate": "成功率",
-    "status": {
-      "success": "成功",
-      "stream": "流式传输",
-      "cache": "缓存命中",
-      "error": "错误"
+    "eyebrow": "Hucky / 产品概览",
+    "title": "一套可投产的全栈后台，从用户到 AI 一次配齐。",
+    "description": "用户、文件、AI 流水线与主题控制共享同一套权限、存储和设计令牌。页面没有演示数据，四个模块都从真实接口工作。",
+    "docsCta": "阅读文档",
+    "versionLabel": "Template v0.1",
+    "stack": {
+      "framework": "框架",
+      "ui": "UI",
+      "data": "数据",
+      "styling": "样式"
     },
-    "weeklyUsers": "每周活跃用户",
-    "weeklyUsersDescription": "按自然日统计",
-    "weekdays": {
-      "mon": "一",
-      "tue": "二",
-      "wed": "三",
-      "thu": "四",
-      "fri": "五",
-      "sat": "六",
-      "sun": "日"
+    "modules": {
+      "label": "核心模块",
+      "title": "四条主线，覆盖后台最常见的需求",
+      "description": "每个模块都包含页面、Server Actions、权限校验与文档，可以单独拆出复用。",
+      "readMore": "查看文档",
+      "users": {
+        "title": "用户管理",
+        "lead": "Logto 统一身份、本地会话与 RBAC 组成完整的账号体系。",
+        "points": [
+          "Logto OIDC 单一入口，本地不保存密码",
+          "角色与权限分层，页面和 API 双重校验",
+          "用户、角色、权限与会话集中管理"
+        ]
+      },
+      "files": {
+        "title": "文件管理",
+        "lead": "RustFS 预签名直传，数据库只保存元数据与归属关系。",
+        "points": [
+          "浏览器直传对象存储，不经过应用服务器",
+          "虚拟目录、拖拽移动、搜索与分页",
+          "在线预览与 OnlyOffice 协同编辑"
+        ]
+      },
+      "ai": {
+        "title": "AI 基础流水线",
+        "lead": "供应商、模型、智能体到对话与知识库，全部由管理员配置。",
+        "points": [
+          "供应商密钥只在服务端解密",
+          "LangChain + LangGraph 流式输出",
+          "Qdrant 向量检索构建 RAG 知识库"
+        ]
+      },
+      "theme": {
+        "title": "主题控制",
+        "lead": "颜色、圆角、阴影与字体在运行时切换，无需重新构建。",
+        "points": [
+          "基础色、主色、圆角与阴影实时生效",
+          "私有 COS 字体按需下载并缓存",
+          "同一套 token 同时服务业务与文档"
+        ]
+      }
     },
-    "topModels": "模型使用排行",
-    "topModelsDescription": "按 token 消耗",
-    "activityHeatmap": "活动热力图",
-    "activityHeatmapDescription": "过去 18 周的请求密度",
-    "less": "少",
-    "more": "多"
+    "pipeline": {
+      "label": "AI 基础流水线",
+      "title": "从加密密钥到流式对话的完整链路",
+      "description": "管理员维护供应商与模型，普通用户只接触启用中的智能体；两条权限线彼此隔离。",
+      "providers": {
+        "title": "供应商",
+        "description": "API Key 服务端加密保存"
+      },
+      "models": {
+        "title": "模型",
+        "description": "按供应商实例化适配器"
+      },
+      "agents": {
+        "title": "智能体",
+        "description": "组合提示词、模型与参数"
+      },
+      "chat": {
+        "title": "对话",
+        "description": "SSE 推送 token 流"
+      },
+      "rag": {
+        "title": "知识库",
+        "description": "Qdrant 检索增强上下文"
+      }
+    },
+    "docs": {
+      "label": "文档导航",
+      "title": "继续深入",
+      "description": "从快速开始到部署与模块细节，文档和代码在同一个仓库维护。",
+      "footnote": "文档与代码同步维护",
+      "open": "打开完整文档",
+      "items": {
+        "gettingStarted": "快速开始",
+        "deployment": "部署",
+        "authentication": "认证与用户",
+        "files": "文件存储",
+        "ai": "AI 对话",
+        "theme": "主题配置",
+        "fonts": "字体",
+        "skills": "Skills"
+      }
+    },
+    "article": "文章",
+    "articles": "文章管理"
   },
   "Sidebar": {
     "brandName": "Hucky",
@@ -68,7 +127,12 @@
     "filesAll": "全部文件",
     "support": "支持",
     "feedback": "反馈",
-    "documentation": "文档"
+    "documentation": "文档",
+    "rssGroup": "订阅",
+    "rssCatalog": "订阅",
+    "rssRead": "阅读",
+    "rssChannels": "频道",
+    "rssArticles": "文章"
   },
   "User": {
     "profile": "个人资料",
@@ -732,5 +796,85 @@
       "not_found": "对话不存在或已被删除。",
       "unknown": "操作失败，请稍后重试。"
     }
+  },
+  "Rss": {
+    "title": "RSS 订阅",
+    "description": "选择要订阅的站点频道，抓取到的文章会进入你的阅读库。",
+    "catalogDescription": "系统内置的可订阅站点；进入站点后选择要订阅的频道。",
+    "channels": "频道",
+    "channelCount": "{count} 个频道",
+    "subscribedCount": "已订阅 {count} 个",
+    "disabled": "已停用",
+    "openSite": "查看频道",
+    "emptyCatalog": "暂无可用站点。",
+    "siteFallback": "站点",
+    "siteDisabledHint": "该站点已被管理员停用。",
+    "enableSite": "启用站点",
+    "disableSite": "停用站点",
+    "enableChannel": "启用频道",
+    "disableChannel": "停用频道",
+    "channelDisabledHint": "频道已停用，订阅者无法获取新文章。",
+    "subscribe": "订阅",
+    "unsubscribe": "取消订阅",
+    "refresh": "立即抓取",
+    "refreshing": "抓取中...",
+    "refreshAll": "刷新全部订阅",
+    "newArticles": "新增 {count} 篇",
+    "lastFetched": "上次抓取：{time}",
+    "neverFetched": "尚未抓取",
+    "fetchError": "最近一次抓取失败：{message}",
+    "articleCount": "{count} 篇文章",
+    "read": {
+      "title": "阅读",
+      "description": "只显示你已订阅频道中的文章。",
+      "all": "全部",
+      "unread": "未读",
+      "saved": "已收藏",
+      "empty": "还没有文章。先在订阅页开启频道，然后点击刷新。",
+      "markRead": "标为已读",
+      "markUnread": "标为未读",
+      "save": "收藏",
+      "unsave": "取消收藏",
+      "back": "返回列表",
+      "original": "查看原文",
+      "author": "作者",
+      "publishedAt": "发布时间",
+      "noContent": "这篇文章没有抓取到正文，请查看原文。",
+      "prev": "上一页",
+      "next": "下一页",
+      "page": "第 {page} 页",
+      "total": "共 {count} 篇",
+      "unreadCount": "{count} 篇未读",
+      "filterAll": "全部频道",
+      "markAllRead": "全部标为已读",
+      "date": "日期",
+      "backToTop": "回到顶部"
+    },
+    "errors": {
+      "forbidden": "没有权限执行该操作。",
+      "channel_not_found": "频道不存在。",
+      "channel_disabled": "频道或站点已被停用。",
+      "adapter_unavailable": "该站点的抓取器尚未实现。",
+      "unknown": "操作失败，请稍后重试。"
+    },
+    "site": "站点",
+    "subscription": "订阅状态",
+    "actions": "操作",
+    "channelsTitle": "频道管理",
+    "channelsDescription": "控制站点和频道是否对订阅者开放；关闭后不再抓取新文章。",
+    "enabled": "启用状态",
+    "enabledChannelCount": "{count} 个已启用",
+    "manageChannels": "管理频道",
+    "articlesTitle": "文章管理",
+    "articlesDescription": "全站已抓取的文章，只读。",
+    "articlesEmpty": "还没有抓取到任何文章。",
+    "article": "文章",
+    "source": "来源",
+    "author": "作者",
+    "publishedAt": "发布时间",
+    "fetchedAt": "抓取时间",
+    "addedAt": "入库时间",
+    "view": "查看",
+    "contentMissing": "这篇文章没有抓取到正文，仅保存了摘要。"
   }
 }

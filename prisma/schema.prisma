@@ -37,6 +37,10 @@ model User {
   aiConversations AiConversation[]
 
   ragLibraries RagLibrary[]
+
+  rssSubscriptions RssSubscription[]
+
+  rssArticles RssUserArticle[]
 }
 
 // ─── 角色 ──────────────────────────────────────────────
@@ -409,4 +413,134 @@ model AiAgentKnowledgeBase {
 
   @@id([agentId, libraryId])
   @@index([libraryId])
+}
+
+// ─── RSS 订阅 / 阅读 ───────────────────────────────────
+
+/// 抓取方式。BROWSER 预留给后续 Playwright + 用户登录态的实现。
+enum RssSourceType {
+  HTML
+  JSON_API
+  RSS
+  BROWSER
+}
+
+/// 可订阅站点。管理员控制全局启用状态; 站点由 seed 内置, 也可后续在后台扩展。
+/// `adapter` 对应 lib/rss/adapters 中的爬虫实现标识。
+model RssSite {
+  id           String        @id @default(cuid())
+  slug         String        @unique
+  name         String
+  homepageUrl  String
+  description  String?
+  adapter      String
+  sourceType   RssSourceType @default(JSON_API)
+  requiresAuth Boolean       @default(false)
+  isEnabled    Boolean       @default(true)
+  sortOrder    Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  channels RssChannel[]
+  articles RssArticle[]
+
+  @@index([isEnabled, sortOrder])
+}
+
+/// 站点下的可订阅单元 (36氪的频道 / 专题 / 快讯)。
+/// `adapterKey` 由爬虫实现解释, 例如 36氪的 subnavNick。
+model RssChannel {
+  id            String    @id @default(cuid())
+  siteId        String
+  slug          String
+  name          String
+  description   String?
+  url           String?
+  adapterKey    String
+  config        Json?
+  isEnabled     Boolean   @default(true)
+  sortOrder     Int       @default(0)
+  lastFetchedAt DateTime?
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  site          RssSite             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  subscriptions RssSubscription[]
+  articles      RssArticleChannel[]
+
+  @@unique([siteId, slug])
+  @@index([siteId, isEnabled, sortOrder])
+}
+
+/// 用户对频道的订阅。记录不存在 = 未订阅; isEnabled 用于暂停而不丢失阅读记录。
+/// credentials 预留给需要登录态的爬虫 (Playwright) 保存该用户自己的 token。
+model RssSubscription {
+  userId       String
+  channelId    String
+  isEnabled    Boolean   @default(true)
+  credentials  Json?
+  lastViewedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel RssChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@id([userId, channelId])
+  @@index([userId, isEnabled])
+  @@index([channelId])
+}
+
+/// 文章本体按站点去重; 同一篇文章可能出现在多个频道, 用关联表连接。
+model RssArticle {
+  id          String    @id @default(cuid())
+  siteId      String
+  externalId  String
+  title       String
+  url         String
+  summary     String?
+  content     String?
+  author      String?
+  imageUrl    String?
+  publishedAt DateTime?
+  fetchedAt   DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  site     RssSite             @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  channels RssArticleChannel[]
+  users    RssUserArticle[]
+
+  @@unique([siteId, externalId])
+  @@index([siteId, publishedAt(sort: Desc)])
+}
+
+model RssArticleChannel {
+  articleId String
+  channelId String
+
+  article RssArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  channel RssChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, channelId])
+  @@index([channelId])
+}
+
+/// 用户在文章上的阅读状态。只有已订阅频道的文章才会创建该记录。
+model RssUserArticle {
+  userId    String
+  articleId String
+  isRead    Boolean   @default(false)
+  readAt    DateTime?
+  isSaved   Boolean   @default(false)
+  savedAt   DateTime?
+  createdAt DateTime  @default(now())
+
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article RssArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, articleId])
+  @@index([userId, isRead, createdAt(sort: Desc)])
+  @@index([userId, isSaved, createdAt(sort: Desc)])
 }
