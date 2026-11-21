@@ -98,7 +98,7 @@ function SectionHeading({
         {index} / {label}
       </div>
       <div className="lg:col-span-9">
-        <h2 className="font-sans max-w-2xl text-2xl font-medium tracking-tight text-balance sm:text-3xl">
+        <h2 className="font-heading max-w-2xl text-2xl font-medium tracking-tight text-balance sm:text-3xl">
           {title}
         </h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
@@ -125,7 +125,7 @@ export function DashboardOverview() {
               <span className="size-2 bg-primary" />
               {t("eyebrow")}
             </div>
-            <h1 className="font-sans mt-6 max-w-3xl text-4xl leading-[1.05] font-medium tracking-tight text-balance sm:text-5xl xl:text-6xl">
+            <h1 className="font-heading mt-6 max-w-3xl text-4xl leading-[1.05] font-medium tracking-tight text-balance sm:text-5xl xl:text-6xl">
               {t("title")}
             </h1>
           </div>
@@ -135,7 +135,7 @@ export function DashboardOverview() {
               {t("description")}
             </p>
             <div className="flex flex-wrap items-center gap-3">
-              <Button asChild className="rounded-none">
+              <Button asChild>
                 <Link href={`/${locale}/docs`}>
                   {t("docsCta")}
                   <ArrowRight data-icon="inline-end" />
@@ -143,7 +143,7 @@ export function DashboardOverview() {
               </Button>
               <Badge
                 variant="outline"
-                className="h-6 rounded-none font-mono text-[10px] tracking-[0.18em] uppercase"
+                className="h-6 font-mono text-[10px] tracking-[0.18em] uppercase"
               >
                 {t("versionLabel")}
               </Badge>
@@ -151,13 +151,13 @@ export function DashboardOverview() {
           </div>
         </div>
 
-        <dl className="mt-10 grid grid-cols-2 gap-px border border-border bg-border sm:grid-cols-4">
+        <dl className="mt-10 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-border shadow-xs ring-1 ring-foreground/10 sm:grid-cols-4">
           {STACK.map((item) => (
-            <div key={item.labelKey} className="bg-background p-4">
+            <div key={item.labelKey} className="bg-card p-4">
               <dt className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground uppercase">
                 {t(`stack.${item.labelKey}`)}
               </dt>
-              <dd className="font-sans mt-1 text-lg tracking-tight">
+              <dd className="font-heading mt-1 text-lg tracking-tight">
                 {item.value}
               </dd>
             </div>
@@ -174,7 +174,7 @@ export function DashboardOverview() {
           description={t("modules.description")}
         />
 
-        <div className="grid gap-px border border-border bg-border sm:grid-cols-2">
+        <div className="grid gap-px overflow-hidden rounded-xl bg-border shadow-xs ring-1 ring-foreground/10 sm:grid-cols-2">
           {MODULES.map((module) => {
             const Icon = module.icon;
             const points = t.raw(`modules.${module.key}.points`) as string[];
@@ -183,7 +183,7 @@ export function DashboardOverview() {
               <Link
                 key={module.key}
                 href={`/${locale}${module.href}`}
-                className="group flex flex-col bg-background p-6 transition-colors hover:bg-muted/40 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none lg:p-8"
+                className="group flex flex-col bg-card p-6 transition-colors hover:bg-muted/40 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none lg:p-8"
               >
                 <div className="flex items-start justify-between">
                   <span className="font-mono text-[11px] tracking-[0.24em] text-muted-foreground">
@@ -196,7 +196,7 @@ export function DashboardOverview() {
                   />
                 </div>
 
-                <h3 className="font-sans mt-12 text-2xl font-medium tracking-tight">
+                <h3 className="font-heading mt-12 text-2xl font-medium tracking-tight">
                   {t(`modules.${module.key}.title`)}
                 </h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
@@ -231,12 +231,12 @@ export function DashboardOverview() {
           description={t("pipeline.description")}
         />
 
-        <div className="grid gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-px overflow-hidden rounded-xl bg-border shadow-xs ring-1 ring-foreground/10 sm:grid-cols-2 lg:grid-cols-5">
           {PIPELINE.map((step) => {
             const Icon = step.icon;
 
             return (
-              <div key={step.key} className="bg-background p-5">
+              <div key={step.key} className="bg-card p-5">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-[11px] tracking-[0.24em] text-muted-foreground">
                     {step.index}
@@ -247,7 +247,7 @@ export function DashboardOverview() {
                     aria-hidden="true"
                   />
                 </div>
-                <h3 className="font-sans mt-8 text-lg font-medium tracking-tight">
+                <h3 className="font-heading mt-8 text-lg font-medium tracking-tight">
                   {t(`pipeline.${step.key}.title`)}
                 </h3>
                 <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -268,12 +268,12 @@ export function DashboardOverview() {
           description={t("docs.description")}
         />
 
-        <div className="grid gap-px border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-px overflow-hidden rounded-xl bg-border shadow-xs ring-1 ring-foreground/10 sm:grid-cols-2 lg:grid-cols-4">
           {DOC_LINKS.map((item) => (
             <Link
               key={item.key}
               href={`/${locale}${item.href}`}
-              className="group flex items-center justify-between gap-3 bg-background px-5 py-4 text-sm transition-colors hover:bg-muted/40 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+              className="group flex items-center justify-between gap-3 bg-card px-5 py-4 text-sm transition-colors hover:bg-muted/40 focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
             >
               <span>{t(`docs.items.${item.key}`)}</span>
               <ArrowUpRight className="size-4 text-muted-foreground transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" />
@@ -285,7 +285,7 @@ export function DashboardOverview() {
           <p className="font-mono text-[11px] tracking-[0.2em] text-muted-foreground uppercase">
             {t("docs.footnote")}
           </p>
-          <Button asChild variant="outline" className="rounded-none">
+          <Button asChild variant="outline">
             <Link href={`/${locale}/docs`}>
               {t("docs.open")}
               <ArrowRight data-icon="inline-end" />
