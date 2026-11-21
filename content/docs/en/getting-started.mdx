@@ -87,15 +87,15 @@ RUSTFS_SECRET_KEY=your-secret-key
 RUSTFS_BUCKET=your-bucket
 
 # Font COS (private bucket, server-side only)
-FONT_COS_SECRET_ID=your-font-secret-id
-FONT_COS_SECRET_KEY=your-font-secret-key
-FONT_COS_BUCKET=hucky-fonts-1301215062
-FONT_COS_REGION=ap-shanghai
+FONT_COS_SECRET_ID=
+FONT_COS_SECRET_KEY=
+FONT_COS_BUCKET=
+FONT_COS_REGION=
 ```
 
 `DATABASE_URL` is used by the application at runtime; in production it should be the managed database's pooled connection string. `MIGRATE_DATABASE_URL` is only for migrations, seeding, and Prisma Studio, and must be a direct connection. In local development both can use the same value.
 
-`LOGTO_BASE_URL` is the app's own URL; Logto redirects back here. `LOGTO_COOKIE_SECRET` must be at least 32 characters and should be strongly random in production. `.env.example` is committed to Git; real `.env*` files are not. See [Environment variables](/en/docs/infrastructure/environment-variables) for details.
+`LOGTO_BASE_URL` is the app's own URL; Logto redirects back here. `LOGTO_COOKIE_SECRET` must be at least 32 characters and should be strongly random in production. `.env.example` is committed to Git; real `.env*` files are not. See [Environment variables](/en/docs/environment-variables) for details.
 
 `BOOTSTRAP_ADMIN_EMAILS` bootstraps the first deployment: while the system has no administrator, these verified emails receive the `admin` role on sign-in. Once an administrator exists, the variable has no effect and can be kept or removed.
 
@@ -163,7 +163,7 @@ When you add a public page, update `publicRoutes` in `proxy.ts` too, or it will 
 
 - Read the [overview](/en/docs) for the project layout.
 - Read [Deployment](/en/docs/deployment) for the Vercel build command and production configuration.
-- Read [Infrastructure](/en/docs/infrastructure) for the package manager and [environment variable](/en/docs/infrastructure/environment-variables) conventions.
+- Read [Infrastructure](/en/docs/infrastructure) for the package manager and formatting conventions, and [Environment variables](/en/docs/environment-variables) for how `.env` files load.
 - Read [shadcn/ui components](/en/docs/shadcn) for component and Tailwind CSS rules.
 - Read [Prisma database](/en/docs/prisma) for the data model, PostgreSQL, and migrations.
 - Read [Authentication & users](/en/docs/authentication) for local accounts, Logto, and RBAC.
