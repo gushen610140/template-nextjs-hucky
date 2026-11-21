@@ -10,44 +10,101 @@
     "filePreview": "预览",
     "fileEdit": "在线编辑",
     "comingSoon": "该模块正在建设中",
-    "overviewTitle": "概览",
-    "overviewSubtitle": "关键指标、请求量与模型使用情况一览。",
-    "updatedJustNow": "实时更新",
-    "last30Days": "最近 30 天",
-    "kpiUsers": "活跃用户",
-    "kpiRequests": "请求总量",
-    "kpiErrorRate": "错误率",
-    "kpiLatency": "平均延迟",
-    "requestVolume": "请求量",
-    "requestVolumeDescription": "过去 24 小时的推理请求",
-    "live": "实时",
-    "vsLastPeriod": "较上一周期",
-    "requestStatus": "请求状态",
-    "requestStatusDescription": "按结束方式拆分",
-    "successRate": "成功率",
-    "status": {
-      "success": "成功",
-      "stream": "流式传输",
-      "cache": "缓存命中",
-      "error": "错误"
+    "eyebrow": "Hucky / 产品概览",
+    "title": "一套可投产的全栈后台，从用户到 AI 一次配齐。",
+    "description": "用户、文件、AI 流水线与主题控制共享同一套权限、存储和设计令牌。页面没有演示数据，四个模块都从真实接口工作。",
+    "docsCta": "阅读文档",
+    "versionLabel": "Template v0.1",
+    "stack": {
+      "framework": "框架",
+      "ui": "UI",
+      "data": "数据",
+      "styling": "样式"
     },
-    "weeklyUsers": "每周活跃用户",
-    "weeklyUsersDescription": "按自然日统计",
-    "weekdays": {
-      "mon": "一",
-      "tue": "二",
-      "wed": "三",
-      "thu": "四",
-      "fri": "五",
-      "sat": "六",
-      "sun": "日"
+    "modules": {
+      "label": "核心模块",
+      "title": "四条主线，覆盖后台最常见的需求",
+      "description": "每个模块都包含页面、Server Actions、权限校验与文档，可以单独拆出复用。",
+      "readMore": "查看文档",
+      "users": {
+        "title": "用户管理",
+        "lead": "Logto 统一身份、本地会话与 RBAC 组成完整的账号体系。",
+        "points": [
+          "Logto OIDC 单一入口，本地不保存密码",
+          "角色与权限分层，页面和 API 双重校验",
+          "用户、角色、权限与会话集中管理"
+        ]
+      },
+      "files": {
+        "title": "文件管理",
+        "lead": "RustFS 预签名直传，数据库只保存元数据与归属关系。",
+        "points": [
+          "浏览器直传对象存储，不经过应用服务器",
+          "虚拟目录、拖拽移动、搜索与分页",
+          "在线预览与 OnlyOffice 协同编辑"
+        ]
+      },
+      "ai": {
+        "title": "AI 基础流水线",
+        "lead": "供应商、模型、智能体到对话与知识库，全部由管理员配置。",
+        "points": [
+          "供应商密钥只在服务端解密",
+          "LangChain + LangGraph 流式输出",
+          "Qdrant 向量检索构建 RAG 知识库"
+        ]
+      },
+      "theme": {
+        "title": "主题控制",
+        "lead": "颜色、圆角、阴影与字体在运行时切换，无需重新构建。",
+        "points": [
+          "基础色、主色、圆角与阴影实时生效",
+          "私有 COS 字体按需下载并缓存",
+          "同一套 token 同时服务业务与文档"
+        ]
+      }
     },
-    "topModels": "模型使用排行",
-    "topModelsDescription": "按 token 消耗",
-    "activityHeatmap": "活动热力图",
-    "activityHeatmapDescription": "过去 18 周的请求密度",
-    "less": "少",
-    "more": "多"
+    "pipeline": {
+      "label": "AI 基础流水线",
+      "title": "从加密密钥到流式对话的完整链路",
+      "description": "管理员维护供应商与模型，普通用户只接触启用中的智能体；两条权限线彼此隔离。",
+      "providers": {
+        "title": "供应商",
+        "description": "API Key 服务端加密保存"
+      },
+      "models": {
+        "title": "模型",
+        "description": "按供应商实例化适配器"
+      },
+      "agents": {
+        "title": "智能体",
+        "description": "组合提示词、模型与参数"
+      },
+      "chat": {
+        "title": "对话",
+        "description": "SSE 推送 token 流"
+      },
+      "rag": {
+        "title": "知识库",
+        "description": "Qdrant 检索增强上下文"
+      }
+    },
+    "docs": {
+      "label": "文档导航",
+      "title": "继续深入",
+      "description": "从快速开始到部署与模块细节，文档和代码在同一个仓库维护。",
+      "footnote": "文档与代码同步维护",
+      "open": "打开完整文档",
+      "items": {
+        "gettingStarted": "快速开始",
+        "deployment": "部署",
+        "authentication": "认证与用户",
+        "files": "文件存储",
+        "ai": "AI 对话",
+        "theme": "主题配置",
+        "fonts": "字体",
+        "skills": "Skills"
+      }
+    }
   },
   "Sidebar": {
     "brandName": "Hucky",
