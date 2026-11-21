@@ -2,6 +2,7 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getRssAdapter } from "./adapters";
 import type {
+  RssAdminSite,
   RssArticleRow,
   RssChannelRow,
   RssFeedItem,
@@ -407,6 +408,50 @@ export async function setSubscription(
   }
 }
 
+export async function listAdminChannelTree(): Promise<RssAdminSite[]> {
+  const sites = await prisma.rssSite.findMany({
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      description: true,
+      homepageUrl: true,
+      isEnabled: true,
+      channels: {
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          isEnabled: true,
+          lastFetchedAt: true,
+          lastError: true,
+          _count: { select: { articles: true } },
+        },
+      },
+    },
+  });
+
+  return sites.map((site) => ({
+    id: site.id,
+    slug: site.slug,
+    name: site.name,
+    description: site.description,
+    homepageUrl: site.homepageUrl,
+    isEnabled: site.isEnabled,
+    channels: site.channels.map((channel) => ({
+      id: channel.id,
+      slug: channel.slug,
+      name: channel.name,
+      isEnabled: channel.isEnabled,
+      articleCount: channel._count.articles,
+      lastFetchedAt: channel.lastFetchedAt?.toISOString() ?? null,
+      lastError: channel.lastError,
+    })),
+  }));
+}
+
 export async function setSiteEnabled(siteId: string, enabled: boolean) {
   await prisma.rssSite.update({
     where: { id: siteId },
@@ -428,6 +473,7 @@ export async function listUserArticles(
   options?: {
     filter?: ArticleFilter;
     channelId?: string;
+    date?: string;
     page?: number;
     pageSize?: number;
   },
@@ -438,9 +484,21 @@ export async function listUserArticles(
   const page = Math.max(1, options?.page ?? 1);
   const pageSize = options?.pageSize ?? 20;
 
+  // 按本地自然日筛选；date 由页面传入 YYYY-MM-DD
+  let publishedAt: Prisma.DateTimeFilter | undefined;
+  if (options?.date) {
+    const start = new Date(`${options.date}T00:00:00`);
+    if (!Number.isNaN(start.getTime())) {
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      publishedAt = { gte: start, lt: end };
+    }
+  }
+
   const where: Prisma.RssUserArticleWhereInput = {
     userId,
     article: {
+      ...(publishedAt ? { publishedAt } : {}),
       channels: {
         some: {
           ...(options?.channelId ? { channelId: options.channelId } : {}),

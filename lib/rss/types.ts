@@ -93,3 +93,23 @@ export type RssArticleRow = {
   channelName: string;
   url: string;
 };
+
+export type RssAdminChannel = {
+  id: string;
+  slug: string;
+  name: string;
+  isEnabled: boolean;
+  articleCount: number;
+  lastFetchedAt: string | null;
+  lastError: string | null;
+};
+
+export type RssAdminSite = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  homepageUrl: string;
+  isEnabled: boolean;
+  channels: RssAdminChannel[];
+};

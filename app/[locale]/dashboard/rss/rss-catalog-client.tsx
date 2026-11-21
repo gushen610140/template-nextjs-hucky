@@ -1,24 +1,21 @@
 "use client";
 
-import { ChevronRight, Globe, Rss } from "lucide-react";
+import { ChevronRight, Globe } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import type { RssSiteCard } from "@/lib/rss/types";
 
-export function RssCatalogClient({
-  sites,
-  canManage,
-}: {
-  sites: RssSiteCard[];
-  canManage: boolean;
-}) {
+export function RssCatalogClient({ sites }: { sites: RssSiteCard[] }) {
   const t = useTranslations("Rss");
   const locale = useLocale();
 
@@ -31,50 +28,71 @@ export function RssCatalogClient({
         </p>
       </div>
 
-      {sites.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground text-sm">
-          {t("emptyCatalog")}
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {sites.map((site) => (
-            <Link key={site.id} href={`/${locale}/dashboard/rss/${site.id}`}>
-              <Card className="h-full transition-colors hover:bg-muted/50">
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="flex size-9 items-center justify-center rounded-lg bg-muted">
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t("site")}</TableHead>
+              <TableHead>{t("channels")}</TableHead>
+              <TableHead>{t("subscription")}</TableHead>
+              <TableHead className="text-right">{t("actions")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sites.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={4}
+                  className="h-24 text-center text-muted-foreground"
+                >
+                  {t("emptyCatalog")}
+                </TableCell>
+              </TableRow>
+            ) : (
+              sites.map((site) => (
+                <TableRow key={site.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex size-8 items-center justify-center rounded-lg bg-muted">
                         <Globe className="size-4" />
                       </span>
-                      <div className="space-y-0.5">
-                        <CardTitle className="flex items-center gap-2">
+                      <div className="grid">
+                        <span className="flex items-center gap-2 font-medium">
                           {site.name}
-                          {!site.isEnabled && canManage && (
+                          {!site.isEnabled && (
                             <Badge variant="outline">{t("disabled")}</Badge>
                           )}
-                        </CardTitle>
-                        <CardDescription>
+                        </span>
+                        <span className="text-muted-foreground text-xs">
                           {site.description ?? site.homepageUrl}
-                        </CardDescription>
+                        </span>
                       </div>
                     </div>
-                    <ChevronRight className="mt-1 size-4 text-muted-foreground" />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 pt-3 text-xs">
+                  </TableCell>
+                  <TableCell>
                     <Badge variant="secondary">
-                      <Rss className="size-3" />
                       {t("channelCount", { count: site.channelCount })}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
                     <Badge variant="outline">
                       {t("subscribedCount", { count: site.subscribedCount })}
                     </Badge>
-                  </div>
-                </CardHeader>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button asChild size="sm" variant="ghost">
+                      <Link href={`/${locale}/dashboard/rss/${site.id}`}>
+                        {t("openSite")}
+                        <ChevronRight />
+                      </Link>
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

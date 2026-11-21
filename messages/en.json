@@ -104,7 +104,8 @@
         "fonts": "Fonts",
         "skills": "Skills"
       }
-    }
+    },
+    "article": "Article"
   },
   "Sidebar": {
     "brandName": "Hucky",
@@ -127,8 +128,9 @@
     "feedback": "Feedback",
     "documentation": "Documentation",
     "rssGroup": "RSS",
-    "rssCatalog": "Feeds",
-    "rssRead": "Reading"
+    "rssCatalog": "Subscriptions",
+    "rssRead": "Reading",
+    "rssChannels": "Channels"
   },
   "User": {
     "profile": "Profile",
@@ -796,7 +798,7 @@
   "Rss": {
     "title": "RSS Reader",
     "description": "Subscribe to site channels; fetched articles land in your reading library.",
-    "catalogDescription": "Built-in sites you can subscribe to. Open a site to toggle individual channels.",
+    "catalogDescription": "Built-in sites. Open a site to choose which channels you subscribe to.",
     "channels": "Channels",
     "channelCount": "{count} channels",
     "subscribedCount": "{count} subscribed",
@@ -842,7 +844,8 @@
       "total": "{count} articles",
       "unreadCount": "{count} unread",
       "filterAll": "All channels",
-      "markAllRead": "Mark all as read"
+      "markAllRead": "Mark all as read",
+      "date": "Date"
     },
     "errors": {
       "forbidden": "You are not allowed to do that.",
@@ -850,6 +853,11 @@
       "channel_disabled": "Channel or site is disabled.",
       "adapter_unavailable": "The crawler for this site is not implemented yet.",
       "unknown": "Something went wrong. Please try again."
-    }
+    },
+    "site": "Site",
+    "subscription": "Subscription",
+    "actions": "Actions",
+    "channelsTitle": "Channel management",
+    "channelsDescription": "Control which sites and channels are available to subscribers."
   }
 }

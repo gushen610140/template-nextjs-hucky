@@ -16,12 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import type { RssChannelRow } from "@/lib/rss/types";
-import {
-  refreshChannelAction,
-  setChannelEnabledAction,
-  setSiteEnabledAction,
-  toggleSubscription,
-} from "../actions";
+import { refreshChannelAction, toggleSubscription } from "../actions";
 
 type Site = {
   id: string;
@@ -42,25 +37,17 @@ function formatTime(value: string | null, locale: string): string | null {
 export function RssSiteClient({
   site,
   channels,
-  canManage,
 }: {
   site: Site;
   channels: RssChannelRow[];
-  canManage: boolean;
 }) {
   const t = useTranslations("Rss");
   const locale = useLocale();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [siteEnabled, setSiteEnabled] = useState(site.isEnabled);
   const [subscribed, setSubscribed] = useState<Record<string, boolean>>(
     Object.fromEntries(
       channels.map((channel) => [channel.id, channel.subscribed]),
-    ),
-  );
-  const [enabled, setEnabled] = useState<Record<string, boolean>>(
-    Object.fromEntries(
-      channels.map((channel) => [channel.id, channel.isEnabled]),
     ),
   );
   const [error, setError] = useState<string | null>(null);
@@ -97,82 +84,34 @@ export function RssSiteClient({
     });
   }
 
-  function toggleSite(value: boolean) {
-    setSiteEnabled(value);
-    setError(null);
-    startTransition(async () => {
-      const result = await setSiteEnabledAction({
-        siteId: site.id,
-        enabled: value,
-      });
-      if (!result.ok) {
-        setSiteEnabled(!value);
-        setError(errorText(result.error));
-        return;
-      }
-      router.refresh();
-    });
-  }
-
-  function toggleChannel(channelId: string, value: boolean) {
-    setEnabled((prev) => ({ ...prev, [channelId]: value }));
-    setError(null);
-    startTransition(async () => {
-      const result = await setChannelEnabledAction({
-        channelId,
-        enabled: value,
-      });
-      if (!result.ok) {
-        setEnabled((prev) => ({ ...prev, [channelId]: !value }));
-        setError(errorText(result.error));
-        return;
-      }
-      router.refresh();
-    });
-  }
-
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <Button asChild size="sm" variant="ghost" className="-ml-2">
-            <Link href={`/${locale}/dashboard/rss`}>
-              <ArrowLeft />
-              {t("title")}
-            </Link>
-          </Button>
-          <h1 className="flex items-center gap-2 font-heading font-medium text-xl">
-            {site.name}
-            {!siteEnabled && <Badge variant="outline">{t("disabled")}</Badge>}
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            {site.description ?? site.homepageUrl}
-          </p>
-          <a
-            href={site.homepageUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-muted-foreground text-xs underline-offset-2 hover:underline"
-          >
-            {site.homepageUrl}
-            <ExternalLink className="size-3" />
-          </a>
-        </div>
-
-        {canManage && (
-          <div className="flex items-center gap-2 text-sm">
-            {siteEnabled ? t("disableSite") : t("enableSite")}
-            <Switch
-              aria-label={siteEnabled ? t("disableSite") : t("enableSite")}
-              checked={siteEnabled}
-              disabled={pending}
-              onCheckedChange={toggleSite}
-            />
-          </div>
-        )}
+      <div className="space-y-1">
+        <Button asChild size="sm" variant="ghost" className="-ml-2">
+          <Link href={`/${locale}/dashboard/rss`}>
+            <ArrowLeft />
+            {t("title")}
+          </Link>
+        </Button>
+        <h1 className="flex items-center gap-2 font-heading font-medium text-xl">
+          {site.name}
+          {!site.isEnabled && <Badge variant="outline">{t("disabled")}</Badge>}
+        </h1>
+        <p className="text-muted-foreground text-sm">
+          {site.description ?? site.homepageUrl}
+        </p>
+        <a
+          href={site.homepageUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-muted-foreground text-xs underline-offset-2 hover:underline"
+        >
+          {site.homepageUrl}
+          <ExternalLink className="size-3" />
+        </a>
       </div>
 
-      {!siteEnabled && (
+      {!site.isEnabled && (
         <Alert>
           <AlertDescription>{t("siteDisabledHint")}</AlertDescription>
         </Alert>
@@ -198,7 +137,6 @@ export function RssSiteClient({
         <ul className="divide-y">
           {channels.map((channel) => {
             const isSubscribed = subscribed[channel.id] ?? false;
-            const isEnabled = enabled[channel.id] ?? false;
             return (
               <li
                 key={channel.id}
@@ -210,7 +148,7 @@ export function RssSiteClient({
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{channel.name}</span>
-                    {!isEnabled && (
+                    {!channel.isEnabled && (
                       <Badge variant="outline">{t("disabled")}</Badge>
                     )}
                     <span className="text-muted-foreground text-xs">
@@ -227,54 +165,26 @@ export function RssSiteClient({
                       ? ` · ${t("fetchError", { message: channel.lastError })}`
                       : ""}
                   </p>
-                  {!isEnabled && (
-                    <p className="text-muted-foreground text-xs">
-                      {t("channelDisabledHint")}
-                    </p>
-                  )}
                 </div>
 
-                <div className="flex items-center gap-3">
-                  {canManage && (
-                    <div className="flex items-center gap-2 text-muted-foreground text-xs">
-                      {isEnabled ? t("disableChannel") : t("enableChannel")}
-                      <Switch
-                        aria-label={
-                          isEnabled ? t("disableChannel") : t("enableChannel")
-                        }
-                        checked={isEnabled}
-                        disabled={pending}
-                        onCheckedChange={(value) =>
-                          toggleChannel(channel.id, value)
-                        }
-                      />
-                    </div>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={pending || !isSubscribed}
-                    onClick={() => refresh(channel.id)}
-                  >
-                    <RefreshCw
-                      className={pending ? "animate-spin" : undefined}
-                    />
-                    {t("refresh")}
-                  </Button>
-                  <div className="flex items-center gap-2 text-sm">
-                    {isSubscribed ? t("unsubscribe") : t("subscribe")}
-                    <Switch
-                      aria-label={
-                        isSubscribed ? t("unsubscribe") : t("subscribe")
-                      }
-                      checked={isSubscribed}
-                      disabled={pending || !siteEnabled || !isEnabled}
-                      onCheckedChange={(value) =>
-                        toggleSubscribe(channel.id, value)
-                      }
-                    />
-                  </div>
-                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="ml-auto"
+                  disabled={pending || !isSubscribed}
+                  onClick={() => refresh(channel.id)}
+                >
+                  <RefreshCw className={pending ? "animate-spin" : undefined} />
+                  {t("refresh")}
+                </Button>
+                <Switch
+                  aria-label={isSubscribed ? t("unsubscribe") : t("subscribe")}
+                  checked={isSubscribed}
+                  disabled={pending || !site.isEnabled || !channel.isEnabled}
+                  onCheckedChange={(value) =>
+                    toggleSubscribe(channel.id, value)
+                  }
+                />
               </li>
             );
           })}

@@ -28,6 +28,7 @@ export default async function DashboardLayout({
         canUseAi={permissions.has(PERMISSIONS.aiOwn)}
         canManageAi={permissions.has(PERMISSIONS.aiManage)}
         canUseRss={permissions.has(PERMISSIONS.rssOwn)}
+        canManageRss={permissions.has(PERMISSIONS.rssManage)}
       />
       <SidebarInset>
         <DashboardHeader

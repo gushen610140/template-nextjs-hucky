@@ -104,7 +104,8 @@
         "fonts": "字体",
         "skills": "Skills"
       }
-    }
+    },
+    "article": "文章"
   },
   "Sidebar": {
     "brandName": "Hucky",
@@ -127,8 +128,9 @@
     "feedback": "反馈",
     "documentation": "文档",
     "rssGroup": "订阅",
-    "rssCatalog": "订阅源",
-    "rssRead": "阅读"
+    "rssCatalog": "订阅",
+    "rssRead": "阅读",
+    "rssChannels": "频道"
   },
   "User": {
     "profile": "个人资料",
@@ -796,7 +798,7 @@
   "Rss": {
     "title": "RSS 订阅",
     "description": "选择要订阅的站点频道，抓取到的文章会进入你的阅读库。",
-    "catalogDescription": "系统内置的可订阅站点；进入站点后可以单独开关每个频道。",
+    "catalogDescription": "系统内置的可订阅站点；进入站点后选择要订阅的频道。",
     "channels": "频道",
     "channelCount": "{count} 个频道",
     "subscribedCount": "已订阅 {count} 个",
@@ -842,7 +844,8 @@
       "total": "共 {count} 篇",
       "unreadCount": "{count} 篇未读",
       "filterAll": "全部频道",
-      "markAllRead": "全部标为已读"
+      "markAllRead": "全部标为已读",
+      "date": "日期"
     },
     "errors": {
       "forbidden": "没有权限执行该操作。",
@@ -850,6 +853,11 @@
       "channel_disabled": "频道或站点已被停用。",
       "adapter_unavailable": "该站点的抓取器尚未实现。",
       "unknown": "操作失败，请稍后重试。"
-    }
+    },
+    "site": "站点",
+    "subscription": "订阅状态",
+    "actions": "操作",
+    "channelsTitle": "频道管理",
+    "channelsDescription": "控制站点和频道是否对订阅者开放；关闭后不再抓取新文章。"
   }
 }
