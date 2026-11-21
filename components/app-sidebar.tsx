@@ -9,7 +9,9 @@ import {
   Folders,
   LifeBuoy,
   MessageSquare,
+  Newspaper,
   Palette,
+  Rss,
   Send,
   Server,
   ShieldCheck,
@@ -52,6 +54,8 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   canUseAi: boolean;
   /** 是否可以管理供应商 / 模型 (ai:manage) */
   canManageAi: boolean;
+  /** 是否可以使用 RSS 订阅与阅读 (rss:own) */
+  canUseRss: boolean;
 };
 
 export function AppSidebar({
@@ -61,6 +65,7 @@ export function AppSidebar({
   canManageFiles,
   canUseAi,
   canManageAi,
+  canUseRss,
   ...props
 }: AppSidebarProps) {
   const t = useTranslations("Sidebar");
@@ -132,6 +137,25 @@ export function AppSidebar({
       items: fileItems,
     });
   }
+
+  if (canUseRss) {
+    navGroups.push({
+      label: t("rssGroup"),
+      items: [
+        {
+          title: t("rssCatalog"),
+          url: `/${locale}/dashboard/rss`,
+          icon: <Rss />,
+        },
+        {
+          title: t("rssRead"),
+          url: `/${locale}/dashboard/rss/read`,
+          icon: <Newspaper />,
+        },
+      ],
+    });
+  }
+  // 站点/频道的启停开关在订阅页内按 rss:manage 展示，这里不单独加入口。
 
   // 对话入口只要求 ai:own; 模型 / 供应商 / 智能体 / RAG 都是管理功能,
   // 只对 ai:manage 展示。
