@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/authz";
 import { PERMISSIONS } from "@/lib/permissions";
 import { getUserArticle } from "@/lib/rss/service";
 import { RssArticleToolbar } from "./rss-article-toolbar";
+import { RssBackToTop } from "./rss-back-to-top";
 
 const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: sanitizeHtml.defaults.allowedTags.concat([
@@ -94,6 +95,7 @@ export default async function RssArticlePage({
           </p>
         )}
       </article>
+      <RssBackToTop />
     </div>
   );
 }

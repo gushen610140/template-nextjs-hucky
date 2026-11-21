@@ -1,6 +1,7 @@
 "use client";
 
-import { RefreshCw, Rss, Star } from "lucide-react";
+import { enUS, zhCN } from "date-fns/locale";
+import { CalendarDays, RefreshCw, Rss, Star } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
@@ -8,7 +9,12 @@ import { useState, useTransition } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import type { RssArticleRow } from "@/lib/rss/types";
 import { cn } from "@/lib/utils";
 import { refreshAllSubscriptions } from "../actions";
@@ -23,6 +29,11 @@ function formatTime(value: string | null, locale: string): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function toDateParam(value: Date): string {
+  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
 }
 
 function filterHref(
@@ -61,6 +72,7 @@ export function RssReadClient({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const base = `/${locale}/dashboard/rss/read`;
   const filters: { key: Filter; label: string }[] = [
@@ -69,6 +81,8 @@ export function RssReadClient({
     { key: "saved", label: t("read.saved") },
   ];
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const selectedDate = new Date(`${date}T00:00:00`);
+  const calendarLocale = locale.startsWith("zh") ? zhCN : enUS;
 
   function refreshAll() {
     setError(null);
@@ -129,16 +143,29 @@ export function RssReadClient({
           <span className="text-muted-foreground text-xs">
             {t("read.date")}
           </span>
-          <Input
-            type="date"
-            value={date}
-            aria-label={t("read.date")}
-            className="h-8 w-auto"
-            onChange={(event) => {
-              const next = event.target.value;
-              if (next) router.push(filterHref(base, filter, next));
-            }}
-          />
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-2">
+                <CalendarDays />
+                {new Intl.DateTimeFormat(locale, {
+                  dateStyle: "medium",
+                }).format(selectedDate)}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                defaultMonth={selectedDate}
+                locale={calendarLocale}
+                onSelect={(next) => {
+                  if (!next) return;
+                  router.push(filterHref(base, filter, toDateParam(next)));
+                  setCalendarOpen(false);
+                }}
+              />
+            </PopoverContent>
+          </Popover>
           <span className="text-muted-foreground text-xs">
             {t("read.total", { count: total })}
           </span>
@@ -212,7 +239,7 @@ export function RssReadClient({
         </ul>
       )}
 
-      {pageCount > 1 && (
+      {total > 0 && (
         <div className="flex items-center justify-end gap-2">
           <span className="text-muted-foreground text-xs">
             {t("read.page", { page })} / {pageCount}

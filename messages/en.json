@@ -845,7 +845,8 @@
       "unreadCount": "{count} unread",
       "filterAll": "All channels",
       "markAllRead": "Mark all as read",
-      "date": "Date"
+      "date": "Date",
+      "backToTop": "Back to top"
     },
     "errors": {
       "forbidden": "You are not allowed to do that.",

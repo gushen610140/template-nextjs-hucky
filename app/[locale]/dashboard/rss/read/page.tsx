@@ -3,7 +3,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { listUserArticles } from "@/lib/rss/service";
 import { RssReadClient } from "./rss-read-client";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 function todayLocalDate(): string {
   const now = new Date();

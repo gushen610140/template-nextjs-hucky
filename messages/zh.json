@@ -845,7 +845,8 @@
       "unreadCount": "{count} 篇未读",
       "filterAll": "全部频道",
       "markAllRead": "全部标为已读",
-      "date": "日期"
+      "date": "日期",
+      "backToTop": "回到顶部"
     },
     "errors": {
       "forbidden": "没有权限执行该操作。",
